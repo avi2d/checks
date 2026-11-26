@@ -82,7 +82,7 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
   const held = yield* decodeFullTestJob(job).pipe(Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} is not a test job checks-workflows writes: ${issue.message}` })));
   const step = held.steps.find((candidate) => candidate.id === TEST_STEP);
   const tier = step?.env?.["TEST_TIER"];
-  const run = step?.run === RELEASE_TEST_RUN && (tier === "unit" || tier === "e2e") ? `${DEFAULT_TEST_RUN} --tier=${tier}` : step?.run;
+  const run = step?.run === RELEASE_TEST_RUN && (tier === "unit" || tier === "e2e") ? `${DEFAULT_TEST_RUN} --tier=${tier}` : step?.run?.replace(/ --shard=\$\{\{ matrix\.shard \}\}\/\d+$/, "");
   const browsers = held.steps.find((candidate) => candidate.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
   return {
     name,

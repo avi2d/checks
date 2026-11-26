@@ -1,5 +1,6 @@
 import { Config, Console, Effect, Schema } from "effect";
 import { commandPasses } from "./lib/run.ts";
+import { parseShard } from "../../testing/test-shard.ts";
 
 const CheckRelease = Schema.Literals(["true", "false"]);
 const TestTier = Schema.Literals(["unit", "e2e"]);
@@ -22,7 +23,11 @@ export const main = Effect.gen(function* () {
   if (!isCheckRelease(checkRelease)) return yield* new CheckReleaseUnread({ message: `test takes CHECK_RELEASE as true or false, not ${checkRelease}` });
   const tier = yield* Config.String("TEST_TIER").pipe(Config.withDefault(""));
   if (tier !== "" && !Schema.is(TestTier)(tier)) return yield* new CheckReleaseUnread({ message: `test takes TEST_TIER as unit or e2e, not ${tier}` });
-  const { program, args } = testCommandOf(checkRelease, tier === "" ? undefined : tier);
+  const shard = yield* Config.String("TEST_SHARD").pipe(Config.withDefault(""));
+  if (shard !== "" && (tier === "" || parseShard(`--shard=${shard}`) === undefined)) return yield* new CheckReleaseUnread({ message: `test takes TEST_SHARD as index/count with a tier, not ${shard}` });
+  const command = testCommandOf(checkRelease, tier === "" ? undefined : tier);
+  const { program } = command;
+  const args = shard === "" ? command.args : [...command.args, `--shard=${shard}`];
   yield* Console.log(`test: CHECK_RELEASE=${checkRelease}, so this runs ${[program, ...args].join(" ")}`);
   return yield* commandPasses(program, args);
 });

@@ -144,17 +144,25 @@ const siteJob = (set: CallerSet): Job => ({
   ],
 });
 
+const testTier = (test: TestJob): "unit" | "e2e" | undefined =>
+  test.run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : test.run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
+
 const testStep = (set: CallerSet, test: TestJob): Step => {
-  const tier = test.run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : test.run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
+  const tier = testTier(test);
+  const count = tier === undefined ? undefined : set.testTierShards?.[tier];
+  const shard = count === undefined || count === 1 ? undefined : expression("matrix.shard") + "/" + count;
   return checksRelease(set) && tier !== undefined
-    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")], ["TEST_TIER", tier]], run: RELEASE_TEST_RUN }
-    : { id: TEST_STEP, run: scalar(test.run) };
+    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")], ["TEST_TIER", tier], ...(shard === undefined ? [] : [["TEST_SHARD", shard] as const])], run: RELEASE_TEST_RUN }
+    : { id: TEST_STEP, run: scalar(test.run + (shard === undefined ? "" : ` --shard=${shard}`)) };
 };
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
   const hold = holds(set, test);
+  const tier = testTier(test);
+  const count = tier === undefined ? undefined : set.testTierShards?.[tier];
   return {
     id: test.name,
+    ...(count === undefined || count === 1 ? {} : { matrix: ["shard", "[" + Array.from({ length: count }, (_, index) => index + 1).join(", ") + "]"] as const }),
     ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
     ...(isBrowserWalk(test) ? { if: "needs.site.outputs.browser != 'false'" } : {}),
     runsOn: scalar(test.runsOn),

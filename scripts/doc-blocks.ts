@@ -229,6 +229,7 @@ const SETTING_READERS = {
   agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
   "agentTests.allowLocal": "[checks-local-tests](../gates/checks-local-tests.md)",
   testFileMaxSeconds: "[checks-test](../gates/checks-test.md#test-file-time-limit)",
+  testTierShards: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileTimings: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileSkips: "[checks-test](../gates/checks-test.md#test-file-exclusions)",
 } satisfies Record<SettingKey | "agentTests.allowLocal", string>;
