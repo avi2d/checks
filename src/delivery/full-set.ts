@@ -1,9 +1,11 @@
 import kitRelease from "./full-set/kit-release.txt";
 import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
+import type { PlatformPackages } from "../core/settings.ts";
+import { HOSTED_PLATFORMS, PLATFORM_BINARIES_ENV } from "./platform-packages.ts";
 import { type CallerSet } from "./site-names.ts";
 import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
@@ -86,9 +88,44 @@ const assets = (needs: string, tag: string, when?: string): Job => ({
   ],
 });
 
+const BINARIES_ARTIFACT = "platform-binary-";
+const BINARIES_DIRECTORY = expression("runner.temp") + "/platform-binaries";
+const BINARIES_BUILT = "needs.binaries.result == 'success'";
+
+const binaries = ({ binary, platforms }: PlatformPackages): Job => ({
+  id: "binaries",
+  if: JSON.stringify(RELEASE_COMMIT),
+  runsOn: expression("matrix.runner"),
+  timeout: 30,
+  matrix: ["runner", "[" + platforms.map((name) => HOSTED_PLATFORMS[name].runner).join(", ") + "]"],
+  permissions: ["contents: read"],
+  steps: [
+    checkout({}),
+    SETUP,
+    { name: "build the release binaries", run: "bun run " + RELEASE_ASSETS_SCRIPT },
+    { uses: UPLOAD, with: [["name", BINARIES_ARTIFACT + expression("matrix.runner")], ["path", RELEASE_ASSETS_DIRECTORY + "/" + binary + "-*"], ["if-no-files-found", "error"]] },
+  ],
+});
+
+const downloadBinaries: Step = {
+  note: "The binaries job skips on a push that is no release commit, so there is nothing to download.",
+  if: BINARIES_BUILT,
+  uses: DOWNLOAD,
+  with: [["pattern", BINARIES_ARTIFACT + "*"], ["merge-multiple", "true"], ["path", BINARIES_DIRECTORY]],
+};
+
+const releaseGate = (suite: boolean, packaged: boolean): Pick<Job, "needs" | "if"> => {
+  const passed = (job: string) => "(needs." + job + ".result == 'success' || needs." + job + ".result == 'skipped')";
+  const gated = [...(suite ? ["suite"] : []), ...(packaged ? ["binaries"] : [])];
+  if (gated.length === 0) return {};
+  const listed = gated.join(", ");
+  return { needs: gated.length === 1 ? listed : "[" + listed + "]", if: expression(["!cancelled()", ...gated.map(passed)].join(" && ")) };
+};
+
 // A full-test run gates the publish, so the release job waits for it and still runs when the commit is no release commit and it skips.
-function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: CallerOptions): Workflow {
+function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, platformPackages }: CallerOptions): Workflow {
   const suite = fullTest || checkRelease || publishWorkspaces;
+  const packaged = platformPackages !== undefined;
   return {
     name: "main",
     on: ["push:", "  branches: [main]"],
@@ -105,9 +142,10 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: 
             },
           ]
         : []),
+      ...(platformPackages === undefined ? [] : [binaries(platformPackages)]),
       {
         id: "release",
-        ...(suite ? { needs: "suite", if: expression("!cancelled() && (needs.suite.result == 'success' || needs.suite.result == 'skipped')") } : {}),
+        ...releaseGate(suite, packaged),
         runsOn: RUNNER,
         timeout: 15,
         concurrency: "main",
@@ -117,7 +155,12 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: 
           checkout({ history: true, credentials: true }),
           SETUP,
           { note: "npm takes a trusted publish only from the Node it set up with its registry.", uses: SETUP_NODE, with: [["node-version", '"24"'], ["registry-url", "https://registry.npmjs.org"]] },
-          { ...(releaseAssets ? { id: "release" } : {}), env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : [])], run: "bunx checks-release-tag" },
+          ...(packaged ? [downloadBinaries] : []),
+          {
+            ...(releaseAssets ? { id: "release" } : {}),
+            env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : []), ...(packaged ? [[PLATFORM_BINARIES_ENV, BINARIES_DIRECTORY] as const] : [])],
+            run: "bunx checks-release-tag",
+          },
         ],
       },
       ...(releaseAssets ? [assets("release", RELEASED_TAG, expression("!cancelled() && needs.release.result == 'success' && " + RELEASED_TAG + " != ''"))] : []),

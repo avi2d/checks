@@ -49,11 +49,29 @@ export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 
 export const ReleaseAssets = Schema.Boolean;
 
+const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
+
+export type PlatformName = (typeof PLATFORM_NAMES)[number];
+
+export const PlatformPackages = Schema.Struct({
+  binary: Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9._-]*$/, { message: "is not a lowercase file name, such as acme" })).annotate({
+    description: "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>.",
+  }),
+  platforms: Schema.NonEmptyArray(Schema.Literals(PLATFORM_NAMES))
+    .check(Schema.makeFilter((platforms) => new Set(platforms).size === platforms.length || "names a platform twice"))
+    .annotate({ description: "The platforms to build on and publish a package for." }),
+});
+
+export type PlatformPackages = typeof PlatformPackages.Type;
+
 export const Settings = Schema.Struct({
   repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   releaseAssets: Schema.optionalKey(ReleaseAssets.annotate({
     description: "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
     default: false,
+  })),
+  platformPackages: Schema.optionalKey(PlatformPackages.annotate({
+    description: "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies.",
   })),
   smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),
   reach: Schema.optionalKey(Reach.annotate({ description: "The tests to run when a changed path is missing from the import graph." })),

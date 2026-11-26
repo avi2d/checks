@@ -4,6 +4,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { lastTag, runBuild } from "./release.ts";
 import { extractReleaseNotes } from "./release-notes.ts";
 import { publishPackage } from "./release-publish.ts";
+import { publishConfiguredPlatformPackages } from "./platform-packages.ts";
 import { checkTestedTreeOf } from "./tested-tree.ts";
 import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
@@ -180,5 +181,6 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
     for (const workspace of workspaces) yield* publishPackage(path.dirname(path.join(root, workspace.path)));
     return true;
   }
+  yield* publishConfiguredPlatformPackages(root);
   return yield* publishPackage(root);
 });

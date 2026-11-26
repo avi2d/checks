@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
-import { decodeSetting, loadSettings, ReleaseAssets, RepositoryVisibility, SETTINGS_FILE } from "../core/settings.ts";
+import { decodeSetting, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, SETTINGS_FILE } from "../core/settings.ts";
 import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
@@ -136,11 +136,18 @@ function releaseAssetsFault(site: boolean, publicRepository: boolean): string | 
   return undefined;
 }
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean) {
+function platformPackagesFault(site: boolean, publicRepository: boolean, publishes: boolean): string | undefined {
+  if (site) return `${SETTINGS_FILE} sets platformPackages, but a site's main.yml holds no release job to publish the packages from, so remove it`;
+  if (!publicRepository) return `${SETTINGS_FILE} sets platformPackages in a private repository, where checks-ci-wiring refuses the hosted runners the binaries job needs, so remove it`;
+  if (!publishes) return `${SETTINGS_FILE} sets platformPackages, but package.json is private, so no published package names the platform packages; remove it or publish package.json`;
+  return undefined;
+}
+
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs, attachAssets);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs, attachAssets, platformPackages);
   const [extra] = uncarriedInputs(workflows);
   if (extra !== undefined) {
     return yield* new CallerSetFault({
@@ -150,6 +157,8 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   const site = holdsSiteWorkflow(workflows) || flagged;
   const assetsFault = attachAssets ? releaseAssetsFault(site, publicRepository) : undefined;
   if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
+  const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes);
+  if (packagesFault !== undefined) return yield* new CallerSetFault({ message: packagesFault });
   if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, hasE2e), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
@@ -207,7 +216,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
@@ -221,11 +230,19 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   if (releaseAssets && held?.scripts?.[RELEASE_ASSETS_SCRIPT] === undefined) {
     return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets releaseAssets, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the assets, so add the script or remove the setting` });
   }
+  const configuredPackages = settings["platformPackages"];
+  const platformPackages = configuredPackages === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configuredPackages);
+  if (platformPackages !== undefined && held?.scripts?.[RELEASE_ASSETS_SCRIPT] === undefined) {
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the binaries, so add the script or remove the setting` });
+  }
+  if (platformPackages !== undefined && held?.name === KIT_PACKAGE_NAME) {
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but the kit's own release.yml publishes its platform packages, so remove it` });
+  }
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
   const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets } satisfies CallerInputs;
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

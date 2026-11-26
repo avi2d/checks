@@ -30,6 +30,17 @@ test("releaseAssets in a site or a private repository is refused, instead of wri
   expect(attached.options.releaseAssets).toBe(true);
 });
 
+test("platformPackages in a site, a private repository or a private package.json is refused, instead of writing a binaries job with no release, a runner checks-ci-wiring refuses or no main package to name the platform packages", () => {
+  const packages = { binary: "acme", platforms: ["linux-x64"] } as const;
+  const packagesFaultOf = (flags: SiteNameFlags, publishes: boolean, publicRepository: boolean) =>
+    Effect.runSync(Effect.flip(callerSetOf([], flags, "checks-workflows --write", publishes, false, true, publicRepository, false, undefined, false, packages))).message;
+  expect(packagesFaultOf(AZALIALAW, true, true)).toBe("checks.config.ts sets platformPackages, but a site's main.yml holds no release job to publish the packages from, so remove it");
+  expect(packagesFaultOf({}, true, false)).toBe("checks.config.ts sets platformPackages in a private repository, where checks-ci-wiring refuses the hosted runners the binaries job needs, so remove it");
+  expect(packagesFaultOf({}, false, true)).toBe("checks.config.ts sets platformPackages, but package.json is private, so no published package names the platform packages; remove it or publish package.json");
+  const packaged = Effect.runSync(callerSetOf([], {}, "checks-workflows --write", true, false, true, true, false, undefined, false, packages));
+  expect(packaged.options.platformPackages).toEqual(packages);
+});
+
 test("a repository whose workflows name no site is a code repository, so a ci.yml is never read as a site", () => {
   expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });
   expect(setOf([plain("ci.yml"), plain("pr-title.yml")])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });
