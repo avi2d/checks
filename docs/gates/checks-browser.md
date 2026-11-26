@@ -412,7 +412,7 @@ The product installs the optional peers the runner loads, at the versions the ki
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
 ```sh
-bun add -d @axe-core/playwright@4.13.0 html-validate@11.16.0 playwright-core@1.63.0
+bun add -d @axe-core/playwright@4.14.1 html-validate@11.23.0 playwright-core@1.65.1
 ```
 
 <!-- end generated install -->
