@@ -2,6 +2,33 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.119.0
+
+Released 2026-11-26.
+
+### Features
+
+- **core:** print per-gate wall time in checks-lint [#233](https://github.com/avi2d/checks/pull/233)
+
+## 0.118.0
+
+Released 2026-11-26.
+
+### Features
+
+- **delivery:** add platformPackages option to checks-workflows for npm binaries [#231](https://github.com/avi2d/checks/pull/231)
+- **delivery:** publish compiled checks binaries to npm as platform packages [#229](https://github.com/avi2d/checks/pull/229)
+- compile gates to Bun AOT bytecode binaries and attach them to releases [#228](https://github.com/avi2d/checks/pull/228)
+
+### Fixes
+
+- narrow test runs for reach map changes [#227](https://github.com/avi2d/checks/pull/227)
+- **delivery:** treat npm publish refusals without an error code as already published [#224](https://github.com/avi2d/checks/pull/224)
+
+### Performance
+
+- **quality:** share the visit page with the axe audit in checks-browser [#226](https://github.com/avi2d/checks/pull/226)
+
 ## 0.117.2
 
 Released 2026-11-25.

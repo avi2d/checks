@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
+It reports each gate's outcome and wall time in seconds after the gate exits.
 With `--whole-tree` it runs the four whole-tree gates instead.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.
@@ -87,6 +88,7 @@ With `--whole-tree`, it takes no other arguments and runs the four whole-tree ga
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
+checks-lint: checks-comment-gate violated in 1.23s
 checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
 ```
 
