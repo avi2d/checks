@@ -118,7 +118,10 @@ export function serviceOverrides(overrides: readonly (typeof Override.Type)[], b
 }
 
 export function withServiceOverrides(tsconfig: string, overrides: readonly ServiceOverride[]): string {
-  if (!hasMember(tsconfig, SERVICE)) return overrides.length === 0 ? tsconfig : withMember(tsconfig, SERVICE, { diagnosticSeverity: KIT_SEVERITY, overrides });
+  if (!hasMember(tsconfig, SERVICE)) {
+    const entry = { diagnosticSeverity: KIT_SEVERITY, ...(overrides.length === 0 ? {} : { overrides }) };
+    return withMember(tsconfig, SERVICE, entry);
+  }
   const paths = overrides.length === 0 ? withoutMember(tsconfig, SERVICE_OVERRIDES) : withMember(tsconfig, SERVICE_OVERRIDES, overrides);
   const withoutGlobalScope = Object.keys(SCOPED_DEFAULTS).reduce((text, key) => withoutMember(text, [...SERVICE_SEVERITY, key]), paths);
   return Object.entries(KIT_SEVERITY).reduce((text, [key, severity]) => withMember(text, [...SERVICE_SEVERITY, key], severity), withoutGlobalScope);

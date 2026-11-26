@@ -176,6 +176,24 @@ test("consumer rejects blind catchEager and orElseSucceed handlers in both call 
   expect(await lint(ERROR_AWARE_HANDLERS)).toEqual({ exitCode: 0, text: "" });
 });
 
+const CATCH_PARAMETER_USES = `import { Effect } from "effect";
+const failed = Effect.fail("boom");
+export const a = Effect.catch(failed, _ => Effect.succeed(_.length));
+export const b = failed.pipe(Effect.catch((_: string) => Effect.succeed(_.length)));
+export const c = Effect.catch(failed, _unused => Effect.succeed(0));
+export const d = failed.pipe(Effect.catch((_unused: string) => Effect.succeed(0)));
+export const e = Effect.catch(failed, () => Effect.succeed(0));
+export const f = failed.pipe(Effect.catch(() => Effect.succeed(0)));
+export const g = Effect.catch(failed, error => Effect.succeed(error.length));
+export const h = failed.pipe(Effect.catch((error: string) => Effect.succeed(error.length)));
+`;
+
+test("consumer counts caught error binding reads instead of judging parameter names in both call forms", async () => {
+  const result = await lint(CATCH_PARAMETER_USES);
+  expect(result.exitCode).toBe(1);
+  expect(refusals(result)).toEqual(["5: Effect.catch", "6: Effect.catch", "7: Effect.catch", "8: Effect.catch"]);
+});
+
 const FILTERED_CAUSES = `import { Cause, Effect, Filter } from "effect";
 const failed = Effect.fail("boom");
 export const byPredicate = Effect.catchCauseIf(failed, Cause.hasFails, () => Effect.succeed("fallback"));

@@ -10,12 +10,13 @@ As a gate it fails when either differs from what it would write.
 ## What it checks
 
 It loads the default export of `oxlint.config.ts`.
-An override that names all six Effect rules sets the paths for the scoped diagnostics in `src/quality/presets/effect.language-service.json`.
+An override that names all six Effect rules, the one the `effect` key of `defineConfig` builds, sets the paths for the scoped diagnostics in `src/quality/presets/effect.language-service.json`.
+Each such override becomes one entry under `overrides` of the `@effect/language-service` plugin in `tsconfig.json`, with `files` as its `include`, `excludeFiles` as its `exclude`, and the severities as its `options`.
 If all six rules are off, the override turns off all six scoped diagnostics on those paths.
 The `oxc/no-async-await` and `promise/avoid-new` settings also set `asyncFunction` and `newPromise`, whether they appear in the root rules or in an override.
 Later matching overrides replace only the severities they set, including `off`.
 Oxlint severities `allow` and `deny` map to `off` and `error`, and an unsupported scoped rule severity is refused.
-With `effect: false` and neither paired rule configured, the plugin holds no `overrides`.
+With `effect: false` and neither paired rule configured, the plugin holds the shared severities but no `overrides`.
 The TypeScript project keeps its own file selection, so the shared Effect diagnostics still run outside these paths.
 With `--check` it fails when the override or the kit's severities in `tsconfig.json` differ from what it would write, and writes nothing.
 
@@ -75,8 +76,8 @@ With `--check` it only compares.
 | Code | When |
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths and the kit's severities, or was written to hold them |
-| 1 | with `--check`, `tsconfig.json` holds other Effect paths or other severities for the kit's keys |
-| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a hidden or pruned path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse or lacks the objects the gate writes into |
+| 1 | with `--check`, the plugin is missing or its Effect paths or severities for the kit's keys differ from what the gate would write |
+| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a hidden or pruned path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, holds a `diagnosticSeverity` that is not an object, or lacks the objects the gate writes into |
 
 ## Sample output
 

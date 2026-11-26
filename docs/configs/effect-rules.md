@@ -66,7 +66,7 @@ A config that leaves `effect` out, sets it to a string or gives `files` no glob 
 | `ignore`, `ignoreCause` | Every value reference, because both failure and success become an indistinguishable success |
 | `catchCause` | Every value reference, because recovery includes typed errors, defects, and interruption |
 | `catchCauseIf`, `catchCauseFilter` | Every value reference, because matching causes can include defects or interruption, though unmatched causes still fail |
-| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or only parameters named with underscores |
+| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or does not read its first identifier parameter |
 
 The handler check covers both data-first and piped calls.
 The rule follows the `Effect` export from `effect` and namespace or named imports from `effect/Effect`, including renamed imports.
@@ -96,6 +96,7 @@ It turns off `catchAllToMapError`, `catchToIgnore`, and `catchToOrElseSucceed`.
 A mixed cause can make `Effect.catch` and `Effect.mapError` produce different failures.
 `catchToIgnore` suggests `Effect.ignore`, which the oxlint base refuses.
 `catchToOrElseSucceed` turns a blind `Effect.catch` fallback, which the oxlint base refuses, into `Effect.orElseSucceed`, the same blind recovery under another name.
+With `effect: false`, the shared diagnostics still run, but the plugin has no scoped overrides.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
 The kit owns the shared severities and writes the scoped severities in path overrides.
 A repository can add its own keys except the six scoped keys, which the gate removes from the top-level `diagnosticSeverity`.

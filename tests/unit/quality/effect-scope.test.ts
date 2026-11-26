@@ -56,7 +56,6 @@ test("overrides that already hold the paths, in any key order or layout, are lef
   const reordered = JSON.stringify({ options: held?.options, include: held?.include });
   const tsconfig = `{ "compilerOptions": { "plugins": [{ "overrides": [${reordered}], "diagnosticSeverity": ${JSON.stringify(KIT_SEVERITY)}, "name": "${LANGUAGE_SERVICE}" }] } }`;
   expect(rewritten(tsconfig)).toBe(tsconfig);
-  expect(rewritten(`{ "compilerOptions": {} }`, [])).toBe(`{ "compilerOptions": {} }`);
 });
 
 test("removed overrides take only their own text and comma, with the closer on their line or the next", () => {
