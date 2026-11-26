@@ -13,7 +13,6 @@ const SEVERITIES = [
   "globalErrorInEffectCatch",
   "globalErrorInEffectFailure",
   "catchUnfailableEffect",
-  "catchAllToMapError",
   "missingReturnYieldStar",
   "floatingEffect",
   "outdatedApi",
@@ -114,6 +113,47 @@ test("tsconfig.effect.json carries the language-service block and erasableSyntax
   const typecheck = await tsc();
   expect(typecheck.exitCode).not.toBe(0);
   expect(typecheck.text).toContain("erasableSyntaxOnly");
+});
+
+test("the shared policy does not suggest non-equivalent or banned recovery rewrites", async () => {
+  await consumer(["mixed-cause.ts", "recovery.ts"]);
+  await writeFile(
+    join(dir, "mixed-cause.ts"),
+    `import { Cause, Effect, Exit } from "effect";
+const input = Effect.failCause(Cause.combine(Cause.fail("bad"), Cause.die("bug")));
+const outputs = {
+  catch: Effect.runSyncExit(Effect.catch(input, (error) => Effect.fail(error.length))),
+  mapError: Effect.runSyncExit(Effect.mapError(input, (error) => error.length)),
+};
+for (const [name, exit] of Object.entries(outputs)) {
+  if (Exit.isFailure(exit)) {
+    console.log(name, JSON.stringify(exit.cause.reasons.map((reason) =>
+      Cause.isFailReason(reason) ? ["Fail", reason.error] :
+      Cause.isDieReason(reason) ? ["Die", reason.defect] : ["Interrupt"]
+    )));
+  }
+}
+`,
+  );
+  await writeFile(
+    join(dir, "recovery.ts"),
+    `import { Effect } from "effect";
+declare const input: Effect.Effect<void, string>;
+export const ignored = Effect.catch(input, () => Effect.void);
+export const fallback = Effect.catch(input, () => Effect.succeed("fallback"));
+`,
+  );
+  const runtime = await run(process.execPath, ["mixed-cause.ts"]);
+  expect(runtime.exitCode).toBe(0);
+  expect(runtime.text).toContain('catch [["Die","bad"],["Die","bug"]]');
+  expect(runtime.text).toContain('mapError [["Fail",3],["Die","bug"]]');
+
+  const diagnostics = await run(join(CHECKOUT, "node_modules", ".bin", "effect-tsgo"), [
+    "diagnostics", "--project", "tsconfig.json", "--format", "text", "--strict",
+  ]);
+  for (const rule of ["catchAllToMapError", "catchToIgnore", "catchToOrElseSucceed"]) {
+    expect(diagnostics.text).not.toContain(`effect(${rule})`);
+  }
 });
 
 test("a consumer of tsconfig.effect.json fails an undefined in a Schema.optionalKey field, passes once the key is left out", async () => {
