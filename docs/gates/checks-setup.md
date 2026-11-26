@@ -25,7 +25,10 @@ It keeps an existing `@types/bun` dev dependency version.
 The fresh `tsconfig.json` names `bun` in `types`.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
+Setup loads the oxlint config and uses the same JSONC patch as [checks-effect-scope](checks-effect-scope.md).
 The pair passes `checks-effect-scope --check` from the first write.
+If an existing oxlint config imports packages, those imports must resolve before setup can read the paths.
+Setup refuses the same unsupported scope patterns as `checks-effect-scope`.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
 It writes the workflow files and local actions `checks-workflows` writes, and every one holds its own steps.
 A repository whose workflow files already name a site gets the site set, and so does a run given the site name flags.
@@ -78,7 +81,7 @@ Then the run names the `CI_RUNS_ON` value to set.
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site, in a private repository or without a `release:assets` script in `package.json`, sets `platformPackages` in the kit or with a private `package.json` and no public workspace or more than one, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site, in a private repository or without a `release:assets` script in `package.json`, sets `platformPackages` in the kit or with a private `package.json` and no public workspace or more than one, a file it needs cannot be read, a retained `oxlint.config.ts` does not load or lacks a default config export, a scope, ignore pattern, or rule setting cannot be mirrored, a second oxlint config may change a scoped override, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

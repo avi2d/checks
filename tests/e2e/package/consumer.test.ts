@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
+import { FLAT_SETTLE, TANGLED_SETTLE } from "../lib/settle-fixtures.ts";
 import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
@@ -176,36 +177,6 @@ test(
   },
   180_000,
 );
-
-const TANGLED_SETTLE = `export function settle(order) {
-  if (order !== null) {
-    if (order.paid || order.credit) {
-      for (const line of order.lines) {
-        if (line.taxable && line.shipped || line.gift) {
-          charge(line);
-        } else if (line.refunded || line.voided) {
-          refund(line);
-        } else {
-          skip(line);
-        }
-      }
-      return "settled";
-    }
-    return "unpaid";
-  }
-  return "missing";
-}
-`;
-
-const FLAT_SETTLE = `export function settle(order) {
-  if (order === null) return "missing";
-  if (!order.paid) return "unpaid";
-  for (const line of order.lines) {
-    if (line.taxable) charge(line);
-  }
-  return "settled";
-}
-`;
 
 test(
   "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",
@@ -535,6 +506,61 @@ test(
     const green = await runScript("graphwalk");
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
+  },
+  180_000,
+);
+
+test(
+  "installed setup does not become stale after git init or the first commit",
+  async () => {
+    for (const setupBeforeInit of [false, true]) {
+      await useConsumer("tarball");
+      await rm(join(dir, ".oxlintrc.json"));
+      await rm(join(dir, ".gitignore"));
+      if (!setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      const written = await readFile(join(dir, "tsconfig.json"), "utf8");
+      if (setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await ran($`git ls-files`.cwd(dir))).text).toBe("");
+      await $`git add . && git -c user.name="Wren Fixture" -c user.email=wren@example.com commit -qm "feat: fixture"`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
+      expect(await readFile(join(dir, "tsconfig.json"), "utf8")).toBe(written);
+    }
+  },
+  180_000,
+);
+
+const SETUP_SCOPE_CASES = [
+  '{ effect: { files: ["src/**/*.ts"] }, overrides: [{ files: ["src/host.ts"], rules: { "oxc/no-async-await": "off" } }] }',
+  '{ effect: { files: ["src/**/*.ts"], excludeFiles: [] } }',
+  '{ effect: useEffect }',
+];
+const packedBin = (bin: string, ...args: readonly string[]) => ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
+test(
+  "installed setup does not write a stale tsconfig for overlapping, empty-exclude, or computed Effect scopes",
+  async () => {
+    for (const config of SETUP_SCOPE_CASES) {
+      await useConsumer("tarball");
+      await rm(join(dir, ".oxlintrc.json"));
+      await $`git init -q`.cwd(dir).quiet();
+      await writeFile(join(dir, "oxlint.config.ts"), `import { defineConfig } from "@avi2dg/checks/oxlint";
+const useEffect = false;
+export default defineConfig(${config});
+`);
+      const tsconfig = join(dir, "tsconfig.json");
+      await writeFile(tsconfig, '{ "compilerOptions": { "strict": true } }\n');
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      const written = await readFile(tsconfig, "utf8");
+      expect(written).toContain('"strict": true');
+      if (config === "{ effect: useEffect }") expect(written).not.toContain('"overrides"');
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
+      expect(await readFile(tsconfig, "utf8")).toBe(written);
+    }
   },
   180_000,
 );
