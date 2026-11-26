@@ -42,7 +42,9 @@ test("the installed gate and setup do not certify a basename question mark that 
   await tree.put(NON_ASCII, ASYNC_PLANT);
   const { linted } = await oxlint([]);
   expect(linted.get(NON_ASCII) ?? []).not.toContain(ASYNC_RULE);
-  expect((await diagnostics()).get(NON_ASCII)).toContain(SHARED);
+  const diagnosed = await diagnostics();
+  expect(diagnosed.get(NON_ASCII)).toContain(SHARED);
+  expect(diagnosed.get(NON_ASCII)).toContain(ASYNC_DIAGNOSTIC);
   await expectRefusal("?.ts");
 }, 180_000);
 
@@ -59,8 +61,30 @@ test.each([".gitignore", "ignorePatterns"])("%s question marks do not make setup
 
   await tree.put(NON_ASCII, ASYNC_PLANT);
   expect((await oxlint([])).linted.get(NON_ASCII)).toContain(ASYNC_RULE);
-  expect((await diagnostics()).get(NON_ASCII)).toContain(SHARED);
+  const diagnosed = await diagnostics();
+  expect(diagnosed.get(NON_ASCII)).toContain(SHARED);
+  expect(diagnosed.get(NON_ASCII)).not.toContain(ASYNC_DIAGNOSTIC);
   await expectRefusal(pattern);
+}, 180_000);
+
+test.each([".gitignore", "ignorePatterns"])("%s non-TypeScript extension classes do not leave scoped diagnostics in ignored directories", async (source) => {
+  await consumer();
+  const pattern = "*.py[cod]";
+  await configure(["scripts/**/*.ts"], source === "ignorePatterns" ? [pattern] : []);
+  if (source === ".gitignore") await tree.put(".gitignore", `node_modules/\n${pattern}\n`);
+  const kept = "scripts/a.pyx/keep.ts";
+  const initial = ["scripts/a.pyc/skip.ts", "scripts/a.pyo/skip.ts", "scripts/a.pyd/skip.ts"];
+  for (const file of [SCOPED, UNSCOPED, kept, ...initial]) await tree.put(file, ASYNC_PLANT);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths([SCOPED, kept]);
+
+  const added = ["scripts/nested/b.pyc/skip.ts", "scripts/nested/b.pyo/skip.ts", "scripts/nested/b.pyd/skip.ts"];
+  for (const file of added) await tree.put(file, ASYNC_PLANT);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths([SCOPED, kept]);
+  const diagnosed = await diagnostics();
+  for (const file of [...initial, ...added, UNSCOPED]) expect(diagnosed.get(file)).toContain(SHARED);
 }, 180_000);
 
 test("a basename glob cannot certify newly added files under tsgo's implicit dependency directories", async () => {

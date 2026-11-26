@@ -48,15 +48,18 @@ function outsideIncludes(pattern: string, directory: string, includes: readonly 
   const anchored = negatedOff.startsWith("/") || positive.replace(/\/$/, "").includes("/");
   const reach = anchored ? positive : "x";
   const prefix = literalDirectory(directory === "" ? reach : `${directory}/${reach}`);
-  if (prefix !== "" && includes.every((include) => {
+  return prefix !== "" && includes.every((include) => {
     const included = literalDirectory(include);
     return included !== "" && included !== prefix && !included.startsWith(`${prefix}/`) && !prefix.startsWith(`${included}/`);
-  })) return true;
-  if (pattern.startsWith("!") || pattern.endsWith("/") || pattern.includes("\\")) return false;
-  const leaf = positive.split("/").at(-1) ?? "";
-  const extension = leaf.slice(leaf.lastIndexOf("."));
-  return /^\.[a-zA-Z]+(?:\[[a-zA-Z]+\])?$/.test(extension)
-    && SOURCES.every((source) => !minimatch(source.slice(source.lastIndexOf(".")), extension));
+  });
+}
+
+function ignoreAlternatives(pattern: string): readonly string[] {
+  const extension = pattern.slice(pattern.lastIndexOf("."));
+  if (!/^\.[a-zA-Z]+\[[a-zA-Z]+\]$/.test(extension)
+    || SOURCES.some((source) => minimatch(source.slice(source.lastIndexOf(".")), extension))) return [pattern];
+  const start = pattern.lastIndexOf("[");
+  return [...pattern.slice(start + 1, -1)].map((letter) => `${pattern.slice(0, start)}${letter}`);
 }
 
 const trackedNonTypeScriptNegation = Effect.fn("trackedNonTypeScriptNegation")(function* (root: string, pattern: string, directory: string, trackedFiles: ReadonlySet<string>) {
@@ -82,17 +85,20 @@ const ignoreGlobs = Effect.fn("ignoreGlobs")(function* (root: string, { file, di
     if (pattern === "" || pattern.startsWith("#")) return Effect.succeed([]);
     const directoryOnly = pattern.endsWith("/");
     const unanchored = pattern.replace(/^\//, "").replace(/\/$/, "");
-    if (unanchored === "" || UNSUPPORTED_GLOB.test(unanchored)) {
+    const alternatives = ignoreAlternatives(unanchored);
+    if (unanchored === "" || alternatives.some((alternative) => UNSUPPORTED_GLOB.test(alternative))) {
       if (outsideIncludes(pattern, directory, includes)) return Effect.succeed([]);
       return trackedNonTypeScriptNegation(root, pattern, directory, trackedFiles).pipe(Effect.flatMap((safe) => safe
         ? Effect.succeed([])
         : Effect.fail(pathFault(file, line, "use separate positive file or directory patterns with * or ? instead"))));
     }
-    const relative = pattern.startsWith("/") || unanchored.includes("/") ? unanchored : `**/${unanchored}`;
-    const rooted = directory === "" ? relative : `${directory}/${relative}`;
-    const directoryGlob = endsInGlobstar(rooted) ? `${rooted.slice(0, -2)}*` : rooted;
-    const glob = directoryOnly ? `${directoryGlob}/**/*` : globstarWithLeaf(rooted);
-    return Effect.succeed([{ glob, pattern: line, source: file }]);
+    return Effect.succeed(alternatives.map((alternative) => {
+      const relative = pattern.startsWith("/") || alternative.includes("/") ? alternative : `**/${alternative}`;
+      const rooted = directory === "" ? relative : `${directory}/${relative}`;
+      const directoryGlob = endsInGlobstar(rooted) ? `${rooted.slice(0, -2)}*` : rooted;
+      const glob = directoryOnly ? `${directoryGlob}/**/*` : globstarWithLeaf(rooted);
+      return { glob, pattern: line, source: file };
+    }));
   });
 });
 
