@@ -1,5 +1,5 @@
-import { Crypto, Duration, Effect, FileSystem, Path, Ref, Schedule, Schema } from "effect";
-import * as Hex from "effect/encoding/Hex";
+import { Duration, Effect, FileSystem, Path, Ref, Schedule, Schema } from "effect";
+import { Digest } from "effect/crypto";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { collect } from "../core/git.ts";
@@ -28,9 +28,9 @@ function installedSha256(asset: Asset): string {
 }
 
 const sha256Of = Effect.fn("sha256Of")(function* (bytes: Uint8Array) {
-  const crypto = yield* Crypto.Crypto;
-  return Hex.encode(yield* crypto.digest("SHA-256", bytes));
-});
+  const digest = yield* Digest.Digest;
+  return yield* digest.digestHex(Digest.sha256, bytes);
+}, Effect.provide(Digest.layerWebCrypto));
 
 const verified = Effect.fn("verified")(function* (binary: string, sha256: string) {
   const fs = yield* FileSystem.FileSystem;
