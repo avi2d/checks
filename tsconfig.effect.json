@@ -15,7 +15,9 @@
           "globalErrorInEffectCatch": "error",
           "globalErrorInEffectFailure": "error",
           "catchUnfailableEffect": "error",
-          "catchAllToMapError": "error",
+          "catchAllToMapError": "off",
+          "catchToIgnore": "off",
+          "catchToOrElseSucceed": "off",
           "missingReturnYieldStar": "error",
           "floatingEffect": "error",
           "outdatedApi": "error"
