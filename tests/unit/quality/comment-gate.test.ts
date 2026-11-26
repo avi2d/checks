@@ -119,3 +119,10 @@ test("an added line that reads like a file header stays a line of the file it wa
   const diff = ["diff --git notes.md notes.md", "--- notes.md", "+++ notes.md", "@@ -1 +1,2 @@", "--- a rule", "+++ bold", "+It builds."].join("\n");
   expect([...parseAddedLines(diff)]).toEqual([["notes.md", new Set([1, 2])]]);
 });
+
+
+test("a file-wide oxlint suppression is refused, not ignored", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// oxlint-disable\n", new Set([2])))).toEqual([
+    "src/a.ts:2 carries the machine-read directive \`oxlint-disable\`. Fix what the tool is reporting, or stop running the tool on this file",
+  ]);
+});
