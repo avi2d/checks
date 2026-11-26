@@ -13,6 +13,7 @@ jobs:
   tests:
     runs-on: __RUNNER__
     timeout-minutes: 20
+    permissions: { contents: read }
     steps:
       - uses: __CHECKOUT__
       - uses: ./.github/actions/setup
@@ -26,6 +27,7 @@ __PLAYWRIGHT__
   gates:
     runs-on: __RUNNER__
     timeout-minutes: 20
+    permissions: { contents: read }
     steps:
       - uses: __CHECKOUT__
         with:
