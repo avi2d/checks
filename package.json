@@ -158,9 +158,9 @@
     "playwright-core": "1.63.0",
     "postcss-html": "2.0.0",
     "postcss-value-parser": "4.2.0",
-    "stylelint": "17.16.0",
-    "stylelint-config-standard": "40.0.0",
-    "stylelint-plugin-use-baseline": "1.4.7",
+    "stylelint": "18.1.0",
+    "stylelint-config-standard": "41.1.0",
+    "stylelint-plugin-use-baseline": "1.5.0",
     "typescript": "7.0.2"
   },
   "peerDependenciesMeta": {
@@ -208,9 +208,9 @@
     "playwright-core": "1.63.0",
     "postcss-html": "2.0.0",
     "postcss-value-parser": "4.2.0",
-    "stylelint": "17.16.0",
-    "stylelint-config-standard": "40.0.0",
-    "stylelint-plugin-use-baseline": "1.4.7",
+    "stylelint": "18.1.0",
+    "stylelint-config-standard": "41.1.0",
+    "stylelint-plugin-use-baseline": "1.5.0",
     "typescript": "7.0.2"
   },
   "dependencies": {
