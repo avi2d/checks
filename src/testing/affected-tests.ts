@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { addReachTests, readReachChange, refuseReachMap, type ReachChange } from "../core/reach-change.ts";
 import { basenameOf, pullRequestReason, testEnvironmentReason, TEST_FILE, TEST_FIXTURES } from "../core/test-impact.ts";
@@ -335,7 +335,7 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const files = yield* workingTreeFiles(root);
-  const read = (file: string) => fs.readFileString(path.join(root, file)).pipe(Effect.orElseSucceed(() => ""));
+  const read = (file: string) => fs.readFileString(path.join(root, file)).pipe(Effect.catchTag("PlatformError", () => Effect.succeed("")));
   const sources = new Map(yield* Effect.forEach(files.filter((file) => SOURCE_FILE.test(file)), (file) =>
     read(file).pipe(Effect.map((text) => [file, text] as const)), { concurrency: 16 }));
   const manifest = files.includes("package.json") ? yield* read("package.json").pipe(Effect.flatMap(decodeManifest)) : {};
@@ -373,7 +373,7 @@ const readDefaultNarrowing = Effect.fn("readDefaultNarrowing")(function* (root: 
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" } satisfies Narrowing;
   const helpers = changed.filter((file) => /\.(?:[cm]?[jt]sx?)$/.test(file) && testEnvironmentReason(file) === "a test helper");
   if (helpers.some((file) => preloadClosure(repository).has(file))) return { kind: "full", because: "a changed test helper is preloaded" } satisfies Narrowing;
-  const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files, graphOf(repository, helpers).readers).pipe(Effect.orElseSucceed(() => undefined));
+  const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files, graphOf(repository, helpers).readers).pipe(Effect.option, Effect.map(Option.getOrUndefined));
   if (helperTests === undefined) return { kind: "full", because: "the changed test helper's import graph cannot be resolved" } satisfies Narrowing;
   const remaining = changed.filter((file) => !helpers.includes(file) && file !== SETTINGS_FILE);
   const impact = remaining.length === 0 ? undefined : testImpact(remaining, repository, tests, tier);

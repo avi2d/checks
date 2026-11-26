@@ -58,6 +58,6 @@ export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (roo
     yield* Console.log(`browser: base and head builds took ${Date.now() - start} ms`);
     if (baseOutput === undefined || headOutput === undefined) return false;
     return (yield* sameOutput(baseOutput, headOutput)) && (yield* sameOutput(headOutput, path.join(root, site)));
-  }).pipe(Effect.scoped, Effect.orElseSucceed(() => false));
+  }).pipe(Effect.scoped, Effect.catchTag(["GitFailure", "PlatformError"], () => Effect.succeed(false)));
   return yield* prove;
 });

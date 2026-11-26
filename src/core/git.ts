@@ -62,7 +62,7 @@ export const defaultBranch = Effect.fn("defaultBranch")(function* (cwd?: string)
   return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
     Effect.flatMap(decodeEventRepository),
     Effect.map(({ repository }) => repository.default_branch),
-    Effect.orElseSucceed(() => DEFAULT_BRANCH),
+    Effect.catchTag(["PlatformError", "SchemaError"], () => Effect.succeed(DEFAULT_BRANCH)),
   );
 });
 
