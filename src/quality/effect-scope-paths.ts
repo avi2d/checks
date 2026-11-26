@@ -59,7 +59,7 @@ function ignoreAlternatives(pattern: string): readonly string[] {
   if (!/^\.[a-zA-Z]+\[[a-zA-Z]+\]$/.test(extension)
     || SOURCES.some((source) => minimatch(source.slice(source.lastIndexOf(".")), extension))) return [pattern];
   const start = pattern.lastIndexOf("[");
-  return [...pattern.slice(start + 1, -1)].map((letter) => `${pattern.slice(0, start)}${letter}`);
+  return pattern.slice(start + 1, -1).split("").map((letter) => `${pattern.slice(0, start)}${letter}`);
 }
 
 const trackedNonTypeScriptNegation = Effect.fn("trackedNonTypeScriptNegation")(function* (root: string, pattern: string, directory: string, trackedFiles: ReadonlySet<string>) {

@@ -36,7 +36,7 @@ Use a separate glob for each alternative.
 A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare directory name.
 On every generation and check, the gate examines matching TypeScript paths, including newly added paths.
 It refuses a path that oxlint includes but tsgo's wildcard include skips.
-These include hidden directories and the dependency directories `node_modules`, `bower_components`, and `jspm_packages`.
+These include hidden files and directories and the dependency directories `node_modules`, `bower_components`, and `jspm_packages`.
 Name that path explicitly in `files` or exclude its directory with a glob ending in `/**`.
 For paths with non-ASCII characters, `?` can match differently because oxlint counts UTF-8 bytes and tsgo counts characters.
 When their matches differ, the gate names the pattern and the path.
