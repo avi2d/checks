@@ -106,16 +106,20 @@ const configuredPackages = Effect.fn("configuredPackages")(function* (root: stri
   return configured === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configured);
 });
 
-export type ConfiguredRelease = { readonly release: PlatformRelease; readonly record: Readonly<Record<string, unknown>> };
+export type ConfiguredRelease = { readonly release: PlatformRelease; readonly record: Readonly<Record<string, unknown>>; readonly manifestFile: string };
 
-export const configuredPlatformRelease = Effect.fn("configuredPlatformRelease")(function* (root: string, head: string) {
+export const configuredPlatformRelease = Effect.fn("configuredPlatformRelease")(function* (root: string, head: string, workspacePaths?: readonly string[]) {
   const packages = yield* configuredPackages(root);
   if (packages === undefined) return undefined;
+  if (workspacePaths !== undefined && workspacePaths.length !== 1) {
+    return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets platformPackages, but the private root must publish exactly one workspace` });
+  }
+  const manifestPath = workspacePaths?.[0] ?? MANIFEST;
   const directory = yield* Config.String(PLATFORM_BINARIES_ENV).pipe(Config.withDefault(""));
   if (directory === "") {
     return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets platformPackages, but ${PLATFORM_BINARIES_ENV} names no directory of built binaries, so run checks-workflows --write` });
   }
-  const file = (yield* Path.Path).join(root, MANIFEST);
+  const file = (yield* Path.Path).join(root, manifestPath);
   const record = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(Effect.flatMap(decodeManifestRecord));
   const manifest = yield* decodeMainManifest(record).pipe(Effect.mapError((cause) => new PlatformPackageFault({ message: `${MANIFEST}: ${cause.message}` })));
   const release: PlatformRelease = { directory, binary: packages.binary, manifest, platforms: packages.platforms.map((name) => HOSTED_PLATFORMS[name]) };
@@ -123,12 +127,11 @@ export const configuredPlatformRelease = Effect.fn("configuredPlatformRelease")(
   if (missing !== undefined) {
     return yield* new PlatformPackageFault({ message: `${missing}; this run tags and publishes nothing, so rerun the main run of the release commit ${head.slice(0, 12)}, whose binaries job builds every platform` });
   }
-  return { release, record } satisfies ConfiguredRelease;
+  return { release, record, manifestFile: file } satisfies ConfiguredRelease;
 });
 
-// The main package names the platform packages, so npm must hold each of them before the main package is published.
-export const publishPlatformRelease = Effect.fn("publishPlatformRelease")(function* (root: string, { release, record }: ConfiguredRelease) {
+export const publishPlatformRelease = Effect.fn("publishPlatformRelease")(function* ({ release, record, manifestFile }: ConfiguredRelease) {
   yield* stageEach(release);
   yield* publishPlatformPackages(release);
-  yield* (yield* FileSystem.FileSystem).writeFileString((yield* Path.Path).join(root, MANIFEST), npmManifest(withOptionalDependencies(record, release)));
+  yield* (yield* FileSystem.FileSystem).writeFileString(manifestFile, npmManifest(withOptionalDependencies(record, release)));
 });

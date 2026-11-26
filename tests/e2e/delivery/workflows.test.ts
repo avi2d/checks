@@ -577,6 +577,18 @@ test("platformPackages writes a binaries job that passes checks-plain-steps, che
   });
 }, 60_000);
 
+test("platformPackages accepts one public workspace under a private root instead of refusing the release", async () => {
+  const repo = await open({
+    "package.json": manifest({ private: true, workspaces: ["packages/*"], scripts: { "release:assets": "bun scripts/assets.ts" } }),
+    "packages/run/package.json": JSON.stringify({ name: "@acme/cli", version: "1.0.0" }),
+    "checks.config.ts": 'export default { platformPackages: { binary: "acme", platforms: ["linux-x64"] } };\n',
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await text(repo, "main.yml")).toContain('CHECKS_PUBLISH_WORKSPACES: "true"');
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
 test("a private root with a public workspace does not omit workspace publishing", async () => {
   const repo = await open({
     "package.json": manifest({ private: true, workspaces: ["packages/*"] }),
