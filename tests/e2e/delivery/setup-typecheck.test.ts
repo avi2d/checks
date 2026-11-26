@@ -21,7 +21,9 @@ const UNKNOWN_ERROR = /index\.ts\(\d+,\d+\): error effect\(anyUnknownInErrorCont
 async function installKit(repo: FixtureRepo): Promise<void> {
   const dir = await scratch("checks-setup-pack-");
   const packed = await $`bun pm pack --destination ${dir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
-  await $`bun add --dev --ignore-scripts ${packed.stdout.toString().trim()}`.cwd(repo.dir).quiet();
+  const tarball = packed.stdout.toString().trim();
+  await $`bun pm pkg set ${`devDependencies.@avi2dg/checks=file:${tarball}`}`.cwd(repo.dir).quiet();
+  await $`bun install --ignore-scripts`.cwd(repo.dir).quiet();
 }
 
 const typecheck = (repo: FixtureRepo) => ran($`bun run typecheck`.cwd(repo.dir));
@@ -39,10 +41,9 @@ test("setup refuses a typecheck script that only echoes the checker names", asyn
 
 test("a clean install from setup reaches Effect diagnostics instead of failing to resolve Bun types", async () => {
   const repo = await open({
-    "checks.config.ts": 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({});\n',
     "index.ts": EFFECT_FAILURE,
   });
-  expect((await repo.script("delivery/setup.ts")).exitCode).toBe(0);
+  expect(await repo.script("delivery/setup.ts")).toMatchObject({ exitCode: 0 });
   await installKit(repo);
 
   const checked = await typecheck(repo);
@@ -63,7 +64,7 @@ test("setup does not drop shared Effect diagnostics when an unextended config ha
     "tsconfig.json": unextended,
     "index.ts": EFFECT_FAILURE + ASYNC_DECLARATION,
   });
-  expect((await repo.script("delivery/setup.ts")).exitCode).toBe(0);
+  expect(await repo.script("delivery/setup.ts")).toMatchObject({ exitCode: 0 });
   await installKit(repo);
 
   expect((await checkScope(repo)).exitCode).toBe(0);
