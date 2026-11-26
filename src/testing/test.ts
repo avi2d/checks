@@ -7,7 +7,7 @@ import { ciCores } from "../core/ci-cores.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
-import { decodeSetting, loadSettings, refuseOldPlace, Smoke } from "../core/settings.ts";
+import { decodeSetting, loadSettings, refuseOldPlace, Smoke, TestFileTimings } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -15,6 +15,7 @@ import { changedLocalPaths } from "./changed-tests.ts";
 import { judgeTestFileTimes, resolveTestFileMaxSeconds } from "./test-file-time.ts";
 import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test-refusal.ts";
 import { readSuiteScope, readTestFileSkips, type SuiteSelection } from "./test-selection.ts";
+import { parseShard, type Shard } from "./test-shard.ts";
 import { scanTestFiles, selectedTierFile, type Environment, type SkipDeclaration } from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
@@ -39,7 +40,7 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>] [--shard=<index>/<count>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
 
 export type EntryRun = "default" | "changed" | "pr" | "pr-screens";
@@ -54,17 +55,21 @@ export type EntryOptions = {
   readonly options: TestOptions;
   readonly junit: Option.Option<string>;
   readonly run: EntryRun;
+  readonly shard?: Shard;
 };
 
 export function entryOptions(args: readonly string[]): EntryOptions | undefined {
   const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
   const runs = args.flatMap((arg) => RUN_FLAGS.get(arg) ?? []);
-  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg)));
-  if (options === undefined || junit.length > 1 || runs.length > 1) return undefined;
+  const shardArgs = args.filter((arg) => arg.startsWith("--shard="));
+  const shard = shardArgs.length === 1 ? parseShard(shardArgs[0] ?? "") : undefined;
+  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg) && !arg.startsWith("--shard=")));
+  if (options === undefined || junit.length > 1 || runs.length > 1 || shardArgs.length > 1 || (shardArgs.length === 1 && shard === undefined)) return undefined;
   const [run = "default"] = runs;
   if (((run === "changed" || run === "pr-screens") && options.tier !== undefined) || (run !== "default" && options.full === true)) return undefined;
   if (run === "pr" && (options.tier === "live" || options.tier === "pixel")) return undefined;
-  return { options, junit: Option.fromNullishOr(junit[0]), run };
+  if (shard !== undefined && (options.tier === undefined || (run !== "default" && run !== "pr"))) return undefined;
+  return { options, junit: Option.fromNullishOr(junit[0]), run, ...(shard === undefined ? {} : { shard }) };
 }
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
@@ -292,7 +297,7 @@ const testEntry = Effect.gen(function* () {
   yield* refuseLocalTests(root);
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
-  const { options, junit, run } = entry;
+  const { options, junit, run, shard } = entry;
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
@@ -316,7 +321,9 @@ const testEntry = Effect.gen(function* () {
   }
   const configuredSmoke = settings["smoke"];
   const smoke = selection.kind === "smoke" && configuredSmoke !== undefined ? yield* decodeSetting("smoke", Smoke, configuredSmoke) : [];
-  const scope = yield* readSuiteScope(root, selection, smoke, excluded);
+  const timings = shard === undefined || settings["testFileTimings"] === undefined ? {} : yield* decodeSetting("testFileTimings", TestFileTimings, settings["testFileTimings"]);
+  const sharding = shard === undefined ? undefined : { shard, timings };
+  const scope = yield* readSuiteScope(root, selection, smoke, excluded, sharding);
   if (scope.kind === "empty") {
     yield* Console.log(`${NAME}: ${scope.message}`);
     return true;

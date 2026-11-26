@@ -3,6 +3,7 @@ import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { Usage } from "../core/main.ts";
 import { decodeSetting, SETTINGS_FILE, TestFileSkips } from "../core/settings.ts";
 import type { TestTier } from "../core/test-script.ts";
+import { shardFiles, type Shard } from "./test-shard.ts";
 import { readDeclarationsIn, readSmokeFiles, scanTestFiles, selectedTierFile } from "./test-skips.ts";
 
 export type SuiteSelection =
@@ -58,9 +59,12 @@ export const readSuiteScope = Effect.fn("readSuiteScope")(function* (
   selection: SuiteSelection,
   smoke: readonly string[],
   excluded: ReadonlySet<string>,
+  sharding?: { readonly shard: Shard; readonly timings: Readonly<Record<string, number>> },
 ) {
   const selected = yield* suiteFiles(root, selection, smoke);
-  const files = selected.filter((file) => !excluded.has(file));
+  const included = selected.filter((file) => !excluded.has(file));
+  const files = sharding === undefined ? included : shardFiles(included, sharding.timings, sharding.shard);
+  if (sharding !== undefined && files.length === 0) return { kind: "empty", message: "this shard has no test files" } as const;
   if (files.length === 0 && selected.length > 0) {
     return { kind: "empty", message: "all selected test files are excluded, so no test ran" } as const;
   }
@@ -69,7 +73,7 @@ export const readSuiteScope = Effect.fn("readSuiteScope")(function* (
     const message = `no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`;
     return { kind: "empty", message } as const;
   }
-  const args = files.length === selected.length ? suiteArgs(selection, smoke) : [...tierUnignoreArgs(selection), ...fileArgs(files)];
+  const args = sharding === undefined && files.length === selected.length ? suiteArgs(selection, smoke) : [...tierUnignoreArgs(selection), ...fileArgs(files)];
   const declarations = yield* readDeclarationsIn(root, files);
   return { kind: "run", args, declarations } as const;
 });
