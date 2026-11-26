@@ -12,7 +12,7 @@ As a gate it fails when either differs from what it would write.
 It loads `oxlint.config.ts` and takes the `files` and `excludeFiles` of the override holding the six Effect rules, the one the `effect` key of `defineConfig` builds.
 Each such override becomes one entry under `overrides` of the `@effect/language-service` plugin in `tsconfig.json`, with `files` as its `include`, `excludeFiles` as its `exclude`, and the severities in `src/quality/presets/effect.language-service.json` as its `options`.
 The `overrides` of that plugin and the kit's keys in its `diagnosticSeverity` belong to it, and every other key of `tsconfig.json` stays as the repository wrote it.
-With `effect: false` the plugin holds no `overrides`.
+With `effect: false` the plugin holds the shared severities but no `overrides`.
 With `--check` it fails when the override or the kit's severities in `tsconfig.json` differ from what it would write, and writes nothing.
 
 ## What it reads
@@ -43,7 +43,7 @@ With `--check` it only compares.
 | Code | When |
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths and the kit's severities, or was written to hold them |
-| 1 | with `--check`, `tsconfig.json` holds other Effect paths or other severities for the kit's keys |
+| 1 | with `--check`, the plugin is missing or its Effect paths or shared severities differ from the kit's |
 | 2 | `oxlint.config.ts` does not load, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, or holds a `diagnosticSeverity` that is not an object |
 
 ## Sample output
