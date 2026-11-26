@@ -79,7 +79,7 @@ test("the code set is ci, pr-title, main and release, and the site set adds prev
 test("configured tier shards keep the aggregate checks job and pull request selection", () => {
   const set: CallerSet = { ...CODE, testTierShards: { e2e: 2 } };
   const jobs = jobsOf(documentOf(set, "ci.yml"));
-  expect(jobs["e2e"]?.["strategy"]).toEqual({ matrix: { shard: [1, 2] } });
+  expect(jobs["e2e"]?.["strategy"]).toEqual({ "fail-fast": false, matrix: { shard: [1, 2] } });
   expect(stepsOf(jobs["e2e"] ?? {}).find((step) => step["id"] === "test")?.["run"]).toContain("--pr --tier=e2e --shard=${{ matrix.shard }}/2");
   expect(jobs["checks"]?.["needs"]).toContain("e2e");
 });
