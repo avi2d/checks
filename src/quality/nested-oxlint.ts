@@ -99,7 +99,7 @@ function directoryOf(config: string): string {
 }
 
 function nearestConfig(configs: readonly string[], file: string): string | undefined {
-  return configs.filter((config) => file.startsWith(directoryOf(config))).toSorted((first, second) => second.length - first.length)[0];
+  return configs.filter((config) => file.startsWith(directoryOf(config))).toSorted((first, second) => directoryOf(second).length - directoryOf(first).length)[0];
 }
 
 const failed = (message: string) => (cause: unknown) => new NestedOxlintError({ message: `${message}: ${String(cause)}` });
