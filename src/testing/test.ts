@@ -375,7 +375,8 @@ const judgeRun = Effect.fn("judgeRun")(function* (
 
   const xml = yield* fs.readFileString(outfile);
   const { results, crashedFiles } = yield* parseReport(xml);
-  yield* Console.log(`${NAME}: testFileTimings ${JSON.stringify(Object.fromEntries(yield* fileSeconds(xml)))}`);
+  const timings = [...(yield* fileSeconds(xml))].filter(([, seconds]) => seconds > 0);
+  yield* Console.log(`${NAME}: testFileTimings ${JSON.stringify(Object.fromEntries(timings))}`);
   for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
   const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));
   const verdict = judgeSkips(results, judged, policy.environment);

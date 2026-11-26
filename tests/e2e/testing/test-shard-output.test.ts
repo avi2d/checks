@@ -51,7 +51,7 @@ test("an unassigned shard does not claim its included files were excluded or sta
 
 for (const ci of [false, true]) {
   for (const fails of [false, true]) {
-    test(`a ${ci ? "CI" : "local"} ${fails ? "failed" : "passing"} run emits reusable file timings instead of only slow-file warnings`, async () => {
+    test(`a ${ci ? "CI" : "local"} ${fails ? "failed" : "passing"} run emits reusable file timings without zero values`, async () => {
       const repo = await open({
         "package.json": JSON.stringify({ name: "acme" }),
         "checks.config.ts": "export default { agentTests: { allowLocal: true } };\n",
@@ -68,11 +68,13 @@ for (const ci of [false, true]) {
       expect(line).toBeDefined();
       const json: unknown = JSON.parse(line?.slice("checks-test: testFileTimings ".length) ?? "null");
       const timings = Effect.runSync(Schema.decodeUnknownEffect(TestFileTimings)(json));
-      expect(Object.keys(timings).sort()).toEqual(["tests/unit/one.test.ts", "tests/unit/two.test.ts"]);
       const xml = await Bun.file(join(repo.dir, "report.xml")).text();
-      for (const [file, seconds] of Object.entries(timings)) {
-        const suite = [...xml.matchAll(/<testsuite\b[^>]*>/g)].find(([tag]) => tag.includes(`file="${file}"`))?.[0];
-        expect(seconds).toBe(Number(/\btime="([^"]+)"/.exec(suite ?? "")?.[1]));
+      const suites = [...xml.matchAll(/<testsuite\b[^>]*file="([^"]+)"[^>]*time="([^"]+)"[^>]*>/g)];
+      expect(suites.map(([, file]) => file).sort()).toEqual(["tests/unit/one.test.ts", "tests/unit/two.test.ts"]);
+      expect(Object.keys(timings).every((file) => suites.some(([, reported]) => reported === file))).toBe(true);
+      for (const [, file, time] of suites) {
+        const seconds = Number(time);
+        expect(timings[file ?? ""]).toBe(seconds > 0 ? seconds : undefined);
       }
     });
   }

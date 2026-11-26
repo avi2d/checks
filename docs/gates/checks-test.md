@@ -263,7 +263,9 @@ No `package.json` script passes `--parallel=<workers>`, as [checks-test-layout](
 The count is a whole number from 1 up.
 Each file runs in a fresh global, so a file cannot lean on state another file left behind.
 Tests still run in random order, and `test.only` still fails the run.
-Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged across the whole suite.
+Bun merges every worker's results into one JUnit report for the selected files.
+Skips, todos, and stale declarations are judged only within those files.
+A sharded run judges only its shard's files.
 [checks-flake](checks-flake.md#parallel-hunts) hunts with the worker count the same rule selects.
 
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
@@ -274,7 +276,8 @@ The index starts at 1 and cannot exceed the count.
 A `--pr` tier run selects the reached files before assigning them to shards.
 Set `testFileTimings` in `checks.config.ts` to map test file paths to recorded seconds.
 Each value must be finite and greater than zero.
-Every run with a JUnit report prints a `testFileTimings` line mapping the files it ran to their measured seconds.
+Every run with a JUnit report prints a `testFileTimings` line containing only positive file times.
+Files with nonpositive times are omitted.
 Copy its JSON object into the setting to refresh the recorded times.
 For sharded runs, merge the objects from every shard.
 The longest files go first to the shard with the smallest total recorded time.
