@@ -192,13 +192,14 @@ It downloads the binaries into the runner's temporary directory and names that d
 The `binaries` job reads the subject of the pushed commit, so a push that releases an earlier release commit builds no binaries.
 `checks-release-tag` then refuses before it tags anything and names the release commit, so rerun that commit's own main run.
 
-[checks-release-tag](checks-release-tag.md) then stages and publishes the packages before it publishes the main package:
+[checks-release-tag](checks-release-tag.md) then stages and publishes the packages before it publishes the main package.
+The main package is the root `package.json`, or under a private root the public workspace's `package.json`, such as `packages/run/package.json`:
 
-1. It stages one package per platform, named `<name>-<os>-<cpu>` after the `name` in `package.json`, such as `@acme/cli-linux-x64`.
+1. It stages one package per platform, named `<name>-<os>-<cpu>` after the `name` of the main package, such as `@acme/cli-linux-x64`.
    The package holds only the binary, as `<binary>-<version>`, and sets `os`, `cpu` and, on Linux, `libc`.
-   It takes `version`, `license`, `repository` and `publishConfig` from `package.json`.
+   It takes `version`, `license`, `repository` and `publishConfig` from the main package.
 2. It publishes each platform package.
-3. It adds each platform package at the same version to `optionalDependencies` in `package.json`.
+3. It adds each platform package at the same version to `optionalDependencies` in the main package's `package.json`.
 4. It publishes the main package.
 
 The release job publishes every package through npm trusted publishing, which signs each with provenance and needs no token.
@@ -317,7 +318,7 @@ It names the fix.
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 

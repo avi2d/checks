@@ -121,7 +121,7 @@ export const configuredPlatformRelease = Effect.fn("configuredPlatformRelease")(
   }
   const file = (yield* Path.Path).join(root, manifestPath);
   const record = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(Effect.flatMap(decodeManifestRecord));
-  const manifest = yield* decodeMainManifest(record).pipe(Effect.mapError((cause) => new PlatformPackageFault({ message: `${MANIFEST}: ${cause.message}` })));
+  const manifest = yield* decodeMainManifest(record).pipe(Effect.mapError((cause) => new PlatformPackageFault({ message: `${manifestPath}: ${cause.message}` })));
   const release: PlatformRelease = { directory, binary: packages.binary, manifest, platforms: packages.platforms.map((name) => HOSTED_PLATFORMS[name]) };
   const missing = yield* missingBinary(release);
   if (missing !== undefined) {

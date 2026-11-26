@@ -175,7 +175,7 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
   const workspaces = yield* checkedWorkspaces(root, landed);
-  const platforms = yield* configuredPlatformRelease(root, landed.head, landed.publishes ? undefined : workspaces.map((workspace) => workspace.path);
+  const platforms = yield* configuredPlatformRelease(root, landed.head, landed.publishes ? undefined : workspaces.map((workspace) => workspace.path));
   const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
   if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
   if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
