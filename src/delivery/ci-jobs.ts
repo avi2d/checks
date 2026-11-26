@@ -4,7 +4,7 @@ import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-
 
 export type RepositoryKind = "code" | "site";
 
-export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
+const DEFAULT_TEST_RUN = "bunx checks-test --pr";
 export const RELEASE_TEST_RUN = "bunx checks-ci test";
 const BROWSER_RUN = "bunx checks-browser --pr";
 
@@ -42,6 +42,9 @@ const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, brows
 const BROWSER: TestJob = { name: "browser", run: BROWSER_RUN, browsers: "webkit", readsBuild: true, runsOn: DEFAULT_RUNNER };
 
 export const isBrowserWalk = (test: TestJob): boolean => test.readsBuild && test.run === BROWSER_RUN;
+
+export const testTierOf = (run: string): "unit" | "e2e" | undefined =>
+  run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
 
 export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
   code: { tests: [UNIT, E2E] },
@@ -82,7 +85,7 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
   const held = yield* decodeFullTestJob(job).pipe(Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} is not a test job checks-workflows writes: ${issue.message}` })));
   const step = held.steps.find((candidate) => candidate.id === TEST_STEP);
   const tier = step?.env?.["TEST_TIER"];
-  const run = step?.run === RELEASE_TEST_RUN && (tier === "unit" || tier === "e2e") ? `${DEFAULT_TEST_RUN} --tier=${tier}` : step?.run;
+  const run = step?.run === RELEASE_TEST_RUN && (tier === "unit" || tier === "e2e") ? `${DEFAULT_TEST_RUN} --tier=${tier}` : step?.run?.replace(/ --shard=\$\{\{ matrix\.shard \}\}\/\d+$/, "");
   const browsers = held.steps.find((candidate) => candidate.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
   return {
     name,

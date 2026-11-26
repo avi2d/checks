@@ -7,7 +7,7 @@ import { ciCores } from "../core/ci-cores.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
-import { decodeSetting, loadSettings, refuseOldPlace, Smoke } from "../core/settings.ts";
+import { decodeSetting, loadSettings, refuseOldPlace, Smoke, TestFileTimings } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -15,8 +15,9 @@ import { changedLocalPaths } from "./changed-tests.ts";
 import { judgeTestFileTimes, resolveTestFileMaxSeconds } from "./test-file-time.ts";
 import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test-refusal.ts";
 import { readSuiteScope, readTestFileSkips, type SuiteSelection } from "./test-selection.ts";
+import { parseShard, type Shard } from "../core/shard.ts";
 import { scanTestFiles, selectedTierFile, type Environment, type SkipDeclaration } from "./test-skips.ts";
-import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
+import { fileSeconds, NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export { suiteArgs, type SuiteSelection } from "./test-selection.ts";
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
@@ -39,7 +40,7 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>] [--shard=<index>/<count>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
 
 export type EntryRun = "default" | "changed" | "pr" | "pr-screens";
@@ -54,17 +55,26 @@ export type EntryOptions = {
   readonly options: TestOptions;
   readonly junit: Option.Option<string>;
   readonly run: EntryRun;
+  readonly shard?: Shard;
 };
+
+function refusedCombination(run: EntryRun, options: TestOptions, shard: Shard | undefined): boolean {
+  if ((run === "changed" || run === "pr-screens") && options.tier !== undefined) return true;
+  if (run !== "default" && options.full === true) return true;
+  if (run === "pr" && (options.tier === "live" || options.tier === "pixel")) return true;
+  return shard !== undefined && (options.tier === undefined || (run !== "default" && run !== "pr"));
+}
 
 export function entryOptions(args: readonly string[]): EntryOptions | undefined {
   const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
   const runs = args.flatMap((arg) => RUN_FLAGS.get(arg) ?? []);
-  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg)));
-  if (options === undefined || junit.length > 1 || runs.length > 1) return undefined;
+  const shardArgs = args.filter((arg) => arg.startsWith("--shard="));
+  const shard = shardArgs.length === 1 ? parseShard(shardArgs[0] ?? "") : undefined;
+  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg) && !arg.startsWith("--shard=")));
+  if (options === undefined || junit.length > 1 || runs.length > 1 || shardArgs.length > 1 || (shardArgs.length === 1 && shard === undefined)) return undefined;
   const [run = "default"] = runs;
-  if (((run === "changed" || run === "pr-screens") && options.tier !== undefined) || (run !== "default" && options.full === true)) return undefined;
-  if (run === "pr" && (options.tier === "live" || options.tier === "pixel")) return undefined;
-  return { options, junit: Option.fromNullishOr(junit[0]), run };
+  if (refusedCombination(run, options, shard)) return undefined;
+  return { options, junit: Option.fromNullishOr(junit[0]), run, ...(shard === undefined ? {} : { shard }) };
 }
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
@@ -287,12 +297,24 @@ const temporaryReportPath = Effect.fn("temporaryReportPath")(function* () {
   return path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
 });
 
+function emptySelectionMessage(selection: SuiteSelection): string | undefined {
+  if (selection.kind === "files" && selection.files.length === 0) return "no selected test file, so no test ran";
+  if (selection.kind === "changed" && selection.files.length === 0) return "the change reaches no test file, so no test ran";
+  return undefined;
+}
+
+const shardingOf = Effect.fn("shardingOf")(function* (shard: Shard | undefined, configured: unknown) {
+  if (shard === undefined) return undefined;
+  const timings = configured === undefined ? {} : yield* decodeSetting("testFileTimings", TestFileTimings, configured);
+  return { shard, timings };
+});
+
 const testEntry = Effect.gen(function* () {
   const root = process.cwd();
   yield* refuseLocalTests(root);
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
-  const { options, junit, run } = entry;
+  const { options, junit, run, shard } = entry;
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
@@ -306,17 +328,15 @@ const testEntry = Effect.gen(function* () {
     : { environment };
   const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
   const selection = yield* entrySelection(run, options, environment);
-  if (selection.kind === "files" && selection.files.length === 0) {
-    yield* Console.log(`${NAME}: no selected test file, so no test ran`);
-    return true;
-  }
-  if (selection.kind === "changed" && selection.files.length === 0) {
-    yield* Console.log(`${NAME}: the change reaches no test file, so no test ran`);
+  const nothingSelected = emptySelectionMessage(selection);
+  if (nothingSelected !== undefined) {
+    yield* Console.log(`${NAME}: ${nothingSelected}`);
     return true;
   }
   const configuredSmoke = settings["smoke"];
   const smoke = selection.kind === "smoke" && configuredSmoke !== undefined ? yield* decodeSetting("smoke", Smoke, configuredSmoke) : [];
-  const scope = yield* readSuiteScope(root, selection, smoke, excluded);
+  const sharding = yield* shardingOf(shard, settings["testFileTimings"]);
+  const scope = yield* readSuiteScope(root, selection, smoke, excluded, sharding);
   if (scope.kind === "empty") {
     yield* Console.log(`${NAME}: ${scope.message}`);
     return true;
@@ -355,6 +375,8 @@ const judgeRun = Effect.fn("judgeRun")(function* (
 
   const xml = yield* fs.readFileString(outfile);
   const { results, crashedFiles } = yield* parseReport(xml);
+  const timings = [...(yield* fileSeconds(xml))].filter(([, seconds]) => seconds > 0);
+  yield* Console.log(`${NAME}: testFileTimings ${JSON.stringify(Object.fromEntries(timings))}`);
   for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
   const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));
   const verdict = judgeSkips(results, judged, policy.environment);

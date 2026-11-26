@@ -826,6 +826,35 @@
       "description": "The time limit in seconds for each test file in CI.",
       "default": 120
     },
+    "testTierShards": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "e2e": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      },
+      "additionalProperties": false,
+      "description": "The number of parallel CI jobs for each test tier."
+    },
+    "testFileTimings": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "description": "The recorded seconds per test file, which balance the shards."
+    },
     "testFileSkips": {
       "type": "array",
       "items": {
