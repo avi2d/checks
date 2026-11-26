@@ -20,6 +20,7 @@ test("a docs-only change runs a tree gate", () => {
   const scope = selectScope(["README.md", "docs/gates/checks-lint.md", "AGENTS.md"]);
   expect(scope.full).toBe(false);
   expect(scope.gates).toContain("checks-copy");
+  expect(scope.gates).toContain("checks-ci-wiring");
 });
 
 test("a checks.config.ts change takes the full run instead of the copy subset", () => {
