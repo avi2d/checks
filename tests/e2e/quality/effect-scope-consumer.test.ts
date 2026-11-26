@@ -393,7 +393,7 @@ export default defineConfig({ effect: { files: ["scripts/**/*.ts"] }, ignorePatt
     expect((await scopeGate()).exitCode).toBe(0);
     expect((await scopeGate("--check")).exitCode).toBe(0);
     await expectAsyncPaths([SCOPED]);
-    for (const refused of ["!scripts/*.ts", "scripts/[ab]/*.cts", "scripts/\\*.tsx"]) {
+    for (const refused of ["!scripts/*.ts", "scripts/[ab]/*.cts", "scripts/\\*.tsx", "!keep/", "!scripts/vendor.lib", "!.vitepress"]) {
       await configure([...unrelated, refused]);
       for (const args of [[], ["--check"]]) {
         const result = await scopeGate(...args);

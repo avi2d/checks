@@ -40,13 +40,16 @@ function literalDirectory(pattern: string): string {
 }
 
 function outsideIncludes(pattern: string, directory: string, includes: readonly string[]): boolean {
-  const positive = pattern.replace(/^!/, "").replace(/^\//, "");
-  const prefix = literalDirectory(directory === "" ? positive : `${directory}/${positive}`);
+  const negatedOff = pattern.replace(/^!/, "");
+  const positive = negatedOff.replace(/^\//, "");
+  const anchored = negatedOff.startsWith("/") || positive.replace(/\/$/, "").includes("/");
+  const reach = anchored ? positive : "x";
+  const prefix = literalDirectory(directory === "" ? reach : `${directory}/${reach}`);
   if (prefix !== "" && includes.every((include) => {
     const included = literalDirectory(include);
     return included !== "" && included !== prefix && !included.startsWith(`${prefix}/`) && !prefix.startsWith(`${included}/`);
   })) return true;
-  if (pattern.endsWith("/") || pattern.includes("\\")) return false;
+  if (pattern.startsWith("!") || pattern.endsWith("/") || pattern.includes("\\")) return false;
   const leaf = positive.split("/").at(-1) ?? "";
   const extension = leaf.slice(leaf.lastIndexOf("."));
   return /^\.[a-zA-Z]+(?:\[[a-zA-Z]+\])?$/.test(extension)
