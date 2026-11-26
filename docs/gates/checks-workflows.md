@@ -158,6 +158,59 @@ After the `github-release` job, the `assets` job attaches the files from those b
 
 `checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
 
+### Publish platform packages
+
+Set `platformPackages` in `checks.config.ts` to publish a compiled binary to npm as one package per platform, the way the kit publishes its own:
+
+```ts
+export default defineConfig({
+  platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] },
+});
+```
+
+`binary` is the name `bun run release:assets` gives each compiled file.
+`platforms` lists the platforms to build and publish, each once.
+Without the setting, `main.yml` holds no `binaries` job and stays as it was.
+
+Each platform builds on its own GitHub-hosted runner:
+
+| Platform | Runner | npm `os`, `cpu` and `libc` |
+| --- | --- | --- |
+| `darwin-arm64` | `macos-latest` | `darwin`, `arm64` |
+| `darwin-x64` | `macos-15-intel` | `darwin`, `x64` |
+| `linux-arm64` | `ubuntu-24.04-arm` | `linux`, `arm64`, `glibc` |
+| `linux-x64` | `ubuntu-latest` | `linux`, `x64`, `glibc` |
+
+With the setting, `main.yml` holds a `binaries` job that runs on a release commit, once on each platform's runner.
+Each run checks out the release commit, sets up Bun and runs `bun run release:assets`.
+The script writes the binary for its own runner as `release-assets/<binary>-<os>-<cpu>`, such as `release-assets/acme-linux-x64`.
+The run uploads the files in `release-assets/` whose names start with `<binary>-`.
+The `release` job waits for the `binaries` job and does not run when it fails.
+It downloads the binaries into the runner's temporary directory and names that directory in `CHECKS_PLATFORM_BINARIES` on the `checks-release-tag` step.
+The `binaries` job reads the subject of the pushed commit, so a push that releases an earlier release commit builds no binaries.
+`checks-release-tag` then refuses before it tags anything and names the release commit, so rerun that commit's own main run.
+
+[checks-release-tag](checks-release-tag.md) then stages and publishes the packages before it publishes the main package:
+
+1. It stages one package per platform, named `<name>-<os>-<cpu>` after the `name` in `package.json`, such as `@acme/cli-linux-x64`.
+   The package holds only the binary, as `<binary>-<version>`, and sets `os`, `cpu` and, on Linux, `libc`.
+   It takes `version`, `license`, `repository` and `publishConfig` from `package.json`.
+2. It publishes each platform package.
+3. It adds each platform package at the same version to `optionalDependencies` in `package.json`.
+4. It publishes the main package.
+
+The release job publishes every package through npm trusted publishing, which signs each with provenance and needs no token.
+npm takes a trusted publish only for a package that already exists, so publish each new platform package once by hand.
+Then add `main.yml` as its trusted publisher on npmjs.com.
+A rerun skips each version npm already holds.
+
+The main package's command finds the binary itself, as the kit's launcher in `src/core/native-launch.ts` does.
+It resolves `<name>-<os>-<cpu>/<binary>-<version>` from its install and runs that file.
+When no platform package matches the host, it runs its source.
+npm installs only the optional dependency whose `os`, `cpu` and `libc` match the host, so an install runs no `postinstall` script and downloads one binary.
+
+`checks-workflows` refuses the setting when `package.json` has no `release:assets` script or sets `private: true`, in a site, in the kit, and when `repositoryVisibility` is `private`.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:
@@ -260,8 +313,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` in a site or a private repository |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` and `package.json` defines no `release:assets` script, or `--write` meets `releaseAssets` in a site or a private repository |
+| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` |
 
 ## Sample output
 

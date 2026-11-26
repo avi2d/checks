@@ -20,7 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
-| `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
+| `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-workflows`, `checks-setup`, `checks-release-tag`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery, quarantine exclusion and the preload that guards agent runs | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -109,6 +109,7 @@ export default defineConfig({
 | --- | --- | --- | --- |
 | `repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
 | `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
+| `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
 | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
 | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
 | `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |

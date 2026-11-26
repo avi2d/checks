@@ -555,6 +555,28 @@ test("releaseAssets writes an assets job that passes checks-plain-steps, checks-
   });
 }, 60_000);
 
+test("platformPackages writes a binaries job that passes checks-plain-steps, checks-workflows and checks-ci-wiring, and is refused without a release:assets script instead of writing a job that cannot build", async () => {
+  const config = 'export default { platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] } };\n';
+  const withScript = manifest({ scripts: { test: "bun test", "release:assets": "bun scripts/assets.ts" } });
+  const repo = await open({ "package.json": withScript, ".bun-version": FLEET_BUN_VERSION + "\n", "checks.config.ts": config });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const jobs = jobsOf(await parsed(repo, "main.yml"), "main.yml");
+  expect(Object.keys(jobs)).toEqual(["suite", "binaries", "release"]);
+  expect(jobs).toMatchObject({
+    release: { steps: expect.arrayContaining([expect.objectContaining({ run: "bunx checks-release-tag", env: expect.objectContaining({ CHECKS_PLATFORM_BINARIES: "${{ runner.temp }}/platform-binaries" }) })]) },
+  });
+  await repo.commit("ci: write the workflow set");
+  expect(await gatesOver(repo)).toEqual([["plain-steps", 0, ""], ["workflows", 0, ""], ["ci-wiring", 0, ""]]);
+
+  const bare = await open({ "package.json": manifest(), "checks.config.ts": config });
+  await bare.commit("start");
+  expect(await workflows(bare, ["--write"])).toEqual({
+    exitCode: 2,
+    text: "workflows: checks.config.ts sets platformPackages, but package.json defines no release:assets script to build the binaries, so add the script or remove the setting\n",
+  });
+}, 60_000);
+
 test("a private root with a public workspace does not omit workspace publishing", async () => {
   const repo = await open({
     "package.json": manifest({ private: true, workspaces: ["packages/*"] }),

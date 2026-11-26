@@ -215,6 +215,7 @@ const PROSE: Block = {
 const SETTING_READERS = {
   repositoryVisibility: "[checks-workflows](../gates/checks-workflows.md)",
   releaseAssets: "[checks-workflows](../gates/checks-workflows.md#attach-release-assets)",
+  platformPackages: "[checks-workflows](../gates/checks-workflows.md#publish-platform-packages)",
   smoke: "[checks-test](../gates/checks-test.md)",
   reach: "[checks-test](../gates/checks-test.md#the-reach-map)",
   mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",

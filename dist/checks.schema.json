@@ -16,6 +16,45 @@
       "description": "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
       "default": false
     },
+    "platformPackages": {
+      "type": "object",
+      "properties": {
+        "binary": {
+          "type": "string",
+          "description": "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>."
+        },
+        "platforms": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "enum": [
+                "darwin-arm64",
+                "darwin-x64",
+                "linux-arm64",
+                "linux-x64"
+              ]
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "darwin-arm64",
+              "darwin-x64",
+              "linux-arm64",
+              "linux-x64"
+            ]
+          }
+        }
+      },
+      "required": [
+        "binary",
+        "platforms"
+      ],
+      "additionalProperties": false,
+      "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
+    },
     "smoke": {
       "type": "array",
       "items": {

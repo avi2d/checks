@@ -19,7 +19,7 @@ export type OnMain = {
   readonly changelog: string;
 };
 
-type Shape = { readonly private?: boolean; readonly testedOther?: boolean; readonly workspace?: boolean };
+type Shape = { readonly private?: boolean; readonly testedOther?: boolean; readonly workspace?: boolean; readonly platformPackages?: boolean };
 
 function releasable(version: string, shape: Shape): string {
   const scripts = { build: "bun ./scripts/build.ts" };
@@ -39,6 +39,7 @@ export function releasedMains(prefix: string): (subject: string, shape?: Shape) 
       "vendor/fixture-helper/index.js": "export default 1;\n",
       ".gitignore": "node_modules/\n",
     });
+    if (shape.platformPackages === true) await repo.write({ "checks.config.ts": 'export default { platformPackages: { binary: "widget", platforms: ["linux-x64"] } };\n' });
     if (shape.workspace === true) {
       await repo.write({ "packages/public/package.json": JSON.stringify({ name: "@acme/public", version: "0.1.0" }), "packages/private/package.json": JSON.stringify({ name: "@acme/private", version: "0.1.0", private: true }) });
     }

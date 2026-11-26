@@ -1,4 +1,5 @@
 import { Option, Schema } from "effect";
+import type { PlatformPackages } from "../core/settings.ts";
 import { crons } from "./release-schedule.ts";
 import { weekly } from "./schedule-policy.ts";
 import { calledFileOf, workflowJobs, type Workflow } from "./workflow-references.ts";
@@ -22,6 +23,7 @@ export type CallerOptions = {
   readonly publicRepository: boolean;
   readonly releaseVersionInput: boolean;
   readonly releaseAssets: boolean;
+  readonly platformPackages: PlatformPackages | undefined;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -38,6 +40,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   publicRepository: false,
   releaseVersionInput: false,
   releaseAssets: false,
+  platformPackages: undefined,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -162,7 +165,7 @@ const decodeVersionInput = Schema.decodeUnknownOption(
 
 const holdsVersionInput = (release: Workflow | undefined): boolean => release !== undefined && Option.isSome(decodeVersionInput(release.document));
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean, platformPackages: PlatformPackages | undefined): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
@@ -177,5 +180,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     publicRepository,
     releaseVersionInput: holdsVersionInput(held("release.yml")),
     releaseAssets,
+    platformPackages,
   };
 }

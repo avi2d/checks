@@ -33,8 +33,13 @@ const EVERY_OPTION: CallerSet = {
     publicRepository: true,
     releaseVersionInput: false,
     releaseAssets: true,
+    platformPackages: undefined,
   },
 };
+
+const PACKAGED: CallerSet = { ...EVERY_OPTION, options: { ...EVERY_OPTION.options, releaseAssets: false, platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] } } };
+
+const FIXTURES = new URL("../../fixtures/workflows/", import.meta.url);
 
 const EXPRESSION = "$";
 
@@ -190,10 +195,10 @@ test("every option lands in the file that uses it, so a pack lint without the se
 });
 
 test("a set written with every option reads back as the same set, so a check right after --write never reports the file it just wrote", () => {
-  for (const set of [EVERY_OPTION, CHECKED, SITE]) {
+  for (const set of [EVERY_OPTION, PACKAGED, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets, set.options.platformPackages));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }
@@ -235,6 +240,54 @@ test("the assets job builds on Linux x64 and macOS arm64 from the released tag a
     expect.objectContaining({ run: "bun run release:assets" }),
     expect.objectContaining({ env: { GH_TOKEN: EXPRESSION + "{{ github.token }}", TAG: tagged }, run: 'gh release upload "$TAG" release-assets/* --clobber' }),
   ]);
+});
+
+test("main.yml without platformPackages is byte for byte the file written before the option existed, so leaving it off never adds a binaries job, a download step or a release step variable", async () => {
+  expect(textOf(CODE, "main.yml")).toBe(await Bun.file(new URL("main-unpublished.yml", FIXTURES)).text());
+  expect(textOf(EVERY_OPTION, "main.yml")).toBe(await Bun.file(new URL("main-with-assets.yml", FIXTURES)).text());
+});
+
+test("the platformPackages option changes only main.yml, so it cannot reach ci.yml, release.yml or another file of the set", () => {
+  const without: CallerSet = { ...PACKAGED, options: { ...PACKAGED.options, platformPackages: undefined } };
+  const before = new Map(written(without).map(({ name, text }) => [name, text]));
+  const after = written(PACKAGED);
+  expect(after.map(({ name }) => name)).toEqual([...before.keys()]);
+  expect(after.filter(({ name, text }) => before.get(name) !== text).map(({ name }) => name)).toEqual(["main.yml"]);
+});
+
+test("the binaries job builds each named platform on its own runner from the release commit and the release job publishes only after it, so a failed build never publishes a main package that names a missing platform package", () => {
+  const jobs = jobsOf(documentOf(PACKAGED, "main.yml"));
+  expect(Object.keys(jobs)).toEqual(["suite", "binaries", "release"]);
+  const built = jobs["binaries"] ?? {};
+  expect(built).toMatchObject({
+    if: "startsWith(github.event.head_commit.message, 'chore: release ')",
+    "runs-on": EXPRESSION + "{{ matrix.runner }}",
+    strategy: { matrix: { runner: ["macos-latest", "ubuntu-latest"] } },
+    permissions: { contents: "read" },
+  });
+  expect(stepsOf(built)).toEqual([
+    expect.objectContaining({ with: { "persist-credentials": false } }),
+    { uses: "./.github/actions/setup" },
+    expect.objectContaining({ run: "bun run release:assets" }),
+    expect.objectContaining({ with: { name: "platform-binary-" + EXPRESSION + "{{ matrix.runner }}", path: "release-assets/acme-*", "if-no-files-found": "error" } }),
+  ]);
+  const release = jobs["release"] ?? {};
+  expect(release["needs"]).toEqual(["suite", "binaries"]);
+  const runs = (suite: string, binaries: string): boolean => jobRuns(String(release["if"]), { needs: { suite: { result: suite }, binaries: { result: binaries } } }, suite === "success" && binaries === "success");
+  expect(runs("success", "success")).toBe(true);
+  expect(runs("skipped", "skipped")).toBe(true);
+  expect(runs("success", "failure")).toBe(false);
+  expect(runs("failure", "success")).toBe(false);
+  const binaries = EXPRESSION + "{{ runner.temp }}/platform-binaries";
+  expect(stepsOf(release).slice(-2)).toEqual([
+    expect.objectContaining({ if: "needs.binaries.result == 'success'", with: { pattern: "platform-binary-*", "merge-multiple": true, path: binaries } }),
+    { env: { GH_TOKEN: EXPRESSION + "{{ github.token }}", CHECKS_PLATFORM_BINARIES: binaries }, run: "bunx checks-release-tag" },
+  ]);
+});
+
+test("each platform name maps to the GitHub-hosted runner of that operating system and processor, so an arm64 binary is never built on an x64 runner", () => {
+  const every: CallerSet = { ...PACKAGED, options: { ...PACKAGED.options, platformPackages: { binary: "acme", platforms: ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] } } };
+  expect(jobsOf(documentOf(every, "main.yml"))["binaries"]?.["strategy"]).toEqual({ matrix: { runner: ["macos-latest", "macos-15-intel", "ubuntu-24.04-arm", "ubuntu-latest"] } });
 });
 
 test("a production.yml that names another domain than the set differs, so a site file cannot drift from its siblings", () => {
