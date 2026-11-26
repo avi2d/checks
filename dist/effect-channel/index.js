@@ -1,17 +1,20 @@
 // src/quality/effect-channel/no-error-channel-escape.ts
-var EFFECT_SOURCES = new Set(["effect", "effect/Effect"]);
-var INSTEAD = {
-  drops: "it drops the failure and the success together, so no caller can tell one from the other. Handle the error by tag, or keep it as a value with Effect.result or Effect.exit",
-  swallows: "a Cause is the typed error plus defects plus interruption, so this swallows the bugs and the cancellations along with it. Catch the errors you named, with Effect.catchTag or Effect.catchTags",
-  blind: "the handler cannot see what it is recovering from, so every error in the channel collapses into one fallback. Name the errors with Effect.catchTag, or take the error and use it"
+var EFFECT_BARREL = "effect";
+var EFFECT_MODULE = "effect/Effect";
+var DIAGNOSTIC = {
+  drops: "erases the error channel: it drops the failure and the success together, so no caller can tell one from the other. Handle the error by tag, or keep it as a value with Effect.result or Effect.exit",
+  swallows: "erases the error channel: a Cause is the typed error plus defects plus interruption, so this swallows the bugs and the cancellations along with it. Catch the errors you named, with Effect.catchTag or Effect.catchTags",
+  filtered: "can recover from a Cause that includes defects or interruptions. A non-match still fails. To handle only typed errors, use Effect.catchIf or Effect.catchFilter",
+  blind: "erases the error channel: the handler cannot see what it is recovering from, so every error in the channel collapses into one fallback. Name the errors with Effect.catchTag, or take the error and use it"
 };
 var REFUSED = new Map([
-  ["ignore", INSTEAD.drops],
-  ["ignoreCause", INSTEAD.drops],
-  ["catchCause", INSTEAD.swallows],
-  ["catchCauseIf", INSTEAD.swallows],
-  ["catchCauseFilter", INSTEAD.swallows]
+  ["ignore", DIAGNOSTIC.drops],
+  ["ignoreCause", DIAGNOSTIC.drops],
+  ["catchCause", DIAGNOSTIC.swallows],
+  ["catchCauseIf", DIAGNOSTIC.filtered],
+  ["catchCauseFilter", DIAGNOSTIC.filtered]
 ]);
+var BLIND_RECOVERY = new Set(["catch", "catchEager", "orElseSucceed"]);
 var blindToTheError = (handler) => {
   if (!handler)
     return false;
@@ -19,50 +22,72 @@ var blindToTheError = (handler) => {
     return false;
   return handler.params.every((param) => param.type === "Identifier" && /^_+$/.test(param.name));
 };
+function memberName(member) {
+  if (!member.computed)
+    return member.property.name;
+  const property = member.property;
+  if (property.type === "Literal" && typeof property.value === "string")
+    return property.value;
+  if (property.type === "TemplateLiteral" && property.expressions.length === 0)
+    return property.quasis[0]?.value.cooked ?? undefined;
+  return;
+}
+function effectBinding(source, specifier) {
+  if (specifier.type !== "ImportSpecifier")
+    return source === EFFECT_MODULE ? { kind: "module" } : undefined;
+  if (specifier.importKind === "type")
+    return;
+  const name = specifier.imported.type === "Identifier" ? specifier.imported.name : specifier.imported.value;
+  if (source === EFFECT_BARREL)
+    return name === "Effect" ? { kind: "module" } : undefined;
+  if (BLIND_RECOVERY.has(name) || REFUSED.has(name))
+    return { kind: "combinator", name };
+  return;
+}
 var rule = {
   meta: {
     type: "problem",
     docs: { description: "Disallow the combinators that erase Effect's error channel" }
   },
   create(context) {
-    const effect = new Set;
-    const named = (node) => {
-      if (!node || node.type !== "MemberExpression" || node.computed)
-        return null;
-      if (node.object.type !== "Identifier" || !effect.has(node.object.name))
-        return null;
-      return node.property.type === "Identifier" ? node.property.name : null;
-    };
-    const refuse = (node, combinator, instead) => {
-      context.report({ node, message: `Effect.${combinator} erases the error channel: ${instead}` });
-    };
+    function checkReference(node, combinator) {
+      const call = node.parent;
+      const blindRecovery = BLIND_RECOVERY.has(combinator) && call?.type === "CallExpression" && call.callee === node && blindToTheError(call.arguments.at(-1));
+      const diagnostic = blindRecovery ? DIAGNOSTIC.blind : REFUSED.get(combinator);
+      if (diagnostic !== undefined) {
+        context.report({ node: blindRecovery ? call : node, message: `Effect.${combinator} ${diagnostic}` });
+      }
+    }
+    function checkModuleReference(identifier) {
+      const member = identifier.parent;
+      if (member?.type !== "MemberExpression" || member.object !== identifier)
+        return;
+      const combinator = memberName(member);
+      if (combinator !== undefined)
+        checkReference(member, combinator);
+    }
+    function checkBinding(specifier, binding) {
+      for (const variable of context.sourceCode.getDeclaredVariables(specifier)) {
+        for (const reference of variable.references) {
+          if (!reference.isRead())
+            continue;
+          if (binding.kind === "module")
+            checkModuleReference(reference.identifier);
+          else
+            checkReference(reference.identifier, binding.name);
+        }
+      }
+    }
     return {
       ImportDeclaration(node) {
-        if (!EFFECT_SOURCES.has(node.source.value))
+        const source = node.source.value;
+        if (node.importKind === "type" || source !== EFFECT_BARREL && source !== EFFECT_MODULE)
           return;
-        const module = node.source.value === "effect/Effect";
         for (const specifier of node.specifiers) {
-          if (specifier.type === "ImportSpecifier") {
-            if (specifier.imported.type === "Identifier" && specifier.imported.name === "Effect")
-              effect.add(specifier.local.name);
-          } else if (module)
-            effect.add(specifier.local.name);
+          const binding = effectBinding(source, specifier);
+          if (binding !== undefined)
+            checkBinding(specifier, binding);
         }
-      },
-      MemberExpression(node) {
-        const combinator = named(node);
-        if (combinator === null)
-          return;
-        const instead = REFUSED.get(combinator);
-        if (instead !== undefined)
-          refuse(node, combinator, instead);
-      },
-      CallExpression(node) {
-        if (named(node.callee) !== "catch")
-          return;
-        if (!blindToTheError(node.arguments[node.arguments.length - 1]))
-          return;
-        refuse(node, "catch", INSTEAD.blind);
       }
     };
   }
