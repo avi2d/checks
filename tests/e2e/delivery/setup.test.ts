@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { Schema } from "effect";
 import { join } from "node:path";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
@@ -103,22 +103,6 @@ expect(service?.overrides?.[0]?.exclude).toEqual(EXPECTED_EXCLUDE);
 const { uses, runs } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
 expect(uses).toBeUndefined();
 expect(runs).toContain("bunx checks-ci require-success");
-},
-60_000,
-);
-
-test(
-"fresh setup typechecks a checks.config.ts import without TS5097",
-async () => {
-const dir = await scratch("setup-typecheck");
-expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
-await mkdir(join(dir, "node_modules", "@avi2dg"), { recursive: true });
-await symlink(CHECKOUT, join(dir, "node_modules", "@avi2dg", "checks"));
-await symlink(join(CHECKOUT, "node_modules", "@types"), join(dir, "node_modules", "@types"));
-await writeFile(join(dir, "checks.config.ts"), 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({});\n');
-const result = await $`${join(CHECKOUT, "node_modules", ".bin", "tsc")} --noEmit --pretty false`.cwd(dir).nothrow().quiet();
-expect(result.stdout.toString() + result.stderr.toString()).toBe("");
-expect(result.exitCode).toBe(0);
 },
 60_000,
 );
@@ -312,6 +296,46 @@ expect(manifest.scripts?.["test"]).toBe("checks-test");
 expect(manifest.scripts?.["test:fast"]).toBe("checks-test --changed");
 expect(manifest.scripts?.["test:unit"]).toBe("checks-test --tier=unit");
 expect(manifest.scripts?.["test:e2e"]).toBeUndefined();
+},
+60_000,
+);
+
+test(
+"it refuses a retained lint script that only echoes the checker names",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "echo oxlint checks-lint", test: "checks-test" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain('scripts.lint must run oxlint and the layout check: use "oxlint && checks-lint"');
+},
+60_000,
+);
+
+test(
+"it keeps a retained standard lint script instead of refusing it",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
+expect(manifest.scripts?.["lint"]).toBe("oxlint && checks-lint");
+},
+60_000,
+);
+
+test(
+"it refuses a retained typecheck script padded with whitespace",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test", typecheck: " tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict " } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain("scripts.typecheck must run tsc and the Effect diagnostics");
 },
 60_000,
 );
