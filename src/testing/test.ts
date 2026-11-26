@@ -17,7 +17,7 @@ import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test
 import { readSuiteScope, readTestFileSkips, type SuiteSelection } from "./test-selection.ts";
 import { parseShard, type Shard } from "./test-shard.ts";
 import { scanTestFiles, selectedTierFile, type Environment, type SkipDeclaration } from "./test-skips.ts";
-import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
+import { fileSeconds, NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export { suiteArgs, type SuiteSelection } from "./test-selection.ts";
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
@@ -362,6 +362,7 @@ const judgeRun = Effect.fn("judgeRun")(function* (
 
   const xml = yield* fs.readFileString(outfile);
   const { results, crashedFiles } = yield* parseReport(xml);
+  yield* Console.log(`${NAME}: testFileTimings ${JSON.stringify(Object.fromEntries(yield* fileSeconds(xml)))}`);
   for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
   const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));
   const verdict = judgeSkips(results, judged, policy.environment);

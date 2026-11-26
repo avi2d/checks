@@ -2,7 +2,7 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
 import { decodeSetting, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE } from "../core/settings.ts";
 import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
-import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
+import { ciJobsOf, testTierOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { readTestScriptContext } from "./test-scripts.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
@@ -160,7 +160,13 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
   const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes, publishWorkspaces);
   if (packagesFault !== undefined) return yield* new CallerSetFault({ message: packagesFault });
-  if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, hasE2e), options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
+  const ci = yield* heldCiJobs(site ? "site" : "code", workflows, publicRepository, buildDocs, hasE2e);
+  for (const tier of ["unit", "e2e"] as const) {
+    if (testTierShards?.[tier] !== undefined && !ci.tests.some((test) => testTierOf(test.run) === tier)) {
+      return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets testTierShards.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key` });
+    }
+  }
+  if (!site) return { kind: "code", ci, options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -170,7 +176,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site workflows name no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publicRepository, buildDocs, hasE2e), options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
+  return { kind: "site", names, ci, options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));

@@ -43,6 +43,9 @@ const BROWSER: TestJob = { name: "browser", run: BROWSER_RUN, browsers: "webkit"
 
 export const isBrowserWalk = (test: TestJob): boolean => test.readsBuild && test.run === BROWSER_RUN;
 
+export const testTierOf = (run: string): "unit" | "e2e" | undefined =>
+  run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
+
 export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
   code: { tests: [UNIT, E2E] },
   site: { tests: [UNIT, E2E, BROWSER] },

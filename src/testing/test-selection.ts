@@ -64,7 +64,7 @@ export const readSuiteScope = Effect.fn("readSuiteScope")(function* (
   const selected = yield* suiteFiles(root, selection, smoke);
   const included = selected.filter((file) => !excluded.has(file));
   const files = sharding === undefined ? included : shardFiles(included, sharding.timings, sharding.shard);
-  if (sharding !== undefined && files.length === 0) return { kind: "empty", message: "this shard has no test files" } as const;
+  if (sharding !== undefined && included.length > 0 && files.length === 0) return { kind: "empty", message: "this shard has no test files" } as const;
   if (files.length === 0 && selected.length > 0) {
     return { kind: "empty", message: "all selected test files are excluded, so no test ran" } as const;
   }

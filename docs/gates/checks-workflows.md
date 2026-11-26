@@ -57,6 +57,8 @@ A private root with a `test` script also holds the `suite` job, and its `ci.yml`
 Its `ci.yml` runs the docs build there when `package.json` defines `docs:build`.
 A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is kept in the test and flake jobs.
 The `testTierShards` setting splits a default unit or e2e test job into matrix jobs while the `checks` job keeps its name.
+Each configured tier must have a default job for that tier.
+The command refuses a key without that default job, including a custom command with `--parallel`.
 [checks-test](checks-test.md#parallel-runs) describes the setting and file assignment.
 
 For a pull request, a newer push cancels the `ci.yml` run it replaces.
@@ -240,6 +242,8 @@ On those runs every job but `changes` and `checks` skips, unless the repository 
 Then the static, docs, and test jobs run on the release pull request, and the gate does not accept their skips.
 Its default test step runs `bunx checks-ci test` with `CHECK_RELEASE` set from the `check-release` output of `changes` and `TEST_TIER` set to its tier.
 For each default tier, that step runs `bun run test --tier=<tier>` on the release pull request and `bunx checks-test --pr --tier=<tier>` on any other run.
+For a sharded tier, the step also sets `TEST_SHARD` to `${{ matrix.shard }}/<count>`.
+Without the release wrapper, the default test command instead appends `--shard=${{ matrix.shard }}/<count>`.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
 

@@ -1,5 +1,5 @@
 import { type CallerSet } from "../site-names.ts";
-import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, isBrowserWalk, runnerOf } from "../ci-jobs.ts";
+import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, RELEASE_TEST_RUN, isBrowserWalk, runnerOf, testTierOf } from "../ci-jobs.ts";
 import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
@@ -144,11 +144,8 @@ const siteJob = (set: CallerSet): Job => ({
   ],
 });
 
-const testTier = (test: TestJob): "unit" | "e2e" | undefined =>
-  test.run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : test.run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
-
 const testStep = (set: CallerSet, test: TestJob): Step => {
-  const tier = testTier(test);
+  const tier = testTierOf(test.run);
   const count = tier === undefined ? undefined : set.testTierShards?.[tier];
   const shard = count === undefined || count === 1 ? undefined : expression("matrix.shard") + "/" + count;
   return checksRelease(set) && tier !== undefined
@@ -158,7 +155,7 @@ const testStep = (set: CallerSet, test: TestJob): Step => {
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
   const hold = holds(set, test);
-  const tier = testTier(test);
+  const tier = testTierOf(test.run);
   const count = tier === undefined ? undefined : set.testTierShards?.[tier];
   return {
     id: test.name,

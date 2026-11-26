@@ -82,6 +82,7 @@ It reads the reach map under `reach` in `checks.config.ts` too, as [The reach ma
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads the file exclusions from `testFileSkips` in `checks.config.ts`, as [Test file exclusions](#test-file-exclusions) says.
+A `--shard` run also reads `testFileTimings` from `checks.config.ts` for file assignment, as [Parallel runs](#parallel-runs) says.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads `CI_CORES` for the worker count unless `--parallel=<workers>` overrides it, as [Parallel runs](#parallel-runs) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
@@ -273,6 +274,9 @@ The index starts at 1 and cannot exceed the count.
 A `--pr` tier run selects the reached files before assigning them to shards.
 Set `testFileTimings` in `checks.config.ts` to map test file paths to recorded seconds.
 Each value must be finite and greater than zero.
+Every run with a JUnit report prints a `testFileTimings` line mapping the files it ran to their measured seconds.
+Copy its JSON object into the setting to refresh the recorded times.
+For sharded runs, merge the objects from every shard.
 The longest files go first to the shard with the smallest total recorded time.
 A file without a time uses the mean of the recorded times of the selected files.
 When none have a time, the files are split evenly by count.
@@ -280,6 +284,7 @@ A shard with no files passes without starting Bun.
 
 Set `testTierShards` to generate parallel CI jobs for the default unit or e2e tier job.
 Each count is a whole number from 1 through 256.
+A configured tier without a default job running `bunx checks-test --pr --tier=<tier>` is refused.
 Run `checks-workflows --write` after changing the setting.
 The `checks` job still requires every shard to pass.
 
@@ -316,7 +321,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, the file timings on a `--shard` run, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
 
 ## Sample output
 
@@ -329,6 +334,12 @@ A CI run with a test file over the time limit reports:
 
 ```
 checks-test: tests/e2e/checkout.test.ts took 132.48s (limit 120s)
+```
+
+A run with a JUnit report prints measured file times:
+
+```
+checks-test: testFileTimings {"tests/e2e/checkout.test.ts":24.6}
 ```
 
 A passing run with no skipped tests ends with:
