@@ -84,7 +84,7 @@ const startedByDependabot = Effect.gen(function* () {
   return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
     Effect.flatMap(decodePullRequestEvent),
     Effect.map((event) => event.sender.login === DEPENDABOT),
-    Effect.orElseSucceed(() => false),
+    Effect.catchTag(["PlatformError", "SchemaError"], () => Effect.succeed(false)),
   );
 });
 

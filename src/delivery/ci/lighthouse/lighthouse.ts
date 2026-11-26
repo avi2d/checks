@@ -63,7 +63,7 @@ const startChrome = Effect.fn("startChrome")(function* (chrome: string) {
   const portFile = path.join(profile, PORT_FILE);
   const readPort = fs.readFileString(portFile).pipe(
     Effect.map(firstLine),
-    Effect.orElseSucceed(() => ""),
+    Effect.catchTag("PlatformError", () => Effect.succeed("")),
   );
   const port = yield* readUntil(readPort, (line) => line !== "", PORT_TRIES, PORT_WAIT);
   if (port === "") return yield* new LighthouseError({ message: `Chrome wrote no debugging port to ${portFile}` });

@@ -47,13 +47,13 @@ const quietlyPasses = Effect.fn("quietlyPasses")(
     return (yield* handle.exitCode) === ChildProcessSpawner.ExitCode(0);
   },
   Effect.scoped,
-  Effect.orElseSucceed(() => false),
+  Effect.catchTag("PlatformError", () => Effect.succeed(false)),
 );
 
 const childrenOf = (pid: string) =>
   commandOutput("pgrep", ["-P", pid]).pipe(
     Effect.map(({ stdout }) => stdout.split("\n").filter((line) => line !== "")),
-    Effect.orElseSucceed((): readonly string[] => []),
+    Effect.catchTag("PlatformError", () => Effect.succeed<readonly string[]>([])),
   );
 
 const descendantsOf = (pid: string): Effect.Effect<readonly string[], never, ChildProcessSpawner.ChildProcessSpawner> =>
@@ -75,7 +75,7 @@ const stopTree = Effect.fn("stopTree")(function* (pid: string) {
 export const commandPassesWithin = Effect.fn("commandPassesWithin")(
   function* (program: string, args: readonly string[], limit: Duration.Duration) {
     const handle = yield* spawnForwarded(program, args, {});
-    const passed = yield* passedWhenDone(handle).pipe(Effect.orElseSucceed(() => false), Effect.timeoutOption(limit));
+    const passed = yield* passedWhenDone(handle).pipe(Effect.catchTag("PlatformError", () => Effect.succeed(false)), Effect.timeoutOption(limit));
     if (Option.isSome(passed)) return passed.value;
     yield* Console.log(`${program} still ran after ${Duration.format(limit)}, so its whole process tree is stopped`);
     yield* stopTree(String(handle.pid));
