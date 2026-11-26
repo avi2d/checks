@@ -105,6 +105,21 @@ type ScopePaths = { readonly include: readonly string[]; readonly exclude?: read
 const matchesPath = (file: string, patterns: readonly string[], dot: boolean) =>
   patterns.some((pattern) => minimatch(file, pattern, { dot }));
 
+const scopeFault = (file: string, overrides: readonly ScopePaths[]): string | undefined => {
+  for (const { include, exclude = [] } of overrides) {
+    if (!matchesPath(file, include, true) || matchesPath(file, exclude, true)) continue;
+    if (!matchesPath(file, include, false)) {
+      return `${file} matches oxlint files but tsgo wildcard includes skip its hidden path; name ${file} explicitly in files or exclude its directory with a glob ending in /**`;
+    }
+    const directories = file.split("/").slice(0, -1).map((_, index, segments) => segments.slice(0, index + 1).join("/"));
+    const pruned = directories.find((directory) => matchesPath(directory, exclude, true));
+    if (pruned !== undefined) {
+      return `${file} is reached by oxlint but tsgo excludeFiles prunes directory ${pruned}; use ${pruned}/** to exclude its contents too, or rename that directory`;
+    }
+  }
+  return undefined;
+};
+
 export const validateScopePaths = Effect.fn("validateScopePaths")(function* (root: string, overrides: readonly ScopePaths[], ignored: readonly string[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -112,17 +127,8 @@ export const validateScopePaths = Effect.fn("validateScopePaths")(function* (roo
   const reached = yield* Effect.forEach(includes, (include) => fs.glob(include, { root, dot: true, exclude: [".git/**", ...ignored] }));
   for (const file of [...new Set(reached.flat())].sort()) {
     if (!matchesPath(file, SOURCES, true) || (yield* fs.stat(path.join(root, file))).type !== "File") continue;
-    for (const { include, exclude = [] } of overrides) {
-      if (!matchesPath(file, include, true) || matchesPath(file, exclude, true)) continue;
-      if (!matchesPath(file, include, false)) {
-        return yield* new EffectScopeError({ message: `${file} matches oxlint files but tsgo wildcard includes skip its hidden path; name ${file} explicitly in files or exclude its directory with a glob ending in /**` });
-      }
-      const directories = file.split("/").slice(0, -1).map((_, index, segments) => segments.slice(0, index + 1).join("/"));
-      const pruned = directories.find((directory) => matchesPath(directory, exclude, true));
-      if (pruned !== undefined) {
-        return yield* new EffectScopeError({ message: `${file} is reached by oxlint but tsgo excludeFiles prunes directory ${pruned}; use ${pruned}/** to exclude its contents too, or rename that directory` });
-      }
-    }
+    const message = scopeFault(file, overrides);
+    if (message !== undefined) return yield* new EffectScopeError({ message });
   }
 });
 

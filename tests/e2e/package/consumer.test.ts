@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
+import { FLAT_SETTLE, TANGLED_SETTLE } from "../lib/settle-fixtures.ts";
 import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
@@ -176,36 +177,6 @@ test(
   },
   180_000,
 );
-
-const TANGLED_SETTLE = `export function settle(order) {
-  if (order !== null) {
-    if (order.paid || order.credit) {
-      for (const line of order.lines) {
-        if (line.taxable && line.shipped || line.gift) {
-          charge(line);
-        } else if (line.refunded || line.voided) {
-          refund(line);
-        } else {
-          skip(line);
-        }
-      }
-      return "settled";
-    }
-    return "unpaid";
-  }
-  return "missing";
-}
-`;
-
-const FLAT_SETTLE = `export function settle(order) {
-  if (order === null) return "missing";
-  if (!order.paid) return "unpaid";
-  for (const line of order.lines) {
-    if (line.taxable) charge(line);
-  }
-  return "settled";
-}
-`;
 
 test(
   "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",

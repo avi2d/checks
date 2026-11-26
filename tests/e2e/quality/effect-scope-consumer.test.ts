@@ -487,36 +487,49 @@ export default defineConfig({ effect: { files: ["scripts/**/*.ts"] }, ignorePatt
   }
 }, 180_000);
 
-test("default Effect scope does not refuse Vite negations of tracked non-TypeScript files", async () => {
-  for (const source of ["root", "nested", "ignorePatterns"]) {
-    await consumer();
-    const prefix = source === "nested" ? "scripts/" : "";
-    const ignores = [".vscode/*", "!.vscode/extensions.json"];
-    await tree.put(".gitignore", "node_modules/\n" + (source === "root" ? ignores.join("\n") + "\n" : ""));
-    if (source === "nested") await tree.put("scripts/.gitignore", ignores.join("\n") + "\n");
-    const file = `${prefix}.vscode/extensions.json`;
-    await tree.put(file, "{}\n");
-    expect((await tree.run("git", ["add", ".gitignore", ...(source === "nested" ? ["scripts/.gitignore"] : []), file])).exitCode).toBe(0);
-    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
-export default defineConfig({ effect: true, ignorePatterns: ${JSON.stringify(source === "ignorePatterns" ? ignores : [])} });
+type ViteSource = "root" | "nested" | "ignorePatterns";
+
+const VITE_IGNORES = [".vscode/*", "!.vscode/extensions.json"];
+
+async function viteConsumer(source: ViteSource): Promise<string> {
+  await consumer();
+  const prefix = source === "nested" ? "scripts/" : "";
+  const ignoreFiles = source === "nested" ? [".gitignore", "scripts/.gitignore"] : [".gitignore"];
+  const lines = VITE_IGNORES.join("\n") + "\n";
+  await tree.put(".gitignore", "node_modules/\n" + (source === "root" ? lines : ""));
+  if (source === "nested") await tree.put("scripts/.gitignore", lines);
+  const file = `${prefix}.vscode/extensions.json`;
+  await tree.put(file, "{}\n");
+  expect((await tree.run("git", ["add", ...ignoreFiles, file])).exitCode).toBe(0);
+  await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: true, ignorePatterns: ${JSON.stringify(source === "ignorePatterns" ? VITE_IGNORES : [])} });
 `);
-    await tree.put(SCOPED, ASYNC_PLANT);
-    await tree.put(UNSCOPED, ASYNC_PLANT);
+  await tree.put(SCOPED, ASYNC_PLANT);
+  await tree.put(UNSCOPED, ASYNC_PLANT);
+  return file;
+}
+
+async function expectScopeRefused(...texts: readonly string[]): Promise<void> {
+  for (const args of [[], ["--check"]]) {
+    const refused = await scopeGate(...args);
+    expect(refused.exitCode).toBe(2);
+    for (const text of texts) expect(refused.text).toContain(text);
+  }
+}
+
+test("default Effect scope does not refuse Vite negations of tracked non-TypeScript files", async () => {
+  for (const source of ["root", "nested", "ignorePatterns"] as const) {
+    const file = await viteConsumer(source);
     expect((await tree.run(process.execPath, [join(CHECKOUT, "src", "delivery", "setup.ts")])).exitCode).toBe(0);
     expect((await scopeGate()).exitCode).toBe(0);
     expect((await scopeGate("--check")).exitCode).toBe(0);
     await expectAsyncPaths([SCOPED]);
     await rm(join(tree.dir, file));
-    for (const args of [[], ["--check"]]) {
-      const refused = await scopeGate(...args);
-      expect(refused.exitCode).toBe(2);
-      expect(refused.text).toContain(`missing tracked file ${file}`);
-      expect(refused.text).toContain("restore that file or remove the negation");
-    }
+    await expectScopeRefused(`missing tracked file ${file}`, "restore that file or remove the negation");
     await tree.put(`${file}/plant.ts`, ASYNC_PLANT);
-    for (const args of [[], ["--check"]]) expect((await scopeGate(...args)).exitCode).toBe(2);
+    await expectScopeRefused();
     expect((await tree.run("git", ["add", "-f", file])).exitCode).toBe(0);
-    for (const args of [[], ["--check"]]) expect((await scopeGate(...args)).exitCode).toBe(2);
+    await expectScopeRefused();
   }
 }, 180_000);
 
