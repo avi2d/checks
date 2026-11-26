@@ -193,9 +193,9 @@
     "@actions/expressions": "^0.3.62",
     "@axe-core/playwright": "4.14.1",
     "@effect/tsgo": "0.45.0",
-    "@hughescr/stryker-bun-runner": "1.4.0",
+    "@hughescr/stryker-bun-runner": "1.6.0",
     "@oxlint/plugins": "1.95.0",
-    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/core": "10.1.1",
     "@swc/core": "1.16.22",
     "@types/bun": "^1.4.5",
     "@types/commonmark": "0.27.10",
@@ -227,8 +227,5 @@
     "minimatch": "11.0.9",
     "qs": "6.17.1",
     "smol-toml": "1.9.1"
-  },
-  "patchedDependencies": {
-    "@hughescr/stryker-bun-runner@1.4.0": "patches/@hughescr%2Fstryker-bun-runner@1.4.0.patch"
   }
 }

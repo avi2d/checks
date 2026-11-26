@@ -42,9 +42,8 @@ A failed mutation run still leaves each failing test filed, and records no score
 A run started on a branch other than `main` lists its findings in the log and files no issue.
 Each issue is fixed in a pull request of its own, so no pull request waits for a whole-tree run.
 Run `bunx stryker run --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
-The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
+`@hughescr/stryker-bun-runner` honours Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout`.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.
-The patch applies only to this repository's install, not to a repository that installs the kit.
 
 ## Regenerate what is committed
 
