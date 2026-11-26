@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { parseAddedLines } from "../../../src/core/git.ts";
 import { refused } from "../../../src/quality/comments.ts";
+import * as Matchers from "../../../src/quality/comment-matchers.ts";
 
 const DIFF = [
   "diff --git src/a.ts src/a.ts",
@@ -147,18 +148,49 @@ test("a file-wide TypeScript suppression is refused, not ignored", () => {
 });
 
 
-test("a tracker key is refused, not treated as ordinary text", () => {
-  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// ABC-123\n", new Set([2])))).toEqual([
+test("a declared tracker key is refused, not treated as ordinary text", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// ABC-123\n", new Set([2]), ["ABC"]))).toEqual([
     'src/a.ts:2 points at a record or a ticket ("ABC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
   ]);
   expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// handles utf8 and version2\n", new Set([2])))).toEqual([]);
 });
 
 test("standards names are not mistaken for tracker keys or allowed to hide one", () => {
-  for (const name of ["SHA-256", "UTF-8", "UTF-16", "RFC-2119", "ECMA-262", "AES-256", "ISO-8601"]) {
-    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name}\n`, new Set([2]))), name).toEqual([]);
-    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name} and ORC-123\n`, new Set([2]))), name).toEqual([
+  for (const name of ["SHA-256", "UTF-8", "UTF-16", "RFC-2119", "ECMA-262", "AES-256", "ISO-8601", "IEEE-754", "CRC-32", "SHA-3"]) {
+    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name}\n`, new Set([2]), ["ORC"])), name).toEqual([]);
+    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name} and ORC-123\n`, new Set([2]), ["ORC"])), name).toEqual([
       'src/a.ts:2 points at a record or a ticket ("ORC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
     ]);
   }
+});
+
+test("undeclared tracker prefixes are not refused by default or mistaken for declared ones", () => {
+  for (const source of ["// ORC-123", "// ABC-123", "// X-1"]) {
+    expect(Matchers.refused("probe.ts", source)).toEqual([]);
+    expect(Effect.runSync(refused("probe.ts", source))).toEqual([]);
+    expect(Effect.runSync(refused("probe.ts", source, undefined, []))).toEqual([]);
+  }
+  for (const key of ["ORC-123", "xABC-123", "ABC-123x", "abc-123"]) {
+    expect(Matchers.refused("probe.ts", `// ${key}`, undefined, ["ABC"])).toEqual([]);
+    expect(Effect.runSync(refused("probe.ts", `// ${key}`, undefined, ["ABC"]))).toEqual([]);
+  }
+});
+
+test("overlapping record and configured tracker matches produce one refusal, not duplicates", () => {
+  for (const pointer of ["ADR-0013", "docs/adr and ORC-123", "#41 and ORC-123"]) {
+    const expected = [
+      `probe.ts:1 points at a record or a ticket (${JSON.stringify(pointer.split(" and ")[0])}). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message`,
+    ];
+    const source = `// ${pointer}`;
+    expect(Matchers.refused("probe.ts", source, undefined, ["ORC", "ADR", "ORC"])).toEqual(expected);
+    expect(Effect.runSync(refused("probe.ts", source, undefined, ["ORC", "ADR", "ORC"]))).toEqual(expected);
+  }
+});
+
+test("declared tracker keys in code, untouched lines, and licences are not refused", () => {
+  for (const source of ['const key = "ORC-123";', "// SPDX-License-Identifier: ORC-123"]) {
+    expect(Matchers.refused("probe.ts", source, undefined, ["ORC"])).toEqual([]);
+    expect(Effect.runSync(refused("probe.ts", source, undefined, ["ORC"]))).toEqual([]);
+  }
+  expect(Effect.runSync(refused("probe.ts", "// ORC-123", new Set(), ["ORC"]))).toEqual([]);
 });

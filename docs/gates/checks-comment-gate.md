@@ -12,18 +12,36 @@ It fails when an added line carries a banned comment.
 It refuses a machine-read directive, a record or ticket pointer, a doc block, and a file opening with a rationale block over three lines, licence headers excepted.
 The directives include `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `biome-ignore`, and `prettier-ignore`.
 They also include directives beginning with `eslint-disable`, `oxlint-disable`, or `stylelint-disable`.
-A ticket pointer includes an uppercase tracker key such as `ABC-123`.
-SHA hash names such as `SHA-256` are not ticket pointers.
-Standards names beginning with `UTF-`, `RFC-`, `ECMA-`, `AES-`, or `ISO-` are not ticket pointers.
+A tracker key is a ticket pointer only when its prefix appears in `trackerKeyPrefixes` in `checks.config.ts`.
 A stylesheet keeps its count of existing stylelint problems in `stylelint-suppressions.json` instead, as [checks-frontend-syntax](checks-frontend-syntax.md) says.
 Each refusal says what to write instead.
 Only added lines are checked, so a violation in a file the diff never touches stays silent.
 A refusal counts when any line of the comment carrying it was added.
 
+## Tracker keys
+
+Set `trackerKeyPrefixes` in `checks.config.ts` to the tracker prefixes your repository uses:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({ trackerKeyPrefixes: ["ABC"] });
+```
+
+Each prefix starts with an uppercase ASCII letter and contains only uppercase ASCII letters and digits.
+Matching is case-sensitive and requires a hyphen followed by digits, such as `ABC-123`.
+The default is `[]`, so no tracker key is refused unless you declare its prefix.
+An undeclared prefix stays allowed, including standards names such as `IEEE-754`, `CRC-32`, and `SHA-3`.
+Record paths, ADR numbers, issue numbers, and issue or pull request URLs remain refused without this setting.
+A comment produces one record-pointer refusal even when a configured tracker prefix also matches an ADR number.
+
 ## What it reads
 
 It reads the diff between two commits, and the added lines of each file whose extension has a comment syntax in `src/quality/comment-matchers.ts`.
 It passes over a file with any other extension.
+It reads `trackerKeyPrefixes` from the working tree's `checks.config.ts`.
+A host using the synchronous `refused(path, source, within, trackerKeyPrefixes)` supplies the prefixes itself.
+The optional fourth argument defaults to `[]`.
 
 `src/quality/comment-matchers.ts` holds the scanner, the comment syntaxes and a synchronous `refused()`, and imports nothing.
 A host such as a hook bundle can therefore copy it alone into a directory with no `node_modules` and import it as `@avi2dg/checks/scripts/comment-matchers.ts`.
@@ -49,7 +67,7 @@ A shallow checkout running the one-argument form needs `fetch-depth: 2`.
 | --- | --- |
 | 0 | no added line carries a refused comment |
 | 1 | an added line carries a refused comment |
-| 2 | a ref does not resolve, or the parent exists but is not in the clone, which it refuses rather than widening to the whole tree |
+| 2 | the config does not load or decode, a ref does not resolve, or the parent exists but is not in the clone |
 
 ## Sample output
 

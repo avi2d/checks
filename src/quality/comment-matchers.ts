@@ -265,33 +265,36 @@ const directiveSource = (name: string): string => {
 const DIRECTIVE = new RegExp(REFUSED_DIRECTIVES.map(directiveSource).join("|"));
 
 type Check = {
-  readonly find: RegExp;
+  readonly find: (text: string) => string | undefined;
   readonly refusal: (match: string) => string;
 };
 
 const recordRefusal = (match: string): string =>
   `points at a record or a ticket (${JSON.stringify(match.trim())}). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message`;
 
-const CHECKS: readonly Check[] = [
-  {
-    find: DIRECTIVE,
-    refusal: (match) =>
-      `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
-  },
-  {
-    find: /\bADR[\s-]?\d+|\bdocs\/adr\b|(?:^|[\s(["'`])#\d+\b|[\w.-]+\/[\w.-]+#\d+|\/(?:issues|pull)\/\d+/i,
-    refusal: recordRefusal,
-  },
-  {
-    find: /\b(?!ADR-|(?:UTF|RFC|ECMA|AES|ISO)-\d+\b|SHA-(?:1|224|256|384|512)\b)[A-Z]{2,}-\d+\b/,
-    refusal: recordRefusal,
-  },
-  {
-    find: /^\/\*\*/,
-    refusal: () =>
-      "opens a doc block. Make the code say it, or put what the types cannot hold on a line comment in the fewest words that carry it",
-  },
-];
+const RECORD_POINTER = /\bADR[\s-]?\d+|\bdocs\/adr\b|(?:^|[\s(["'`])#\d+\b|[\w.-]+\/[\w.-]+#\d+|\/(?:issues|pull)\/\d+/i;
+
+function checksFor(trackerKeyPrefixes: readonly string[]): readonly Check[] {
+  const trackerKey = trackerKeyPrefixes.length === 0
+    ? undefined
+    : new RegExp(`\\b(?:${trackerKeyPrefixes.map(escapeRegExp).join("|")})-\\d+\\b`);
+  return [
+    {
+      find: (text) => DIRECTIVE.exec(text)?.[0],
+      refusal: (match) =>
+        `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
+    },
+    {
+      find: (text) => RECORD_POINTER.exec(text)?.[0] ?? trackerKey?.exec(text)?.[0],
+      refusal: recordRefusal,
+    },
+    {
+      find: (text) => /^\/\*\*/.exec(text)?.[0],
+      refusal: () =>
+        "opens a doc block. Make the code say it, or put what the types cannot hold on a line comment in the fewest words that carry it",
+    },
+  ];
+}
 
 function spans(from: number, lineCount: number, within: ReadonlySet<number> | undefined): boolean {
   if (within === undefined) return true;
@@ -299,8 +302,9 @@ function spans(from: number, lineCount: number, within: ReadonlySet<number> | un
   return false;
 }
 
-export function refusalsIn(path: string, source: string, syntax: Syntax, within?: ReadonlySet<number>): string[] {
+export function refusalsIn(path: string, source: string, syntax: Syntax, within?: ReadonlySet<number>, trackerKeyPrefixes: readonly string[] = []): string[] {
   const out: string[] = [];
+  const checks = checksFor(trackerKeyPrefixes);
   const found = commentsIn(source, syntax);
 
   const opening = openingBlock(found, source);
@@ -320,16 +324,16 @@ export function refusalsIn(path: string, source: string, syntax: Syntax, within?
   for (const comment of found) {
     if (LICENCE.test(comment.text)) continue;
     if (!spans(comment.line, comment.text.split("\n").length, within)) continue;
-    for (const check of CHECKS) {
-      const [match] = check.find.exec(comment.text) ?? [];
+    for (const check of checks) {
+      const match = check.find(comment.text);
       if (match !== undefined) out.push(`${path}:${comment.line} ${check.refusal(match)}`);
     }
   }
   return out;
 }
 
-export function refused(path: string, source: string, within?: ReadonlySet<number>): string[] {
+export function refused(path: string, source: string, within?: ReadonlySet<number>, trackerKeyPrefixes: readonly string[] = []): string[] {
   const syntax = syntaxOf(path);
   if (syntax === undefined) throw new Error(unreadable(path));
-  return refusalsIn(path, source, syntax, within);
+  return refusalsIn(path, source, syntax, within, trackerKeyPrefixes);
 }
