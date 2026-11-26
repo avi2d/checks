@@ -177,6 +177,7 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, refs: readonly st
         : [script, ...refs]
       : [script, ...(gate.args ?? [])];
   const extra = gate.env === undefined ? {} : { env: gate.env, extendEnv: true };
+  const started = yield* Effect.sync(() => performance.now());
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit", ...extra }))
     .pipe(
@@ -184,7 +185,10 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, refs: readonly st
         Console.error(`${NAME}: cannot run ${gate.bin}: ${cause.message}`).pipe(Effect.as(ChildProcessSpawner.ExitCode(2))),
       ),
     );
-  return { gate, outcome: outcomeOf(exitCode) };
+  const elapsed = yield* Effect.sync(() => (performance.now() - started) / 1000);
+  const outcome = outcomeOf(exitCode);
+  yield* Console.log(`${NAME}: ${gate.bin} ${outcome} in ${elapsed.toFixed(2)}s`);
+  return { gate, outcome };
 });
 
 const wholeTreeRange = Effect.fn("wholeTreeRange")(function* () {
