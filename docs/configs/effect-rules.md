@@ -19,6 +19,7 @@ The kit's oxlint `base` loads `effect-channel/no-error-channel-escape` across th
 | `{ files, excludeFiles }` | these globs, less `excludeFiles`, with at least one glob in `files` |
 
 `files` and `excludeFiles` read as they do in an oxlint override.
+[checks-effect-scope](../gates/checks-effect-scope.md#what-it-reads) lists the patterns it can carry into TypeScript.
 Every source file is `SOURCES`, the `.ts`, `.tsx`, `.mts` and `.cts` files, and the tests are `TESTS`, the files under `tests/` and each `*.test.ts` or `*.test.tsx`.
 A comment beside an excluded glob says why that path stays outside Effect:
 
@@ -65,7 +66,7 @@ A config that leaves `effect` out, sets it to a string or gives `files` no glob 
 | `ignore`, `ignoreCause` | Every value reference, because both failure and success become an indistinguishable success |
 | `catchCause` | Every value reference, because recovery includes typed errors, defects, and interruption |
 | `catchCauseIf`, `catchCauseFilter` | Every value reference, because matching causes can include defects or interruption, though unmatched causes still fail |
-| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or only parameters named with underscores |
+| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or does not read its first identifier parameter |
 
 The handler check covers both data-first and piped calls.
 The rule follows the `Effect` export from `effect` and namespace or named imports from `effect/Effect`, including renamed imports.
@@ -79,6 +80,7 @@ Type queries, dynamic keys, and aliases or destructures declared with `let` or `
 The repository's `tsconfig.json` holds its Effect override under `compilerOptions.plugins`.
 [checks-effect-scope](../gates/checks-effect-scope.md) writes that override from `oxlint.config.ts`, so it includes and excludes the same paths as oxlint.
 The override takes its `options` from the severity values the kit ships in `src/quality/presets/effect.language-service.json`.
+`asyncFunction` and `newPromise` follow the oxlint settings of `oxc/no-async-await` and `promise/avoid-new`, as [checks-effect-scope](../gates/checks-effect-scope.md#what-it-checks) says.
 The preset turns these diagnostics to errors:
 
 - `nodeBuiltinImport` refuses an import of a Node built-in module that has an Effect counterpart.
@@ -96,7 +98,8 @@ A mixed cause can make `Effect.catch` and `Effect.mapError` produce different fa
 `catchToOrElseSucceed` turns a blind `Effect.catch` fallback, which the oxlint base refuses, into `Effect.orElseSucceed`, the same blind recovery under another name.
 With `effect: false`, the shared diagnostics still run, but the plugin has no scoped overrides.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
-The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
+The kit owns the shared severities and writes the scoped severities in path overrides.
+A repository can add its own keys except the six scoped keys, which the gate removes from the top-level `diagnosticSeverity`.
 
 ## Related topics
 

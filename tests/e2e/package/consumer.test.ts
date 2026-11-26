@@ -1,12 +1,13 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
-import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
+import { consumerManifest, installConsumer, installPackedConsumer, resetConsumer } from "../lib/consumer-install.ts";
+import { FLAT_SETTLE, TANGLED_SETTLE } from "../lib/settle-fixtures.ts";
 import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
@@ -30,10 +31,6 @@ type Output = {
 
 type Kind = "file" | "tarball";
 
-// Every dependency and its version are the same across every fixture, so one
-// `bun install` per kind serves every test that uses it.
-const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock"]);
-
 let dir = "";
 let fileDir = "";
 let tarballDir = "";
@@ -44,23 +41,13 @@ function widgetTest(widget: string): string {
   return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
 }
 
-async function resetWorkspace(workDir: string): Promise<void> {
-  for (const entry of await readdir(workDir)) {
-    if (KEPT_ACROSS_TESTS.has(entry)) continue;
-    await rm(join(workDir, entry), { recursive: true, force: true });
-  }
-}
-
 beforeAll(async () => {
   fileDir = await mkdtemp(join(tmpdir(), "checks-consumer-file-"));
   await installConsumer(fileDir, `file:${CHECKOUT}`);
 
   packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
-  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
-  tarballPath = packed.stdout.toString().trim();
-
   tarballDir = await mkdtemp(join(tmpdir(), "checks-consumer-tarball-"));
-  await installConsumer(tarballDir, `file:${tarballPath}`);
+  tarballPath = await installPackedConsumer(CHECKOUT, packDir, tarballDir);
 }, 360_000);
 
 afterAll(async () => {
@@ -74,7 +61,7 @@ function oxlint(): Promise<Ran> {
 
 async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): Promise<void> {
   dir = kind === "file" ? fileDir : tarballDir;
-  await resetWorkspace(dir);
+  await resetConsumer(dir);
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
   await writeFile(join(dir, "package.json"), JSON.stringify({ ...consumerManifest(checks), ...manifest }));
   await writeOxlintrc();
@@ -176,36 +163,6 @@ test(
   },
   180_000,
 );
-
-const TANGLED_SETTLE = `export function settle(order) {
-  if (order !== null) {
-    if (order.paid || order.credit) {
-      for (const line of order.lines) {
-        if (line.taxable && line.shipped || line.gift) {
-          charge(line);
-        } else if (line.refunded || line.voided) {
-          refund(line);
-        } else {
-          skip(line);
-        }
-      }
-      return "settled";
-    }
-    return "unpaid";
-  }
-  return "missing";
-}
-`;
-
-const FLAT_SETTLE = `export function settle(order) {
-  if (order === null) return "missing";
-  if (!order.paid) return "unpaid";
-  for (const line of order.lines) {
-    if (line.taxable) charge(line);
-  }
-  return "settled";
-}
-`;
 
 test(
   "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",
@@ -535,6 +492,31 @@ test(
     const green = await runScript("graphwalk");
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
+  },
+  180_000,
+);
+
+const packedBin = (bin: string, ...args: readonly string[]) => ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
+
+test(
+  "installed setup does not become stale after git init or the first commit",
+  async () => {
+    for (const setupBeforeInit of [false, true]) {
+      await useConsumer("tarball");
+      await rm(join(dir, ".oxlintrc.json"));
+      await rm(join(dir, ".gitignore"));
+      if (!setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      const written = await readFile(join(dir, "tsconfig.json"), "utf8");
+      if (setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await ran($`git ls-files`.cwd(dir))).text).toBe("");
+      await $`git add . && git -c user.name="Wren Fixture" -c user.email=wren@example.com commit -qm "feat: fixture"`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
+      expect(await readFile(join(dir, "tsconfig.json"), "utf8")).toBe(written);
+    }
   },
   180_000,
 );

@@ -15,13 +15,6 @@ var REFUSED = new Map([
   ["catchCauseFilter", DIAGNOSTIC.filtered]
 ]);
 var BLIND_RECOVERY = new Set(["catch", "catchEager", "orElseSucceed"]);
-var blindToTheError = (handler) => {
-  if (!handler)
-    return false;
-  if (handler.type !== "ArrowFunctionExpression" && handler.type !== "FunctionExpression")
-    return false;
-  return handler.params.every((param) => param.type === "Identifier" && /^_+$/.test(param.name));
-};
 function propertyName(node) {
   const property = node.type === "MemberExpression" ? node.property : node.key;
   if (!node.computed && property.type === "Identifier")
@@ -50,6 +43,17 @@ var rule = {
     docs: { description: "Disallow the combinators that erase Effect's error channel" }
   },
   create(context) {
+    function blindToTheError(handler) {
+      if (!handler || handler.type !== "ArrowFunctionExpression" && handler.type !== "FunctionExpression")
+        return false;
+      const [parameter] = handler.params;
+      if (!parameter)
+        return true;
+      if (parameter.type !== "Identifier")
+        return false;
+      const variable = context.sourceCode.getDeclaredVariables(handler).find((binding) => binding.identifiers.some((identifier) => identifier.start === parameter.start));
+      return variable !== undefined && !variable.references.some((reference) => reference.isRead());
+    }
     function checkReference(node, combinator) {
       const call = node.parent;
       const blindRecovery = BLIND_RECOVERY.has(combinator) && call?.type === "CallExpression" && call.callee === node && blindToTheError(call.arguments.at(-1));

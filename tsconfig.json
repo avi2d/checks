@@ -37,9 +37,9 @@
               "scripts/**/*.ts"
             ],
             "exclude": [
-              "src/quality/effect-channel/**",
-              "src/complexity/readability/**",
-              "src/quality/data-shape/**",
+              "src/quality/effect-channel/**/*",
+              "src/complexity/readability/**/*",
+              "src/quality/data-shape/**/*",
               "src/quality/presets/oxlint.ts",
               "src/quality/presets/knip.ts",
               "src/quality/presets/dependency-cruiser.ts",
@@ -47,7 +47,13 @@
               "src/testing/flake-preload.ts",
               "src/testing/local-test-preload.ts",
               "src/testing/mutation-guard-plugin.ts",
-              "src/core/native-launch.ts"
+              "src/core/native-launch.ts",
+              "node_modules/**/*",
+              "dist/**/*.js",
+              "**/node_modules/**/*",
+              "**/release-assets/**/*",
+              "**/reports/**/*",
+              "**/repos/**/*"
             ],
             "options": {
               "diagnosticSeverity": {

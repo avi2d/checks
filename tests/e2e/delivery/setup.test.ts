@@ -74,7 +74,7 @@ function decodeTsconfig(text: string): typeof Tsconfig.Type {
 }
 
 const EXPECTED_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
-const EXPECTED_EXCLUDE = ["tests/**", "**/*.test.ts", "**/*.test.tsx"];
+const EXPECTED_EXCLUDE = ["tests/**/*", "**/*.test.ts", "**/*.test.tsx", "**/node_modules/**/*"];
 
 test(
 "an empty directory gains the kit config, the CI workflow and the doc templates byte for byte from the kit",
@@ -155,13 +155,13 @@ test(
 "a repo that already has files keeps them and only fills the gaps",
 async () => {
 const repo = await open({
-"oxlint.config.ts": "// custom\n",
+"oxlint.config.ts": "export default {};\n",
 ".gitignore": "dist/\n",
 "package.json": JSON.stringify({ name: "shop", type: "module" }),
 });
 const run = await setup(repo);
 expect(run.exitCode).toBe(0);
-expect(await readFile(join(repo.dir, "oxlint.config.ts"), "utf8")).toBe("// custom\n");
+expect(await readFile(join(repo.dir, "oxlint.config.ts"), "utf8")).toBe("export default {};\n");
 const kept = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
 expect(kept.name).toBe("shop");
 expect(kept.devDependencies?.["@avi2dg/checks"]).toBeDefined();
@@ -370,7 +370,10 @@ test(
 "a retained effect-free oxlint config gains a tsconfig without Effect paths",
 async () => {
 const repo = await open({
-"oxlint.config.ts": "import { defineConfig } from \"@avi2dg/checks/oxlint\";\n\nexport default defineConfig({ effect: false });\n",
+"oxlint.config.ts": `import { defineConfig } from "${CHECKOUT}/dist/presets/oxlint.js";\n\nexport default defineConfig({ effect: false });\n`,
+".gitignore": ".vscode/*\n!.vscode/extensions.json\n*.py[cod]\n",
+".eslintignore": "scripts/\n",
+".oxlintrc.json": "{}",
 });
 const run = await setup(repo);
 expect(run.exitCode).toBe(0);
@@ -378,6 +381,7 @@ const tsconfig = decodeTsconfig(await readFile(join(repo.dir, "tsconfig.json"), 
 expect(tsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
 const service = tsconfig.compilerOptions?.plugins?.find((plugin) => plugin.name === "@effect/language-service");
 expect(service?.overrides ?? []).toEqual([]);
+expect((await repo.script("quality/effect-scope.ts", "--check")).exitCode).toBe(0);
 },
 60_000,
 );
