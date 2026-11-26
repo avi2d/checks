@@ -26,7 +26,7 @@ const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW }
 export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
   const required = fullRequiredSet(set, kit);
   if (kit) return required;
-  const browsers = [...new Set([...(set.kind === "site" ? ["chromium", "webkit"] : []), ...set.ci.tests.flatMap(({ browsers }) => browsers.split(/\s+/).filter(Boolean))])].join(" ");
+  const browsers = [...new Set([...(set.kind === "site" ? ["chromium", "webkit"] : []), ...set.ci.tests.flatMap((job) => job.browsers.split(/\s+/).filter(Boolean))])].join(" ");
   const playwright = browsers === "" ? "" : `      - uses: ${PLAYWRIGHT_USES}\n        with:\n          browsers: ${browsers}\n`;
   const text = wholeTreeRun
     .replaceAll("__RUNNER__", runnerOf(set.options.publicRepository))

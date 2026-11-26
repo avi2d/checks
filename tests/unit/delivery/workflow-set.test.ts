@@ -1,4 +1,3 @@
-import { Evaluator, Lexer, Parser, data } from "@actions/expressions";
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
@@ -10,6 +9,7 @@ import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
 import { remoteCallsOf } from "../../../src/delivery/remote-calls.ts";
 import { callerSetOf } from "../../../src/delivery/site-names.ts";
 import { byHandSet, differencesOf, requiredSet, type WorkflowFile } from "../../../src/delivery/workflow-set.ts";
+import { EXPRESSION, evaluated, jobRuns, truthy, type Plain } from "../../lib/workflow-expressions.ts";
 import { isRecord } from "../../../src/delivery/workflow-references.ts";
 import type { CallerSet } from "../../../src/delivery/site-names.ts";
 
@@ -41,8 +41,6 @@ const EVERY_OPTION: CallerSet = {
 const PACKAGED: CallerSet = { ...EVERY_OPTION, options: { ...EVERY_OPTION.options, releaseAssets: false, platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] } } };
 
 const FIXTURES = new URL("../../fixtures/workflows/", import.meta.url);
-
-const EXPRESSION = "$";
 
 const written = (set: CallerSet): readonly WorkflowFile[] => [...requiredSet(set, false), ...byHandSet(set, false)];
 
@@ -359,11 +357,6 @@ test("a production.yml that names another domain than the set differs, so a site
 
 type ReleaseContext = { readonly eventName: string; readonly refName: string; readonly headRef: string; readonly baseRef: string; readonly headRepo: string; readonly repository: string };
 
-type Plain = string | { readonly [key: string]: Plain };
-
-const dictionaryOf = (record: { readonly [key: string]: Plain }): data.Dictionary =>
-  new data.Dictionary(...Object.entries(record).map(([key, inner]) => ({ key, value: typeof inner === "string" ? new data.StringData(inner) : dictionaryOf(inner) })));
-
 const githubOf = (ctx: ReleaseContext): Plain => ({
   event_name: ctx.eventName,
   ref_name: ctx.refName,
@@ -372,33 +365,6 @@ const githubOf = (ctx: ReleaseContext): Plain => ({
   repository: ctx.repository,
   event: { pull_request: { head: { repo: { full_name: ctx.headRepo } } } },
 });
-
-const runnerFunctions = new Map([["always", { name: "always", minArgs: 0, maxArgs: 0, call: (): data.ExpressionData => new data.BooleanData(true) }]]);
-
-const evaluated = (expression: string, contexts: Readonly<Record<string, Plain>>): data.ExpressionData => {
-  const inner = expression.startsWith(EXPRESSION + "{{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
-  const parser = new Parser(new Lexer(inner).lex().tokens, Object.keys(contexts), [...runnerFunctions.values()]);
-  return new Evaluator(parser.parse(), dictionaryOf(contexts), runnerFunctions).evaluate();
-};
-
-const truthy = (result: data.ExpressionData): boolean => (result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "");
-
-const STATUS_FUNCTION = /\b(?:success|failure|cancelled|always)\(\)/;
-
-const statusFunction = (name: string, value: boolean) => ({ name, minArgs: 0, maxArgs: 0, call: (): data.ExpressionData => new data.BooleanData(value) });
-
-const jobRuns = (expression: string, contexts: Readonly<Record<string, Plain>>, everyAncestorSucceeded: boolean): boolean => {
-  const inner = expression.startsWith(EXPRESSION + "{{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
-  const checked = STATUS_FUNCTION.test(inner) ? inner : `success() && (${inner})`;
-  const functions = new Map([
-    ["always", statusFunction("always", true)],
-    ["cancelled", statusFunction("cancelled", false)],
-    ["failure", statusFunction("failure", false)],
-    ["success", statusFunction("success", everyAncestorSucceeded)],
-  ]);
-  const parser = new Parser(new Lexer(checked).lex().tokens, Object.keys(contexts), [...functions.values()]);
-  return truthy(new Evaluator(parser.parse(), dictionaryOf(contexts), functions).evaluate());
-};
 
 const ciJobs = (set: CallerSet): Record<string, Record<string, unknown>> => jobsOf(documentOf(set, "ci.yml"));
 
