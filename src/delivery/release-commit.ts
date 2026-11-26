@@ -54,7 +54,7 @@ export function refused(message: string): ReleaseRefused {
 export const versionIn = (manifest: string): Effect.Effect<string | undefined> =>
   decodeVersion(manifest).pipe(
     Effect.map(({ version }) => version),
-    Effect.orElseSucceed(() => undefined),
+    Effect.catchTag("SchemaError", () => Effect.undefined),
   );
 
 export type RequestedVersion = {

@@ -181,7 +181,7 @@ function wantedBunPinFiles(workflows: readonly Workflow[]): ReadonlySet<string> 
 const readJsonFile = Effect.fn("readJsonFile")(function* (file: string) {
   return yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))),
-    Effect.orElseSucceed((): undefined => undefined),
+    Effect.catchTag(["PlatformError", "SchemaError"], () => Effect.void),
   );
 });
 
@@ -209,7 +209,7 @@ export const readBunPinPolicy = Effect.fn("readBunPinPolicy")(function* (root: s
       const parsed: unknown = yield* readJsonFile(path.join(root, name));
       if (parsed !== undefined) manifests.set(name, parsed);
     } else {
-      const text = yield* fs.readFileString(path.join(root, name)).pipe(Effect.orElseSucceed((): undefined => undefined));
+      const text = yield* fs.readFileString(path.join(root, name)).pipe(Effect.catchTag("PlatformError", () => Effect.void));
       if (text !== undefined) files.set(name, text);
     }
   }
