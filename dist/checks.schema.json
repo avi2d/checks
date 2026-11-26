@@ -55,6 +55,14 @@
       "additionalProperties": false,
       "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
     },
+    "trackerKeyPrefixes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
+      "default": []
+    },
     "smoke": {
       "type": "array",
       "items": {
