@@ -361,6 +361,7 @@ test("a daily release that names a removed workflow fails until the name is gone
   const repo = await open({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
     ".github/workflows/ci.yml": workflow,
+    "CHANGELOG.md": "# Changelog\n",
     ".github/workflows/daily-release.yml": broken,
     ".github/workflows/release.yml": releaseWorkflow("echo publish"),
   });
