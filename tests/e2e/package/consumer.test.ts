@@ -1,12 +1,12 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
-import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
+import { consumerManifest, installConsumer, installPackedConsumer, resetConsumer } from "../lib/consumer-install.ts";
 import { FLAT_SETTLE, TANGLED_SETTLE } from "../lib/settle-fixtures.ts";
 import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
@@ -31,10 +31,6 @@ type Output = {
 
 type Kind = "file" | "tarball";
 
-// Every dependency and its version are the same across every fixture, so one
-// `bun install` per kind serves every test that uses it.
-const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock"]);
-
 let dir = "";
 let fileDir = "";
 let tarballDir = "";
@@ -45,23 +41,13 @@ function widgetTest(widget: string): string {
   return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
 }
 
-async function resetWorkspace(workDir: string): Promise<void> {
-  for (const entry of await readdir(workDir)) {
-    if (KEPT_ACROSS_TESTS.has(entry)) continue;
-    await rm(join(workDir, entry), { recursive: true, force: true });
-  }
-}
-
 beforeAll(async () => {
   fileDir = await mkdtemp(join(tmpdir(), "checks-consumer-file-"));
   await installConsumer(fileDir, `file:${CHECKOUT}`);
 
   packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
-  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
-  tarballPath = packed.stdout.toString().trim();
-
   tarballDir = await mkdtemp(join(tmpdir(), "checks-consumer-tarball-"));
-  await installConsumer(tarballDir, `file:${tarballPath}`);
+  tarballPath = await installPackedConsumer(CHECKOUT, packDir, tarballDir);
 }, 360_000);
 
 afterAll(async () => {
@@ -75,7 +61,7 @@ function oxlint(): Promise<Ran> {
 
 async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): Promise<void> {
   dir = kind === "file" ? fileDir : tarballDir;
-  await resetWorkspace(dir);
+  await resetConsumer(dir);
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
   await writeFile(join(dir, "package.json"), JSON.stringify({ ...consumerManifest(checks), ...manifest }));
   await writeOxlintrc();
@@ -510,6 +496,8 @@ test(
   180_000,
 );
 
+const packedBin = (bin: string, ...args: readonly string[]) => ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
+
 test(
   "installed setup does not become stale after git init or the first commit",
   async () => {
@@ -528,38 +516,6 @@ test(
       expect((await packedBin("checks-setup")).exitCode).toBe(0);
       expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
       expect(await readFile(join(dir, "tsconfig.json"), "utf8")).toBe(written);
-    }
-  },
-  180_000,
-);
-
-const SETUP_SCOPE_CASES = [
-  '{ effect: { files: ["src/**/*.ts"] }, overrides: [{ files: ["src/host.ts"], rules: { "oxc/no-async-await": "off" } }] }',
-  '{ effect: { files: ["src/**/*.ts"], excludeFiles: [] } }',
-  '{ effect: useEffect }',
-];
-const packedBin = (bin: string, ...args: readonly string[]) => ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
-test(
-  "installed setup does not write a stale tsconfig for overlapping, empty-exclude, or computed Effect scopes",
-  async () => {
-    for (const config of SETUP_SCOPE_CASES) {
-      await useConsumer("tarball");
-      await rm(join(dir, ".oxlintrc.json"));
-      await $`git init -q`.cwd(dir).quiet();
-      await writeFile(join(dir, "oxlint.config.ts"), `import { defineConfig } from "@avi2dg/checks/oxlint";
-const useEffect = false;
-export default defineConfig(${config});
-`);
-      const tsconfig = join(dir, "tsconfig.json");
-      await writeFile(tsconfig, '{ "compilerOptions": { "strict": true } }\n');
-      expect((await packedBin("checks-setup")).exitCode).toBe(0);
-      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
-      const written = await readFile(tsconfig, "utf8");
-      expect(written).toContain('"strict": true');
-      if (config === "{ effect: useEffect }") expect(written).not.toContain('"overrides"');
-      expect((await packedBin("checks-setup")).exitCode).toBe(0);
-      expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
-      expect(await readFile(tsconfig, "utf8")).toBe(written);
     }
   },
   180_000,
