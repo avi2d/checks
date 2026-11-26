@@ -144,7 +144,7 @@ export async function unpackConsumer(): Promise<{ readonly packDir: string; read
         "@hughescr/stryker-bun-runner": "1.4.0",
         "@stryker-mutator/core": "10.0.0",
         "@types/bun": "1.4.2",
-        effect: "4.0.0",
+        effect: "4.1.4",
       },
     }),
   );
