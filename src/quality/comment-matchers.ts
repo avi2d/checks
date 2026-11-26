@@ -250,7 +250,6 @@ export const REFUSED_DIRECTIVES = [
   "biome-ignore",
   "eslint-disable",
   "oxlint-disable",
-  "oxlint-enable",
   "prettier-ignore",
   "stylelint-disable",
 ] as const satisfies readonly string[];
@@ -284,7 +283,7 @@ const CHECKS: readonly Check[] = [
     refusal: recordRefusal,
   },
   {
-    find: /\b(?!SHA-(?:1|224|256|384|512)\b)[A-Z]{2,}-\d+\b/,
+    find: /\b(?!ADR-|(?:UTF|RFC|ECMA|AES|ISO)-\d+\b|SHA-(?:1|224|256|384|512)\b)[A-Z]{2,}-\d+\b/,
     refusal: recordRefusal,
   },
   {

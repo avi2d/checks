@@ -135,10 +135,8 @@ test("an oxlint next-line suppression is refused, not ignored", () => {
 });
 
 
-test("an oxlint re-enable directive is refused, not ignored", () => {
-  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// oxlint-enable\n", new Set([2])))).toEqual([
-    "src/a.ts:2 carries the machine-read directive \`oxlint-enable\`. Fix what the tool is reporting, or stop running the tool on this file",
-  ]);
+test("an oxlint re-enable directive is not mistaken for a suppression", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// oxlint-enable\n", new Set([2])))).toEqual([]);
 });
 
 
@@ -154,5 +152,13 @@ test("a tracker key is refused, not treated as ordinary text", () => {
     'src/a.ts:2 points at a record or a ticket ("ABC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
   ]);
   expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// handles utf8 and version2\n", new Set([2])))).toEqual([]);
-  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// verify SHA-256\n", new Set([2])))).toEqual([]);
+});
+
+test("standards names are not mistaken for tracker keys or allowed to hide one", () => {
+  for (const name of ["SHA-256", "UTF-8", "UTF-16", "RFC-2119", "ECMA-262", "AES-256", "ISO-8601"]) {
+    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name}\n`, new Set([2]))), name).toEqual([]);
+    expect(Effect.runSync(refused("src/a.ts", `const a = 1;\n// verify ${name} and ORC-123\n`, new Set([2]))), name).toEqual([
+      'src/a.ts:2 points at a record or a ticket ("ORC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
+    ]);
+  }
 });

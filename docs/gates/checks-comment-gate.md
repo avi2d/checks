@@ -10,10 +10,11 @@ audience: consumers
 
 It fails when an added line carries a banned comment.
 It refuses a machine-read directive, a record or ticket pointer, a doc block, and a file opening with a rationale block over three lines, licence headers excepted.
-The directives include `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `biome-ignore`, `oxlint-enable`, and `prettier-ignore`.
+The directives include `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `biome-ignore`, and `prettier-ignore`.
 They also include directives beginning with `eslint-disable`, `oxlint-disable`, or `stylelint-disable`.
 A ticket pointer includes an uppercase tracker key such as `ABC-123`.
 SHA hash names such as `SHA-256` are not ticket pointers.
+Standards names beginning with `UTF-`, `RFC-`, `ECMA-`, `AES-`, or `ISO-` are not ticket pointers.
 A stylesheet keeps its count of existing stylelint problems in `stylelint-suppressions.json` instead, as [checks-frontend-syntax](checks-frontend-syntax.md) says.
 Each refusal says what to write instead.
 Only added lines are checked, so a violation in a file the diff never touches stays silent.
