@@ -38,6 +38,16 @@ const jobsOf = (workflow: unknown, file: string): object => {
 async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
   for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
+test("a consumer workflow set does not omit the whole-tree run or trigger it on other branches", async () => {
+  const repo = await open({ "package.json": manifest() });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "whole-tree-run.yml")).toMatchObject({
+    on: { push: { branches: ["main"] }, workflow_dispatch: null },
+  });
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
 test("a written code workflow set still refuses a missing or untracked changelog without changing the opt-out release template", async () => {
   const repo = await open({ "package.json": manifest(), ".bun-version": `${FLEET_BUN_VERSION}\n` });
   await repo.commit("start");
