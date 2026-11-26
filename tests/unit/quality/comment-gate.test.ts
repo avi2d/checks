@@ -133,3 +133,10 @@ test("an oxlint next-line suppression is refused, not ignored", () => {
     "src/a.ts:2 carries the machine-read directive \`oxlint-disable-next-line\`. Fix what the tool is reporting, or stop running the tool on this file",
   ]);
 });
+
+
+test("an oxlint re-enable directive is refused, not ignored", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// oxlint-enable\n", new Set([2])))).toEqual([
+    "src/a.ts:2 carries the machine-read directive \`oxlint-enable\`. Fix what the tool is reporting, or stop running the tool on this file",
+  ]);
+});
