@@ -120,6 +120,7 @@ export default defineConfig({
 | `browserTimings` | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
 | `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
 | `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
 | `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
