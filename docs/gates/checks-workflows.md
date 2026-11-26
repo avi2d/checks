@@ -170,6 +170,8 @@ export default defineConfig({
 
 `binary` is the name `bun run release:assets` gives each compiled file.
 `platforms` lists the platforms to build and publish, each once.
+A private root must have exactly one public workspace, which becomes the main package.
+The root defines `release:assets`, and its version must match the workspace version.
 Without the setting, `main.yml` holds no `binaries` job and stays as it was.
 
 Each platform builds on its own GitHub-hosted runner:
@@ -209,7 +211,8 @@ It resolves `<name>-<os>-<cpu>/<binary>-<version>` from its install and runs tha
 When no platform package matches the host, it runs its source.
 npm installs only the optional dependency whose `os`, `cpu` and `libc` match the host, so an install runs no `postinstall` script and downloads one binary.
 
-`checks-workflows` refuses the setting when `package.json` has no `release:assets` script or sets `private: true`, in a site, in the kit, and when `repositoryVisibility` is `private`.
+`checks-workflows` refuses the setting when the root has no `release:assets` script, in a site, in the kit, and when `repositoryVisibility` is `private`.
+It also refuses a private root without exactly one public workspace.
 
 ## The composed ci.yml
 
@@ -313,8 +316,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` |
+| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 
