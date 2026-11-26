@@ -12,6 +12,7 @@ With a workflow argument it tags the commit and dispatches that workflow on the 
 
 With a workflow argument it reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
 It refuses a release commit whose `package.json` holds another version.
+It refuses before tagging when the release commit lacks `CHANGELOG.md` at the repository root.
 It tags that commit as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument
@@ -23,6 +24,7 @@ The walk stops with no release once the version `package.json` holds at `HEAD` i
 When the release commit sits behind `HEAD`, it checks out the release commit in the same checkout and installs its dependencies with `bun install --frozen-lockfile`, refusing when the checkout holds uncommitted changes.
 It then runs the build check and the publish there, so npm ships the tree the required checks of the release pull request passed on.
 A merge with no untagged release commit behind it ends at once, without pushing a tag or creating a release.
+It refuses before it checks out or tags anything when the release commit lacks `CHANGELOG.md` at the repository root.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
 That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
@@ -88,7 +90,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, the tag is pushed and the release workflow dispatched, or the release is tagged, released on GitHub and published |
-| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, the release commit lacks `CHANGELOG.md`, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
 
 ## Sample output
 

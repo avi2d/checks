@@ -435,14 +435,37 @@ expect(rerun.text).not.toContain("fill the opening, stance sections, Scope and c
 );
 
 test(
-"the generated public and private workflows pass the kit ci-wiring gate",
+"setup seeds a valid changelog and never overwrites an existing changelog",
 async () => {
-const pub = await open({});
-await setup(pub);
+const repo = await open({ "package.json": JSON.stringify({ name: "widget" }) });
+expect((await setup(repo)).exitCode).toBe(0);
+expect(await readFile(join(repo.dir, "CHANGELOG.md"), "utf8")).toBe("# Changelog\n\nEvery release of `widget`, newest first, written by the release from its conventional commits.\n");
+const changelog = "# Changelog\n\n## 1.0.0\n\nReleased 2026-11-26.\n\n- First release.\n";
+await repo.write({ "CHANGELOG.md": changelog });
+expect((await setup(repo)).exitCode).toBe(0);
+expect(await readFile(join(repo.dir, "CHANGELOG.md"), "utf8")).toBe(changelog);
+const existing = await open({ "CHANGELOG.md": changelog });
+expect((await setup(existing)).exitCode).toBe(0);
+expect(await readFile(join(existing.dir, "CHANGELOG.md"), "utf8")).toBe(changelog);
+},
+60_000,
+);
+
+test(
+"fresh setup passes docs and ci-wiring instead of refusing its own changelog",
+async () => {
+const pub = await open({ "package.json": JSON.stringify({ name: "widget" }) });
+await pub.commit("chore: start repository");
+expect((await setup(pub)).exitCode).toBe(0);
+await pub.write({ "AGENTS.md": "# Project agent memory\n\nRead `package.json` for package settings.\n" });
+await pub.commit("ci: set up public repository");
+const docs = await pub.script("docs/docs.ts", "HEAD~1", "HEAD");
+expect(docs.exitCode).toBe(0);
 const pubWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(pub.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(pub, false) }));
 expect(pubWiring.exitCode).toBe(0);
 const priv = await open({ "checks.config.ts": 'export default { repositoryVisibility: "private" };\n' });
-await setup(priv, "--private");
+expect((await setup(priv, "--private")).exitCode).toBe(0);
+await priv.commit("ci: set up private repository");
 const privWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(priv.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(priv, true) }));
 expect(privWiring.exitCode).toBe(0);
 },

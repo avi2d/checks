@@ -13,7 +13,7 @@ It reports each gate's outcome and wall time in seconds after the gate exits.
 With `--whole-tree` it runs the four whole-tree gates instead.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.
-A Markdown change runs the range gates plus `checks-copy`.
+A Markdown change runs the range gates plus `checks-ci-wiring` and `checks-copy`.
 A TypeScript source change runs every applicable gate.
 A test file classifies as TypeScript, so its change runs every applicable gate too.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.

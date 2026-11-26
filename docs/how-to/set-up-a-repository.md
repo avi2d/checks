@@ -96,6 +96,25 @@ To give the kit and each agent the files they read:
 
 1. Fill the new page's opening, stance sections, Scope and closing lines.
 1. Name `VISION.md` once in `AGENTS.md`.
+1. If `CHANGELOG.md` does not exist, create it at the repository root with this title and lead:
+
+   ```md
+   # Changelog
+
+   Every release of `<package>`, newest first, written by the release from its conventional commits.
+   ```
+
+   Replace `<package>` with the name in `package.json`.
+   Keep an existing changelog unchanged.
+
+1. If `HEAD` has no `CHANGELOG.md`, commit the file before running the checks:
+
+   ```sh
+   git add CHANGELOG.md
+   git commit -m "docs: add changelog"
+   ```
+
+   The release workflows require `CHANGELOG.md` in `HEAD`, so an untracked or staged file does not pass `checks-ci-wiring`.
 
 ## Run the checks on every pull request
 

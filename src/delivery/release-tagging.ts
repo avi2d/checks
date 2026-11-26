@@ -10,6 +10,7 @@ import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces } from "./workspace-packages.ts";
 import { writeOutputs } from "./ci/lib/step-output.ts";
+import { CHANGELOG, committedChangelog } from "./release-changelog.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,
@@ -75,14 +76,21 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
   return undefined;
 });
 
-// Returns false when the tag already tags the head, so a rerun pushes nothing.
-const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (label: string, root: string, { head, version, tag }: Landed, cuttingWorkflow: string) {
+const requireChangelog = Effect.fn("requireChangelog")(function* (root: string, head: string) {
+  if (!(yield* committedChangelog(root, head))) return yield* new TagRefused({ message: `${head.slice(0, 12)} holds no ${CHANGELOG}; add ${CHANGELOG} to the release commit before tagging` });
+});
+
+const releaseTagNeeded = Effect.fn("releaseTagNeeded")(function* (label: string, { head, tag }: Pick<Landed, "head" | "tag">) {
   const tagged = yield* taggedOn(tag);
   if (tagged === head) {
     yield* Console.log(`${label}: ${tag} already tags ${head.slice(0, 12)}`);
     return false;
   }
   if (tagged !== undefined) return yield* new TagRefused({ message: `${tag} already tags ${tagged.slice(0, 12)}, not ${head.slice(0, 12)}` });
+  return true;
+});
+
+const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (root: string, { head, version, tag }: Landed, cuttingWorkflow: string) {
   yield* runBuild(root);
   const rebuilt = (yield* git(["diff", "--name-only"], root)).trim().split("\n").filter((file) => file !== "");
   if (rebuilt.length > 0) {
@@ -93,7 +101,6 @@ const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (label: string, roo
     });
   }
   yield* git(["push", "--quiet", "origin", `${head}:refs/tags/${tag}`], root);
-  return true;
 });
 
 export const tagHead = Effect.fn("tagHead")(function* (
@@ -104,7 +111,9 @@ export const tagHead = Effect.fn("tagHead")(function* (
   awaitRelease?: (workflow: string, sha: string) => Effect.Effect<void, { readonly message: string }, ChildProcessSpawner.ChildProcessSpawner>,
 ) {
   const landed = yield* landedHead(label, root);
-  if (landed === undefined || !(yield* pushReleaseTag(label, root, landed, cuttingWorkflow))) return true;
+  if (landed === undefined || !(yield* releaseTagNeeded(label, landed))) return true;
+  yield* requireChangelog(root, landed.head);
+  yield* pushReleaseTag(root, landed, cuttingWorkflow);
   const { head, tag } = landed;
   yield* dispatch(workflow, tag).pipe(
     Effect.mapError(
@@ -172,12 +181,16 @@ const checkedWorkspaces = Effect.fn("checkedWorkspaces")(function* (root: string
 export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
   const landed = yield* landedRelease(label, root);
   if (landed === undefined) return true;
+  yield* requireChangelog(root, landed.head);
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
   const workspaces = yield* checkedWorkspaces(root, landed);
   const platforms = yield* configuredPlatformRelease(root, landed.head, landed.publishes ? undefined : workspaces.map((workspace) => workspace.path));
-  const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
-  if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  const tagged = yield* releaseTagNeeded(label, landed);
+  if (tagged) {
+    yield* pushReleaseTag(root, landed, cuttingWorkflow);
+    yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  }
   if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
   yield* writeGitHubRelease(label, root, landed);
   yield* writeReleasedTagOutput(landed.tag);
