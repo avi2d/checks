@@ -4,11 +4,13 @@ import { ChildProcessSpawner } from "effect/process";
 import { collect, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { decodeSetting, loadSettings, NestedOxlintConfigs, SETTINGS_FILE } from "../core/settings.ts";
-import { OXLINT_CONFIG_NAMES } from "./effect-scope-paths.ts";
 
 const NAME = "lint-coverage";
 
 const KEY = "nestedOxlintConfigs";
+
+// effect-scope-paths.ts also refuses oxlint.config.js, .mjs, .cjs and .cts, which oxlint never loads.
+const LOADED_CONFIG_NAMES: readonly string[] = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.ts", "oxlint.config.mts"];
 
 const LINTED_SOURCE = /\.(?:tsx?|astro)$/;
 
@@ -146,8 +148,8 @@ const resolveConfig = Effect.fn("resolveConfig")(function* (root: string, config
 const rootConfigFile = Effect.fn("rootConfigFile")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const present = yield* Effect.forEach(OXLINT_CONFIG_NAMES, (name) => fs.exists(path.join(root, name)).pipe(Effect.mapError(failed(`cannot read ${name}`))));
-  return OXLINT_CONFIG_NAMES.find((_, index) => present[index]);
+  const present = yield* Effect.forEach(LOADED_CONFIG_NAMES, (name) => fs.exists(path.join(root, name)).pipe(Effect.mapError(failed(`cannot read ${name}`))));
+  return LOADED_CONFIG_NAMES.find((_, index) => present[index]);
 });
 
 const readAllowed = Effect.fn("readAllowed")(function* (root: string) {
@@ -157,7 +159,7 @@ const readAllowed = Effect.fn("readAllowed")(function* (root: string) {
 });
 
 function isNestedConfig(file: string): boolean {
-  return file.includes("/") && OXLINT_CONFIG_NAMES.includes(file.slice(file.lastIndexOf("/") + 1));
+  return file.includes("/") && LOADED_CONFIG_NAMES.includes(file.slice(file.lastIndexOf("/") + 1));
 }
 
 const weakenedBy = Effect.fn("weakenedBy")(function* (root: string, base: Resolved, config: string, files: readonly string[]) {

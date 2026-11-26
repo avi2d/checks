@@ -21,8 +21,8 @@ It fails when an oxlint config below the repository root turns off a rule that `
 
 ## Nested oxlint configs
 
-oxlint lints the files under a directory that holds a nested config with that config in place of the root one.
-A nested config is a `.oxlintrc.json`, `.oxlintrc.jsonc`, `oxlint.config.ts`, `oxlint.config.mts`, `oxlint.config.cts`, `oxlint.config.js`, `oxlint.config.mjs` or `oxlint.config.cjs`.
+oxlint lints the files under a directory that holds a `.oxlintrc.json`, `.oxlintrc.jsonc`, `oxlint.config.ts` or `oxlint.config.mts` with that config in place of the root one.
+oxlint never loads a nested `oxlint.config.js`, `.mjs`, `.cjs` or `.cts`, so the gate leaves those alone.
 Such a nested config still lets oxlint walk every file, so the walk alone cannot see a rule it turns off.
 
 The gate checks each tracked `.ts`, `.tsx` and `.astro` file under a nested config.
