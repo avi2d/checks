@@ -94,7 +94,7 @@ beforeAll(async () => {
     JSON.stringify({
       name: "checks-define-config-fixture",
       type: "module",
-      dependencies: { effect: "4.0.0" },
+      dependencies: { effect: "4.1.4" },
       devDependencies: {
         "@avi2dg/checks": `file:${tarball}`,
         "@swc/core": "1.16.2",

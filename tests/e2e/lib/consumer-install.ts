@@ -9,7 +9,7 @@ export function consumerManifest(checks: string): Record<string, unknown> {
     author: "avi2d <avi2dg@gmail.com>",
     devDependencies: {
       "@avi2dg/checks": checks,
-      effect: "4.0.0",
+      effect: "4.1.4",
       oxlint: "1.83.0",
       "@swc/core": "1.16.2",
       "@types/bun": "1.4.2",

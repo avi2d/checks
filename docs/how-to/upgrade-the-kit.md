@@ -22,7 +22,7 @@ To move a repository to a newer release of the kit:
    <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
    ```sh
-   bun add -d @effect/tsgo@0.45.0 @swc/core@1.16.2 dependency-cruiser@18.4.0 effect@4.0.0 jscpd@5.3.2 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 typescript@7.0.2
+   bun add -d @effect/tsgo@0.45.0 @swc/core@1.16.2 dependency-cruiser@18.4.0 effect@4.1.4 jscpd@5.3.2 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 typescript@7.0.2
    ```
 
    <!-- end generated install -->
