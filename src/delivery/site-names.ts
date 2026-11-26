@@ -206,7 +206,7 @@ export function parseSiteNameFlags(args: readonly string[]): ParsedFlags | undef
 export type HeldFile = { readonly name: string; readonly text: string; readonly workflow: Workflow };
 
 // A file that does not parse names no site, and the comparison still names it.
-const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
+const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.catchTag("UnknownError", () => Effect.void));
 
 const decodePackage = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({
   name: Schema.optionalKey(Schema.String),

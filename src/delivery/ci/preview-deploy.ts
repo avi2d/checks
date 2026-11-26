@@ -19,7 +19,7 @@ export const main = Effect.gen(function* () {
   // Wrangler appends to the file, so an earlier deploy's alias would answer for this one.
   yield* fs.remove(outputFile, { force: true });
   if (!(yield* commandPasses("bunx", deployArgs(deploy), { WRANGLER_OUTPUT_FILE_PATH: outputFile }))) return false;
-  const alias = deployedAlias(yield* fs.readFileString(outputFile).pipe(Effect.orElseSucceed(() => "")));
+  const alias = deployedAlias(yield* fs.readFileString(outputFile).pipe(Effect.catchTag("PlatformError", () => Effect.succeed(""))));
   if (alias !== origin) {
     return yield* new AliasMismatch({ message: `Cloudflare serves the branch at '${alias}', not at the ${origin} the build points to` });
   }

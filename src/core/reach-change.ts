@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Result, Schema } from "effect";
 import { checkoutFiles, git, pathsAt } from "./git.ts";
 import { loadSettings, Reach, SETTINGS_FILE } from "./settings.ts";
 
@@ -34,7 +34,7 @@ export function compareReach(oldSettings: Readonly<Record<string, unknown>>, new
 export function compareLoadedSettings<E, R>(oldSettings: Effect.Effect<Readonly<Record<string, unknown>>, E, R>, newSettings: Effect.Effect<Readonly<Record<string, unknown>>, E, R>): Effect.Effect<ReachChange, never, R> {
   return Effect.gen(function* () {
     return compareReach(yield* oldSettings, yield* newSettings);
-  }).pipe(Effect.orElseSucceed((): ReachChange => ({ kind: "full" })));
+  }).pipe(Effect.result, Effect.map(Result.getOrElse((): ReachChange => ({ kind: "full" }))));
 }
 
 export function addReachTests(tests: readonly string[], selected: ReadonlySet<string>, change: ReachChange): readonly string[] {
@@ -53,5 +53,5 @@ export const readReachChange = Effect.fn("readReachChange")(function* (root: str
     const modules = path.join(root, "node_modules");
     if (yield* fs.exists(modules)) yield* fs.symlink(modules, path.join(tree, "node_modules"));
     return yield* compareLoadedSettings(loadSettings(tree), loadSettings(root));
-  }).pipe(Effect.scoped, Effect.orElseSucceed((): ReachChange => ({ kind: "full" })));
+  }).pipe(Effect.scoped, Effect.catchTag(["GitFailure", "PlatformError"], () => Effect.succeed<ReachChange>({ kind: "full" })));
 });

@@ -45,7 +45,7 @@ const servedBytes = (address: string) =>
       .then((response) => response.arrayBuffer())
       .then((buffer) => new Uint8Array(buffer)),
   ).pipe(
-    Effect.orElseSucceed(() => new Uint8Array()),
+    Effect.catchTag("UnknownError", () => Effect.succeed(new Uint8Array())),
   );
 
 const differing = (root: string, origin: string, files: readonly string[], attempt: number) =>

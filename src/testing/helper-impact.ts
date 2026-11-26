@@ -1,4 +1,4 @@
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { importedFile, importPath, importsOf, resolved } from "../core/imports.ts";
 import { isRecord, parseTypeScript, stringValue } from "../core/swc.ts";
 
@@ -84,7 +84,7 @@ const resolveTargets = Effect.fn("resolveTargets")(function* (root: string, file
     return targets.length === 0 ? undefined : targets;
   }
   const path = yield* Path.Path;
-  const target = yield* Effect.tryPromise({ try: () => Bun.resolve(specifier, path.join(root, directory)), catch: () => undefined }).pipe(Effect.orElseSucceed(() => ""));
+  const target = yield* Effect.tryPromise({ try: () => Bun.resolve(specifier, path.join(root, directory)), catch: () => undefined }).pipe(Effect.option, Effect.map(Option.getOrElse(() => "")));
   if (target === "") return specifier.startsWith("#") || specifier.startsWith("/") || aliases.some((alias) => matchesAlias(specifier, alias)) ? undefined : [];
   const relative = path.relative(root, target);
   return known.has(relative) ? [relative] : [];

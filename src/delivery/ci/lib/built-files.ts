@@ -9,7 +9,7 @@ export const builtFiles = Effect.fn("builtFiles")(function* (input: string, fold
   const root = path.resolve(folder);
   const isDirectory = yield* fs.stat(root).pipe(
     Effect.map(({ type }) => type === "Directory"),
-    Effect.orElseSucceed(() => false),
+    Effect.catchTag("PlatformError", () => Effect.succeed(false)),
   );
   if (!isDirectory) return yield* new FolderMissing({ message: `${input} names ${folder}, which is not a folder, so build the site first` });
   const files: string[] = [];

@@ -29,7 +29,7 @@ const readRemote = Effect.fn("readRemote")(function* (root: string, branch: stri
   const [, ...parents] = (yield* git(["rev-list", "--parents", "-n", "1", tracking], root)).trim().split(" ");
   const version = yield* git(["show", `${tracking}:${MANIFEST}`], root).pipe(
     Effect.flatMap(versionIn),
-    Effect.orElseSucceed(() => undefined),
+    Effect.catchTag("GitFailure", () => Effect.undefined),
   );
   return { parents, version } satisfies Remote;
 });
