@@ -32,7 +32,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository | source |
 | docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` | built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source |
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository | source |
-| delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository | source |
+| delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree, and `HEAD:CHANGELOG.md` | every repository | source |
 | delivery | [`checks-plain-steps`](gates/checks-plain-steps.md) | the working tree | every repository | source |
 | delivery | [`checks-secrets`](gates/checks-secrets.md) | the range | every repository | source |
 | delivery | [`checks-no-mistakes-test`](gates/checks-no-mistakes-test.md) | the working tree | a repository tracking `.no-mistakes.yaml` | source |

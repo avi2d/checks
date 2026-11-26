@@ -4,6 +4,15 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { consumer, head, manifest } from "../lib/release-pr-fixture.ts";
 
+test("a release without CHANGELOG.md cannot open a pull request", async () => {
+  const widget = await consumer();
+  await $`git rm -q CHANGELOG.md && git commit -qm ${"docs: remove changelog"}`.cwd(widget.dir).quiet();
+  const result = await widget.run(["ci.yml"]);
+  expect(result.exitCode).toBe(2);
+  expect(result.text).toContain("CHANGELOG.md");
+  expect((await widget.state()).pulls).toEqual([]);
+}, 30_000);
+
 test(
   "a fix since the last tag opens one pull request that bumps the patch, carries the built changelog and dispatches the checks on its head",
   async () => {
