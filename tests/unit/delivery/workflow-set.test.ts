@@ -43,7 +43,10 @@ const FIXTURES = new URL("../../fixtures/workflows/", import.meta.url);
 
 const EXPRESSION = "$";
 
-const written = (set: CallerSet): readonly WorkflowFile[] => [...requiredSet(set, false), ...byHandSet(set)];
+const written = (set: CallerSet): readonly WorkflowFile[] => {
+  const required = requiredSet(set, false);
+  return [...required, ...byHandSet(set).filter(({ name }) => !required.some((file) => file.name === name))];
+};
 
 const everyFile = (): readonly WorkflowFile[] => [CODE, SITE, CHECKED, EVERY_OPTION].flatMap(written);
 
@@ -71,9 +74,9 @@ const withFile = (set: CallerSet, name: string, text: string): readonly Workflow
 const changed = (set: CallerSet, name: string, text: string): readonly (readonly string[])[] =>
   differencesOf(set, withFile(set, name, text), false).map(({ kind, name: file }) => [kind, file]);
 
-test("the code set is ci, pr-title, main and release, and the site set adds preview-close and production", () => {
-  expect(requiredSet(CODE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml"]);
-  expect(requiredSet(SITE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml"]);
+test("both workflow sets require mutation and the whole-tree run", () => {
+  expect(requiredSet(CODE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml", "mutation.yml", "whole-tree-run.yml"]);
+  expect(requiredSet(SITE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml", "mutation.yml", "whole-tree-run.yml"]);
 });
 
 test("configured tier shards keep the aggregate checks job and pull request selection", () => {
@@ -127,13 +130,13 @@ test("body-only edits neither run nor cancel title checks, while title edits and
   }
 });
 
-test("an absent optional file is no difference, but an edited one is, and a site holds no mutation file", () => {
+test("an absent optional file is no difference, but a modified mutation workflow fails in either set", () => {
   const required = requiredSet(CODE, false);
   expect(differencesOf(CODE, required, false)).toEqual([]);
   expect(byHandSet(SITE).map(({ name }) => name)).toEqual(["advisories.yml"]);
   const handRolled = { name: "mutation.yml", text: "name: mutation\non:\n  workflow_dispatch:\n" };
   expect(differencesOf(CODE, [...required, handRolled], false).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
-  expect(differencesOf(SITE, [...requiredSet(SITE, false), handRolled], false).map(({ kind, name }) => [kind, name])).toEqual([["extra", "mutation.yml"]]);
+  expect(differencesOf(SITE, [...requiredSet(SITE, false), handRolled], false).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
   expect(textOf(CODE, "mutation.yml")).toBe(MUTATION_WORKFLOW);
 });
 
@@ -166,10 +169,10 @@ test("a workflow that grants more than contents: read to every job, or a job tha
   }
 });
 
-test("only ci, pr-title and mutation hold a workflow-level group, and a main release job that cancels a pending release fails here", () => {
+test("the whole-tree run queues concurrent runs, and a main release job does not cancel a pending release", () => {
   const grouped = (set: CallerSet): readonly string[] => written(set).filter(({ text }) => /^concurrency:/m.test(text)).map(({ name }) => name);
-  expect(grouped(CODE)).toEqual(["ci.yml", "pr-title.yml", "mutation.yml"]);
-  expect(grouped(SITE)).toEqual(["ci.yml", "pr-title.yml"]);
+  expect(grouped(CODE)).toEqual(["ci.yml", "pr-title.yml", "mutation.yml", "whole-tree-run.yml"]);
+  expect(grouped(SITE)).toEqual(["ci.yml", "pr-title.yml", "mutation.yml", "whole-tree-run.yml"]);
   for (const set of [CODE, SITE]) expect(jobsOf(documentOf(set, "main.yml"))["release"]).toMatchObject({ concurrency: { "cancel-in-progress": false } });
 });
 

@@ -48,8 +48,8 @@ test("a code write that leaves a job calling another repository's workflow, or a
   const repo = await open({ "package.json": manifest });
   await repo.commit("start");
 
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
-  expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "mutation.yml", "pr-title.yml", "release.yml", "whole-tree-run.yml"]);
   expect(await listed(repo, ".github/actions")).toEqual(["setup", "setup/action.yml", "setup/bun-without-unzip.sh"]);
   for (const name of await listed(repo, ".github/workflows")) expectNoRemoteUses(name, await text(repo, join(".github", "workflows", name)));
   expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { needs: ["changes", "static", "unit"], if: "always()" } } });
@@ -115,8 +115,8 @@ test("a site write that drops the playwright action, the site workflows or the s
   const repo = await open({ "package.json": manifest });
   await repo.commit("start");
 
-  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n" });
-  expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml"]);
+  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 8 workflow file(s) of the site set and its 3 action file(s)\n" });
+  expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "mutation.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml", "whole-tree-run.yml"]);
   expect(await listed(repo, ".github/actions")).toContain("playwright/action.yml");
   for (const name of await listed(repo, ".github/workflows")) expectNoRemoteUses(name, await text(repo, join(".github", "workflows", name)));
   expect(await parsed(repo, "production.yml")).toMatchObject({ env: { SITE_PAGES: "acme", SITE_DOMAIN: "acme.example", SITE_PRODUCTION: "acme/acme.example" } });

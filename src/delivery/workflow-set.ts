@@ -1,3 +1,4 @@
+import wholeTreeRun from "./full-set/whole-tree-run.txt";
 import { fullAdvisories, fullDocs, fullFlake, fullRequiredSet } from "./full-set.ts";
 import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
 import type { CallerSet } from "./site-names.ts";
@@ -21,7 +22,10 @@ type DifferentLine = { readonly line: number; readonly holds: string | undefined
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
 export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
-  return fullRequiredSet(set, kit);
+  const required = fullRequiredSet(set, kit);
+  if (kit) return required;
+  const runner = set.options.publicRepository ? "ubuntu-latest" : "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
+  return [...required, MUTATION, { name: "whole-tree-run.yml", text: wholeTreeRun.replaceAll("__RUNNER__", runner) }];
 }
 
 // An optional file may be absent, but a present one holds exactly this text.
@@ -46,7 +50,7 @@ export function differencesOf(set: CallerSet, present: readonly WorkflowFile[], 
   const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
   const byHand = byHandSet(set);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
-  const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];
+  const judged = [...required, ...byHand.filter(({ name }) => held.has(name) && !required.some((file) => file.name === name))];
   return [
     ...judged.flatMap((file): readonly Difference[] => {
       const text = held.get(file.name);

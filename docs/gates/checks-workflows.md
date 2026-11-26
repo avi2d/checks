@@ -39,6 +39,8 @@ A site takes these files under `.github/workflows/`:
 | `main.yml` | a push to `main` | the staging deploy |
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `production.yml` | `workflow_dispatch` | the production deploy |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `whole-tree-run.yml` | a push to `main` and `workflow_dispatch` | the whole-tree run and issue filing |
 
 A code repository takes these files:
 
@@ -48,6 +50,8 @@ A code repository takes these files:
 | `pr-title.yml` | every push to a pull request and every title edit | the title check, posted as the `commitlint` status |
 | `main.yml` | a push to `main` | `bunx checks-release-tag`, which tags and publishes a release commit |
 | `release.yml` | `workflow_dispatch` | the release pull request |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `whole-tree-run.yml` | a push to `main` and `workflow_dispatch` | the whole-tree run and issue filing |
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
@@ -82,13 +86,12 @@ Replace a job that calls another repository's workflow with its own steps by han
 
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
-A code repository may hold `advisories.yml`, `mutation.yml`, `flake.yml` and `docs.yml`.
+A code repository may hold `advisories.yml`, `flake.yml` and `docs.yml`.
 Each optional file keeps what the file it replaces does:
 
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `mutation.yml` | `workflow_dispatch` and `workflow_call` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard and merges the reports. Only a `workflow_dispatch` run keeps the merged report as the baseline. A run started through `workflow_call` uses the report only within that run |
 | `flake.yml` | `workflow_dispatch` | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
