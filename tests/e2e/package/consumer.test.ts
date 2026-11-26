@@ -362,9 +362,10 @@ test(
         ...Object.values(manifest.exports).flatMap((exported) => (typeof exported === "string" ? [exported] : [exported.types, exported.default])),
         ...oxlintrc.jsPlugins,
         "commitlint.config.ts",
-        // checks-graphwalk hands this file to dependency-cruiser and checks-flake hands its preload to bun by path, and --production follows only an entry marked with !.
+        // checks-graphwalk hands this file to dependency-cruiser, and checks-flake and checks-lint-coverage hand theirs to bun by path, and --production follows only an entry marked with !.
         "src/dependencies/kit-defaults.ts!",
         "src/testing/flake-preload.ts!",
+        "src/quality/nested-oxlint.ts!",
       ].map((target) => (target.startsWith("./") ? target.slice(2) : target));
       await writeFile(join(root, "knip.tarball.json"), JSON.stringify({ entry, commitlint: false }));
       const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
