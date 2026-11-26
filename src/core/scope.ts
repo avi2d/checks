@@ -48,7 +48,7 @@ export function selectScope(paths: readonly string[]): Scope {
   const tree = shapes.has("typescript") ? TREE_GATES : shapes.has("docs") ? ["checks-copy"] : [];
   return {
     full: false,
-    gates: KIT_GATES.filter((gate) => gate.reads === "range" || tree.includes(gate.bin)).map((gate) => gate.bin),
+    gates: KIT_GATES.filter((gate) => gate.reads === "range" || gate.bin === "checks-ci-wiring" || tree.includes(gate.bin)).map((gate) => gate.bin),
   };
 }
 

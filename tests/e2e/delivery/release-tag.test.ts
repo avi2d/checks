@@ -46,6 +46,17 @@ async function landed(version: string, subject: string): Promise<Landed> {
   return withOrigin(repo, await repo.commit(subject));
 }
 
+test("a release without CHANGELOG.md cannot create a tag", async () => {
+  const repo = await repository({ "package.json": manifest("0.2.0") });
+  const main = await withOrigin(repo, await repo.commit("chore: release 0.2.0 (#7)"));
+  for (const args of [[], ["release.yml"]]) {
+    const result = await main.run(args);
+    expect(result.exitCode).toBe(2);
+    expect(result.text).toContain("CHANGELOG.md");
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+  }
+}, 30_000);
+
 test(
   "a landed release commit is tagged with its version once, and the release workflow is dispatched on the tag",
   async () => {

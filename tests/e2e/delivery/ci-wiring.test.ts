@@ -21,6 +21,17 @@ function wiring(repo: FixtureRepo, ci: Readonly<Record<string, string>> = {}): P
   return ran($`bun ${SCRIPT}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), ...ci }));
 }
 
+test("release tools without CHANGELOG.md fail wiring, and adding it passes", async () => {
+  const release = `on: workflow_dispatch\njobs:\n  release:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bunx checks-release-tag\n`;
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/release.yml": release });
+  await repo.commit("start");
+  const missing = await wiring(repo);
+  expect(missing.exitCode).toBe(1);
+  expect(missing.text).toContain("CHANGELOG.md is missing");
+  await repo.write({ "CHANGELOG.md": "# Changelog\n" });
+  expect((await wiring(repo)).exitCode).toBe(0);
+}, 30_000);
+
 test("the installed bin refuses an omitted gate and accepts its restored step", async () => {
   const repo = await open({
     "package.json": scripts(["lint", "test"]),
@@ -250,6 +261,7 @@ test("the installed bin passes a daily release only in a package published to np
     ".github/workflows/ci.yml": workflow,
     ".github/workflows/daily-release.yml": daily,
     ".github/workflows/release.yml": releaseWorkflow("echo publish"),
+    "CHANGELOG.md": "# Changelog\n",
   });
   await repo.commit("start");
   const report = "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it";

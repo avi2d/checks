@@ -12,6 +12,7 @@ With a workflow argument it tags the commit and dispatches that workflow on the 
 
 With a workflow argument it reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
 It refuses a release commit whose `package.json` holds another version.
+It refuses before tagging when the release commit lacks `CHANGELOG.md` at the repository root.
 It tags that commit as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument

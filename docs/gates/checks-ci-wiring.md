@@ -8,6 +8,9 @@ audience: consumers
 
 ## What it checks
 
+A repository whose workflows call `checks-release-pr` or `checks-release-tag` must hold `CHANGELOG.md` at its root.
+The check follows package scripts and shell scripts for these calls.
+
 The kit requires `bunx checks-commit-title` on every pull request.
 A step that calls `bun src/delivery/commit-title.ts` or `./node_modules/.bin/commitlint` directly still satisfies the check.
 It requires `bun run lint`, `bun run build`, `bun run typecheck` and `bun run test` for each of those scripts that `package.json` defines.
@@ -227,7 +230,7 @@ ci-wiring: 1 job(s) can run for hours:
 
 ## When it runs
 
-`checks-lint` runs it in the full run in every repository.
+`checks-lint` runs it on every pull request in every repository.
 
 ## Related topics
 

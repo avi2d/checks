@@ -5,10 +5,10 @@ import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
-import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
+import { readScheduleFiles, readShellFiles, runsBin } from "./mutation-job.ts";
 import { findHandRolledMutation, formatHandRolledReport, isWrittenMutation, MUTATION_PATH, type MutationCalls } from "./mutation-workflow.ts";
 import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
-import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
+import { findScheduledReleases, formatScheduleReport, isBinIn } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
@@ -324,6 +324,15 @@ const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: r
   return gaps;
 });
 
+const changelogPresent = Effect.fn("changelogPresent")(function* (root: string, usesRelease: boolean) {
+  if (!usesRelease) return true;
+  const fs = yield* FileSystem.FileSystem;
+  const changelogPath = (yield* Path.Path).join(root, "CHANGELOG.md");
+  if ((yield* fs.exists(changelogPath)) && (yield* fs.stat(changelogPath)).type === "File") return true;
+  yield* Console.error("ci-wiring: CHANGELOG.md is missing from the repository root; add CHANGELOG.md before releasing");
+  return false;
+});
+
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
@@ -344,6 +353,7 @@ const wiring = Effect.gen(function* () {
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
+  const changelog = yield* changelogPresent(root, runs.some((run) => runsBin(run, scripts, (file) => scheduleFiles.get(file), ([program = ""]) => isBinIn(["checks-release-pr", "checks-release-tag", "release-pr.ts", "release-tag.ts"], program), true)));
   const owner = { visibility, publishes: manifest.private !== true };
   const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
@@ -351,7 +361,7 @@ const wiring = Effect.gen(function* () {
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
-  return mutationOk && [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
+  return mutationOk && changelog && [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

@@ -75,8 +75,13 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
   return undefined;
 });
 
-// Returns false when the tag already tags the head, so a rerun pushes nothing.
+const requireChangelog = Effect.fn("requireChangelog")(function* (root: string, head: string) {
+  const changelogType = yield* git(["cat-file", "-t", `${head}:CHANGELOG.md`], root).pipe(Effect.orElseSucceed(() => ""));
+  if (changelogType.trim() !== "blob") return yield* new TagRefused({ message: `${head.slice(0, 12)} holds no CHANGELOG.md; add CHANGELOG.md to the release commit before tagging` });
+});
+
 const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (label: string, root: string, { head, version, tag }: Landed, cuttingWorkflow: string) {
+  yield* requireChangelog(root, head);
   const tagged = yield* taggedOn(tag);
   if (tagged === head) {
     yield* Console.log(`${label}: ${tag} already tags ${head.slice(0, 12)}`);
@@ -172,6 +177,7 @@ const checkedWorkspaces = Effect.fn("checkedWorkspaces")(function* (root: string
 export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
   const landed = yield* landedRelease(label, root);
   if (landed === undefined) return true;
+  yield* requireChangelog(root, landed.head);
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
   const workspaces = yield* checkedWorkspaces(root, landed);

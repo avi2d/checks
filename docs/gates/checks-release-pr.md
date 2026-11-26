@@ -8,6 +8,9 @@ audience: consumers
 
 ## What it checks
 
+It refuses when `HEAD` lacks `CHANGELOG.md` at the repository root.
+Add and commit that file before opening a release pull request.
+
 Without an explicit version, it does nothing when [checks-release-report](checks-release-report.md) lists no unreleased changes.
 It bumps the version `package.json` holds by the kit's rule:
 

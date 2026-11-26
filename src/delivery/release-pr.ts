@@ -58,6 +58,13 @@ const parseVersionArgument = Effect.fn("parseVersionArgument")(function* (args: 
   return { requested: { value: requested, source: "--version" } satisfies RequestedVersion, rest: [...args.slice(0, index), ...args.slice(index + 2)] };
 });
 
+const releaseRoot = Effect.fn("releaseRoot")(function* () {
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const changelogType = yield* git(["cat-file", "-t", "HEAD:CHANGELOG.md"], root).pipe(Effect.orElseSucceed(() => ""));
+  if (changelogType.trim() !== "blob") return yield* new Usage({ message: "HEAD holds no CHANGELOG.md; add CHANGELOG.md at the repository root before releasing" });
+  return root;
+});
+
 const releasePullRequest = Effect.gen(function* () {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -70,7 +77,7 @@ const releasePullRequest = Effect.gen(function* () {
   if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
   const inputVersion = yield* Config.String(RELEASE_VERSION_ENV).pipe(Config.withDefault(""));
   const requested = cliVersion ?? (inputVersion === "" ? undefined : { value: inputVersion, source: RELEASE_VERSION_ENV } satisfies RequestedVersion);
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const root = yield* releaseRoot();
   if (!allowNonDefault) {
     const branch = (yield* git(["symbolic-ref", "--quiet", "--short", "HEAD"], root)).trim();
     const { default_branch } = yield* gitHubJson(decodeRepository, "GET", REPOSITORY);
