@@ -65,7 +65,7 @@ A config that leaves `effect` out, sets it to a string or gives `files` no glob 
 | `ignore`, `ignoreCause` | Every value reference, because both failure and success become an indistinguishable success |
 | `catchCause` | Every value reference, because recovery includes typed errors, defects, and interruption |
 | `catchCauseIf`, `catchCauseFilter` | Every value reference, because matching causes can include defects or interruption, though unmatched causes still fail |
-| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or only parameters named with underscores |
+| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or does not read its first identifier parameter |
 
 The handler check covers both data-first and piped calls.
 The rule follows the `Effect` export from `effect` and namespace or named imports from `effect/Effect`, including renamed imports.
