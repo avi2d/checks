@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
+It reports each gate's outcome and wall time in seconds after the gate exits.
 With `--whole-tree` it runs the four whole-tree gates instead.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.

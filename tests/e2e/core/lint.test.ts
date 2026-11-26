@@ -6,13 +6,14 @@ import { join } from "node:path";
 import { CHECKOUT, lintWiring, withOwnInstall } from "../lib/fixture-repo.ts";
 import { commit, lint, open, repository, STRANGER } from "../lib/lint-fixture.ts";
 
-test("the local range starts at origin/HEAD, and explicit bad refs are refused", async () => {
+test("the local range starts at origin/HEAD, reports every gate time, and refuses explicit bad refs", async () => {
   const { repo, base } = await repository();
   await repo.write({ "clean.ts": "export const clean = 42;\n" });
   const head = await commit(repo, "feat: clean", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
   const green = await lint(repo);
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/main`);
   expect(green.text).toContain("checks-lint: 13 gate(s) pass");
+  expect(green.text.match(/^checks-lint: checks-\S+ passed in \d+\.\d{2}s$/gm)).toHaveLength(13);
   expect(green.exitCode).toBe(0);
   const missing = await lint(repo, [base, "missing"]);
   expect(missing.exitCode).toBe(2);
@@ -68,6 +69,7 @@ test("a pushed tip runs every range gate and names each failure", async () => {
   const red = await lint(repo);
   expect(red.text).toContain(`checks-lint: tip ${tip} from HEAD against origin/main`);
   expect(red.text).toContain("checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet");
+  expect(red.text).toMatch(/^checks-lint: checks-comment-gate violated in \d+\.\d{2}s$/m);
   expect(red.exitCode).toBe(1);
 }, 60_000);
 
