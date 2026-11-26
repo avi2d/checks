@@ -136,10 +136,10 @@ function releaseAssetsFault(site: boolean, publicRepository: boolean): string | 
   return undefined;
 }
 
-function platformPackagesFault(site: boolean, publicRepository: boolean, publishes: boolean): string | undefined {
+function platformPackagesFault(site: boolean, publicRepository: boolean, publishes: boolean, publishWorkspaces: boolean): string | undefined {
   if (site) return `${SETTINGS_FILE} sets platformPackages, but a site's main.yml holds no release job to publish the packages from, so remove it`;
   if (!publicRepository) return `${SETTINGS_FILE} sets platformPackages in a private repository, where checks-ci-wiring refuses the hosted runners the binaries job needs, so remove it`;
-  if (!publishes) return `${SETTINGS_FILE} sets platformPackages, but package.json is private, so no published package names the platform packages; remove it or publish package.json`;
+  if (!publishes && !publishWorkspaces) return `${SETTINGS_FILE} sets platformPackages, but package.json is private, so no published package names the platform packages; remove it or publish package.json`;
   return undefined;
 }
 
@@ -157,7 +157,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   const site = holdsSiteWorkflow(workflows) || flagged;
   const assetsFault = attachAssets ? releaseAssetsFault(site, publicRepository) : undefined;
   if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
-  const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes);
+  const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes, publishWorkspaces);
   if (packagesFault !== undefined) return yield* new CallerSetFault({ message: packagesFault });
   if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, hasE2e), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
@@ -241,6 +241,9 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
+  if (platformPackages !== undefined && isPrivate && workspaces.length > 1) {
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but the private root has more than one public workspace, so publish only one workspace` });
+  }
   const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
   return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages } satisfies CallerInputs;
 });

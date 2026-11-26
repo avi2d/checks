@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
 import { releasedMains } from "../lib/released-main.ts";
@@ -349,6 +349,26 @@ test(
     expect(released.text).toContain("release-publish: published @acme/public@0.2.0");
     expect((await main.npm()).calls.filter((call) => call === "publish")).toHaveLength(1);
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+  },
+  60_000,
+);
+
+test(
+  "with platformPackages under a private root the public workspace names and carries the platform packages, instead of the private root npm never receives",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { private: true, workspace: true, platformPackages: true });
+    const binaries = join(main.dir, "binaries");
+    await mkdir(binaries);
+    await writeFile(join(binaries, "widget-linux-x64"), "linux x64 build");
+
+    const released = await ran($`bun ${SCRIPT}`.cwd(main.dir).env({ ...process.env, ...main.env, CHECKS_PUBLISH_WORKSPACES: "true", CHECKS_PLATFORM_BINARIES: binaries }));
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain("release-publish: published @acme/public-linux-x64@0.2.0\n");
+    expect(JSON.parse(await readFile(join(binaries, "npm", "@acme", "public-linux-x64", "package.json"), "utf8"))).toMatchObject({ name: "@acme/public-linux-x64", version: "0.2.0", os: ["linux"], cpu: ["x64"] });
+    expect(JSON.parse(await readFile(join(main.dir, "packages", "public", "package.json"), "utf8"))).toEqual({ name: "@acme/public", version: "0.2.0", optionalDependencies: { "@acme/public-linux-x64": "0.2.0" } });
+    expect(JSON.parse(await readFile(join(main.dir, "package.json"), "utf8"))).not.toHaveProperty("optionalDependencies");
+    const looked = (await main.npm()).calls.filter((call) => call.endsWith("dist-tags --json"));
+    expect(looked).toEqual(["view @acme/public-linux-x64 dist-tags --json", "view @acme/public dist-tags --json"]);
   },
   60_000,
 );
