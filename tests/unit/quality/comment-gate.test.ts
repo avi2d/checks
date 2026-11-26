@@ -140,3 +140,10 @@ test("an oxlint re-enable directive is refused, not ignored", () => {
     "src/a.ts:2 carries the machine-read directive \`oxlint-enable\`. Fix what the tool is reporting, or stop running the tool on this file",
   ]);
 });
+
+
+test("a file-wide TypeScript suppression is refused, not ignored", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// @ts-nocheck\n", new Set([2])))).toEqual([
+    "src/a.ts:2 carries the machine-read directive \`@ts-nocheck\`. Fix what the tool is reporting, or stop running the tool on this file",
+  ]);
+});
