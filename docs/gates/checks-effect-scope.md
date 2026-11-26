@@ -26,6 +26,8 @@ It reads `oxlint.config.ts`, `tsconfig.json`, and tracked and non-ignored untrac
 Git ignore discovery uses `git ls-files --cached --others --exclude-standard` without changing the index.
 Before Git initialization, it reads the root `.gitignore`, including the one setup writes.
 It adds paths from oxlint `ignorePatterns` and those Git ignore files to the exclusion list for each scoped override.
+A trailing slash in either ignore source restricts a pattern to directories, including when the pattern ends in `/**/`.
+It reads the first line of a `.gitignore` even when the file starts with a UTF-8 byte order mark.
 It does not use Git's `info/exclude` for scope exclusions.
 It supports relative paths, `*`, `?`, and `**`.
 A basename glob in `files` or `excludeFiles` matches in every directory unless it starts with `./`.
@@ -33,8 +35,12 @@ In `files` and `excludeFiles`, brace expansion and character classes are refused
 Use a separate glob for each alternative.
 A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare directory name.
 On every generation and check, the gate examines matching TypeScript paths, including newly added paths.
-It refuses a hidden path that oxlint includes but tsgo's wildcard include skips.
+It refuses a path that oxlint includes but tsgo's wildcard include skips, such as a file in a hidden or dependency directory.
 Name that path explicitly in `files` or exclude its directory with a glob ending in `/**`.
+If `?` matches a path differently in oxlint and tsgo, the gate names the pattern and the path.
+Use literal paths in place of that pattern.
+The gate also refuses a minified file that tsgo includes and oxlint skips.
+Add the file to `excludeFiles` or rename it.
 It also refuses a directory that matches `excludeFiles` when oxlint still includes a file beneath that directory.
 Use a directory glob ending in `/**` to exclude those contents too, or rename that directory.
 An ignore pattern with `!`, a character class, braces, or a backslash is refused if it may affect a TypeScript path inside an include.
@@ -77,7 +83,7 @@ With `--check` it only compares.
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths and the kit's severities, or was written to hold them |
 | 1 | with `--check`, the plugin is missing or its Effect paths or severities for the kit's keys differ from what the gate would write |
-| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a hidden or pruned path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, holds a `diagnosticSeverity` that is not an object, or lacks the objects the gate writes into |
+| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, holds a `diagnosticSeverity` that is not an object, or lacks the objects the gate writes into |
 
 ## Sample output
 

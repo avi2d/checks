@@ -181,11 +181,12 @@ const readScope = Effect.fn("readScope")(function* (root: string, mode: ConfigLo
   const translated = yield* Effect.forEach(overrides, ({ include, exclude = [], options }) => Effect.gen(function* () {
     return { include: yield* scopeGlobs(include, "oxlint files"), exclude: yield* scopeGlobs(exclude, "oxlint excludeFiles"), options };
   }));
-  const ignored = yield* globalExcludes(root, config.ignorePatterns ?? [], translated.flatMap(({ include }) => include));
+  const includes = translated.flatMap(({ include }) => include.map(({ glob }) => glob));
+  const ignored = yield* globalExcludes(root, config.ignorePatterns ?? [], includes);
   yield* validateScopePaths(root, translated, ignored);
   return translated.map(({ include, exclude, options }) => {
-    const excluded = [...new Set([...exclude, ...ignored])];
-    return { include, ...(excluded.length === 0 ? {} : { exclude: excluded }), options };
+    const excluded = [...new Set([...exclude, ...ignored].map(({ glob }) => glob))];
+    return { include: include.map(({ glob }) => glob), ...(excluded.length === 0 ? {} : { exclude: excluded }), options };
   });
 });
 

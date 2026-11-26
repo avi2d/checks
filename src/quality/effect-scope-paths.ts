@@ -12,7 +12,10 @@ const UNSUPPORTED_GLOB = /[{}[\]!\\:]|(^|\/)\.{1,2}(\/|$)|\/\/|[^/]\*\*|\*\*[^/]
 const pathFault = (source: string, pattern: string, alternative: string) =>
   new EffectScopeError({ message: `${source} pattern ${JSON.stringify(pattern)} cannot be mirrored in tsconfig.json; ${alternative}` });
 
-const globstarWithLeaf = (glob: string) => glob.endsWith("/**") || glob === "**" ? `${glob}/*` : glob;
+const endsInGlobstar = (glob: string) => glob.endsWith("/**") || glob === "**";
+const globstarWithLeaf = (glob: string) => endsInGlobstar(glob) ? `${glob}/*` : glob;
+
+type ScopeGlob = { readonly glob: string; readonly pattern: string; readonly source: string };
 
 export const scopeGlobs = Effect.fn("scopeGlobs")(function* (patterns: readonly string[], field: string) {
   return yield* Effect.forEach(patterns, (pattern) => {
@@ -27,7 +30,7 @@ export const scopeGlobs = Effect.fn("scopeGlobs")(function* (patterns: readonly 
       return Effect.fail(pathFault(field, pattern, "name a file with an extension or use a directory glob ending in /**"));
     }
     // tsgo does not match an include that ends in **.
-    return Effect.succeed(globstarWithLeaf(recursive));
+    return Effect.succeed({ glob: globstarWithLeaf(recursive), pattern, source: field });
   });
 });
 
@@ -87,7 +90,9 @@ const ignoreGlobs = Effect.fn("ignoreGlobs")(function* (root: string, { file, di
     }
     const relative = pattern.startsWith("/") || unanchored.includes("/") ? unanchored : `**/${unanchored}`;
     const rooted = directory === "" ? relative : `${directory}/${relative}`;
-    return Effect.succeed([directoryOnly ? `${rooted}/**/*` : globstarWithLeaf(rooted)]);
+    const directoryGlob = endsInGlobstar(rooted) ? `${rooted.slice(0, -2)}*` : rooted;
+    const glob = directoryOnly ? `${directoryGlob}/**/*` : globstarWithLeaf(rooted);
+    return Effect.succeed([{ glob, pattern: line, source: file }]);
   });
 });
 
@@ -96,39 +101,91 @@ const readIgnore = Effect.fn("readIgnore")(function* (root: string, file: string
   const path = yield* Path.Path;
   const full = path.resolve(root, file);
   if (!(yield* fs.exists(full))) return [];
-  const text = yield* fs.readFileString(full);
+  const text = (yield* fs.readFileString(full)).replace(/^\uFEFF/, "");
   return yield* ignoreGlobs(root, { file, directory, patterns: text.split(/\r?\n/) }, includes, trackedFiles).pipe(Effect.map((lists) => lists.flat()));
 });
 
-type ScopePaths = { readonly include: readonly string[]; readonly exclude?: readonly string[] };
+type ScopePaths = { readonly include: readonly ScopeGlob[]; readonly exclude: readonly ScopeGlob[] };
 
-const matchesPath = (file: string, patterns: readonly string[], dot: boolean) =>
-  patterns.some((pattern) => minimatch(file, pattern, { dot }));
+const matchesGlob = (file: string, glob: string, dot: boolean) => minimatch(file, glob, { dot, noext: true });
+const matchesPath = (file: string, patterns: readonly ScopeGlob[], dot: boolean) =>
+  patterns.some(({ glob }) => matchesGlob(file, glob, dot));
 
-const scopeFault = (file: string, overrides: readonly ScopePaths[]): string | undefined => {
-  for (const { include, exclude = [] } of overrides) {
-    if (!matchesPath(file, include, true) || matchesPath(file, exclude, true)) continue;
-    if (!matchesPath(file, include, false)) {
-      return `${file} matches oxlint files but tsgo wildcard includes skip its hidden path; name ${file} explicitly in files or exclude its directory with a glob ending in /**`;
-    }
-    const directories = file.split("/").slice(0, -1).map((_, index, segments) => segments.slice(0, index + 1).join("/"));
-    const pruned = directories.find((directory) => matchesPath(directory, exclude, true));
-    if (pruned !== undefined) {
-      return `${file} is reached by oxlint but tsgo excludeFiles prunes directory ${pruned}; use ${pruned}/** to exclude its contents too, or rename that directory`;
-    }
+const utf8Bytes = (text: string) => Buffer.from(text).toString("latin1");
+
+function questionFault(paths: readonly string[], patterns: readonly ScopeGlob[]): EffectScopeError | undefined {
+  for (const { glob, pattern, source } of patterns) {
+    if (!glob.includes("?")) continue;
+    // Oxlint matches each ? against a byte, but tsgo matches a Unicode character.
+    const different = paths.find((path) => /\P{ASCII}/u.test(path)
+      && matchesGlob(path, glob, true) !== matchesGlob(utf8Bytes(path), utf8Bytes(glob), true));
+    if (different !== undefined) return pathFault(source, pattern, `? selects ${different} differently; use literal paths instead`);
   }
   return undefined;
-};
+}
 
-export const validateScopePaths = Effect.fn("validateScopePaths")(function* (root: string, overrides: readonly ScopePaths[], ignored: readonly string[]) {
+const parentPaths = (file: string) =>
+  file.split("/").slice(0, -1).map((_, index, segments) => segments.slice(0, index + 1).join("/"));
+
+const TSGO_DEPENDENCY_DIRS = new Set(["node_modules", "bower_components", "jspm_packages"]);
+
+function matchesTsgoComponents(parts: readonly string[], pattern: readonly string[]): boolean {
+  const [glob, ...tail] = pattern;
+  if (glob === undefined) return parts.length === 0;
+  const [part, ...next] = parts;
+  if (glob === "**") {
+    return matchesTsgoComponents(parts, tail) || (part !== undefined
+      && !part.startsWith(".") && !TSGO_DEPENDENCY_DIRS.has(part) && matchesTsgoComponents(next, pattern));
+  }
+  if (part === undefined) return false;
+  if (next.length > 0 && TSGO_DEPENDENCY_DIRS.has(part) && glob !== part) return false;
+  return matchesGlob(part, glob, false) && matchesTsgoComponents(next, tail);
+}
+
+const matchesTsgoInclude = (file: string, include: readonly ScopeGlob[]) =>
+  include.some(({ glob }) => matchesTsgoComponents(file.split("/"), glob.split("/")));
+
+const isMinified = (file: string) => /[._-]min\./.test(file.split("/").at(-1) ?? "");
+
+function selectionFault(file: string, { include, exclude }: ScopePaths, ignored: readonly ScopeGlob[]): EffectScopeError | undefined {
+  const question = questionFault([file], include);
+  if (question !== undefined) return question;
+  if (!matchesPath(file, include, true)) return undefined;
+  const directories = parentPaths(file);
+  const paths = [file, ...directories];
+  const excluded = questionFault(paths, [...exclude, ...ignored]);
+  if (excluded !== undefined) return excluded;
+  if (matchesPath(file, exclude, true) || paths.some((path) => matchesPath(path, ignored, true))) return undefined;
+  const included = matchesTsgoInclude(file, include);
+  const pruned = directories.find((directory) => matchesPath(directory, exclude, true));
+  if (isMinified(file)) {
+    return included && pruned === undefined
+      ? new EffectScopeError({ message: `oxlint skips minified file ${file} but tsgo includes it; add ${file} to excludeFiles or rename it` })
+      : undefined;
+  }
+  if (!included) {
+    return new EffectScopeError({ message: `${file} matches oxlint files but tsgo wildcard includes skip some hidden and dependency paths; name ${file} explicitly in files or exclude its directory with a glob ending in /**` });
+  }
+  return pruned === undefined ? undefined : new EffectScopeError({
+    message: `${file} is reached by oxlint but tsgo excludeFiles prunes directory ${pruned}; use ${pruned}/** to exclude its contents too, or rename that directory`,
+  });
+}
+
+const withoutQuestionMarks = (glob: string) => glob.split("/").map((part) =>
+  part.includes("?") ? part.replace(/[?*]+/g, "*") : part).join("/");
+
+export const validateScopePaths = Effect.fn("validateScopePaths")(function* (root: string, overrides: readonly ScopePaths[], ignored: readonly ScopeGlob[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const includes = [...new Set(overrides.flatMap(({ include }) => include))];
-  const reached = yield* Effect.forEach(includes, (include) => fs.glob(include, { root, dot: true, exclude: [".git/**", ...ignored] }));
+  const includes = [...new Set(overrides.flatMap(({ include }) => include.map(({ glob }) => withoutQuestionMarks(glob))))];
+  const skip = [".git/**", ...ignored.flatMap(({ glob }) => glob.includes("?") ? [] : [glob])];
+  const reached = yield* Effect.forEach(includes, (include) => fs.glob(include, { root, dot: true, exclude: skip }));
   for (const file of [...new Set(reached.flat())].sort()) {
-    if (!matchesPath(file, SOURCES, true) || (yield* fs.stat(path.join(root, file))).type !== "File") continue;
-    const message = scopeFault(file, overrides);
-    if (message !== undefined) return yield* new EffectScopeError({ message });
+    if (!SOURCES.some((glob) => matchesGlob(file, glob, true)) || (yield* fs.stat(path.join(root, file))).type !== "File") continue;
+    for (const override of overrides) {
+      const fault = selectionFault(file, override, ignored);
+      if (fault !== undefined) return yield* fault;
+    }
   }
 });
 

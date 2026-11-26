@@ -159,7 +159,7 @@ export function scopeConsumer(prefix: string): ScopeConsumer {
   }
 
   function scopeGate(...args: readonly string[]) {
-    return tree.run(process.execPath, [join(CHECKOUT, "src", "quality", "effect-scope.ts"), ...args]);
+    return tree.run(join(KIT_BIN, "checks-effect-scope"), args);
   }
 
   async function expectAsyncPaths(expected: readonly string[]): Promise<void> {
