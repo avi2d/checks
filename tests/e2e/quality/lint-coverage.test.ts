@@ -311,27 +311,31 @@ test(
   60_000,
 );
 
-const PLAIN_JS = "packages/plain/oxlint.config.js";
+const UNLOADED_CONFIGS = ["oxlint.config.js", "oxlint.config.mjs", "oxlint.config.cjs", "oxlint.config.cts"];
 
 test(
-  "lint-coverage goes red on a nested oxlint.config.js that turns a rule off, rather than reporting no nested oxlint config",
+  "lint-coverage stays green on a nested oxlint.config.js, .mjs, .cjs or .cts that oxlint never loads, rather than refusing the rule it names",
   async () => {
     const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
     await tree.put("package.json", { name: "nested-consumer", type: "module" });
     await tree.put("src/control.ts", ANY_BOUNDARY);
-    await tree.put("packages/plain/src/seed.ts", ANY_BOUNDARY);
-    await tree.put(PLAIN_JS, 'export default { rules: { "typescript/no-explicit-any": "off" } };\n');
+    for (const name of UNLOADED_CONFIGS) {
+      const directory = `packages/${name.replaceAll(".", "-")}`;
+      const exported = name.endsWith("js") && !name.endsWith("cjs") ? "export default" : "module.exports =";
+      await tree.put(`${directory}/src/seed.ts`, ANY_BOUNDARY);
+      await tree.put(`${directory}/${name}`, `${exported} { plugins: ["typescript"], rules: { "typescript/no-explicit-any": "off" } };\n`);
+    }
     await $`git add -A`.cwd(tree.dir).quiet();
 
     const oxlint = join(KIT_BIN, "oxlint");
     expect((await tree.run(oxlint, ["src/control.ts"])).exitCode).toBe(1);
-    expect((await tree.run(oxlint, ["packages/plain/src/seed.ts"])).exitCode).toBe(0);
+    for (const name of UNLOADED_CONFIGS) {
+      expect((await tree.run(oxlint, [`packages/${name.replaceAll(".", "-")}/src/seed.ts`])).exitCode).toBe(1);
+    }
 
-    const red = await tree.run(SCRIPT, []);
-    expect(red.text).not.toContain("no nested oxlint config");
-    expect(red.text).toContain(`lint-coverage: ${PLAIN_JS} turns off or down rules the root oxlint config sets`);
-    expect(red.text).toMatch(/ {2}off: .*\btypescript\/no-explicit-any\b/);
-    expect(red.exitCode).toBe(1);
+    const green = await tree.run(SCRIPT, []);
+    expect(green.text).toContain("lint-coverage: no nested oxlint config\n");
+    expect(green.exitCode).toBe(0);
   },
   60_000,
 );
