@@ -9,7 +9,7 @@ import { CHECKOUT } from "../lib/fixture-repo.ts";
 const KitManifest = Schema.fromJsonString(Schema.Struct({ peerDependencies: Schema.Struct({ effect: Schema.String }) }));
 const EffectManifest = Schema.fromJsonString(Schema.Struct({ version: Schema.String }));
 
-test("packed bin reports incompatible Effect instead of a missing runtime module", async () => {
+test("packed bin returns undecided rather than a violation for incompatible Effect", async () => {
   const root = await mkdtemp(join(tmpdir(), "checks-effect-version-"));
   try {
     const packed = await $`bun pm pack --destination ${root} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
@@ -32,7 +32,7 @@ test("packed bin reports incompatible Effect instead of a missing runtime module
       const result = await $`${join(dir, "node_modules/.bin/checks-test-layout")}`.cwd(dir).nothrow().quiet();
       const output = result.stdout.toString() + result.stderr.toString();
       if (version !== required) {
-        expect(result.exitCode).not.toBe(0);
+        expect(result.exitCode).toBe(2);
         expect(output).toContain(`requires effect ${required}`);
         expect(output).toContain(`found ${version}`);
         expect(output).not.toContain("Cannot find module");

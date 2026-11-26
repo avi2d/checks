@@ -22,20 +22,23 @@ function readObject(file: string): Record<string, unknown> {
   return value;
 }
 
+function resolvedEffectVersion(): string {
+  try {
+    const manifest = readObject(Bun.resolveSync("effect/package.json", import.meta.path));
+    return typeof manifest["version"] === "string" ? manifest["version"] : "unknown";
+  } catch {
+    return "not installed or unreadable";
+  }
+}
+
 function compatibleEffect(root: string): boolean {
   const manifest = readObject(`${root}/package.json`);
   const peers = manifest["peerDependencies"];
-  if (typeof peers !== "object" || peers === null || !("effect" in peers) || typeof peers.effect !== "string") {
+  if (!isObject(peers) || typeof peers["effect"] !== "string") {
     throw new Error("Missing Effect peer version in checks manifest");
   }
-  const required = peers.effect;
-  let found = "not installed";
-  try {
-    const effectManifest = readObject(Bun.resolveSync("effect/package.json", import.meta.path));
-    found = typeof effectManifest["version"] === "string" ? effectManifest["version"] : "unknown";
-  } catch {
-    found = "not installed or unreadable";
-  }
+  const required = peers["effect"];
+  const found = resolvedEffectVersion();
   if (found === required) return true;
   console.error(`checks: requires effect ${required}, found ${found}`);
   return false;
@@ -44,7 +47,7 @@ function compatibleEffect(root: string): boolean {
 export function launch(command: string, source: string): void {
   const root = Bun.fileURLToPath(new URL("../../", import.meta.url));
   if (!compatibleEffect(root)) {
-    process.exitCode = 1;
+    process.exitCode = 2;
     return;
   }
   const args = process.argv.slice(2);
