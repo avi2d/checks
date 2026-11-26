@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.119.1
+
+Released 2026-11-26.
+
+### Fixes
+
+- **dependencies:** raise effect to 4.1.4 [#235](https://github.com/avi2d/checks/pull/235)
+- **delivery:** publish platform packages from a private root's workspace [#236](https://github.com/avi2d/checks/pull/236)
+
 ## 0.119.0
 
 Released 2026-11-26.
