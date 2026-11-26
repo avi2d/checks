@@ -254,6 +254,26 @@ test(
 );
 
 test(
+  "with platformPackages a plain commit after a release commit, whose run built no binaries, is refused before any tag, GitHub release or npm publish, instead of tagging a release whose platform packages never reach npm",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { platformPackages: true });
+    const behind = main.head;
+    await $`git commit -q --allow-empty -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
+    const binaries = await scratch("checks-release-tag-binaries-");
+
+    const refused = await ran($`bun ${SCRIPT}`.cwd(main.dir).env({ ...process.env, ...main.env, CHECKS_PLATFORM_BINARIES: binaries }));
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(
+      `${join(binaries, "widget-linux-x64")} is missing, so the widget-linux-x64 package has no binary to hold; this run tags and publishes nothing, so rerun the main run of the release commit ${behind.slice(0, 12)}, whose binaries job builds every platform`,
+    );
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).releases).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
   "with no argument a cancelled release behind later commits releases nothing",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)");

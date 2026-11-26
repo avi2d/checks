@@ -4,7 +4,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { lastTag, runBuild } from "./release.ts";
 import { extractReleaseNotes } from "./release-notes.ts";
 import { publishPackage } from "./release-publish.ts";
-import { publishConfiguredPlatformPackages } from "./platform-packages.ts";
+import { configuredPlatformRelease, publishPlatformRelease } from "./platform-packages.ts";
 import { checkTestedTreeOf } from "./tested-tree.ts";
 import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
@@ -170,6 +170,7 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   for (const workspace of workspaces) {
     if (workspace.version !== landed.version) return yield* new TagRefused({ message: `${workspace.path} holds ${workspace.version}, not the tested release version ${landed.version}` });
   }
+  const platforms = landed.publishes ? yield* configuredPlatformRelease(root, landed.head) : undefined;
   const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
   if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
   if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
@@ -181,6 +182,6 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
     for (const workspace of workspaces) yield* publishPackage(path.dirname(path.join(root, workspace.path)));
     return true;
   }
-  yield* publishConfiguredPlatformPackages(root);
+  if (platforms !== undefined) yield* publishPlatformRelease(root, platforms);
   return yield* publishPackage(root);
 });

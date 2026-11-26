@@ -187,6 +187,8 @@ The script writes the binary for its own runner as `release-assets/<binary>-<os>
 The run uploads the files in `release-assets/` whose names start with `<binary>-`.
 The `release` job waits for the `binaries` job and does not run when it fails.
 It downloads the binaries into the runner's temporary directory and names that directory in `CHECKS_PLATFORM_BINARIES` on the `checks-release-tag` step.
+The `binaries` job reads the subject of the pushed commit, so a push that releases an earlier release commit builds no binaries.
+`checks-release-tag` then refuses before it tags anything and names the release commit, so rerun that commit's own main run.
 
 [checks-release-tag](checks-release-tag.md) then stages and publishes the packages before it publishes the main package:
 
