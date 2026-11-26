@@ -13,7 +13,7 @@ It adds the `node_modules/` line to `.gitignore` when the file lacks it.
 It adds the kit entry and any missing script to a `package.json` it finds.
 It writes `devDependencies` in package name order, as `bun add` does.
 It replaces the kit version pin with its own version, and a `--private` run sets `private` to `true`.
-It stops when a `lint` script it finds does not run oxlint and the layout check, and names the script to fix.
+It stops when an existing `lint` script does not match `oxlint && checks-lint`.
 It stops when an existing `typecheck` script does not match `tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict`.
 It stops when a `test` script it finds is not `checks-test`, or a `test:fast` script is not `checks-test --changed`, and names the script to fix.
 It also stops when a `test:<tier>` script is not `checks-test --tier=<tier>` or names a tier with no test files, or another `test:*` script exists.

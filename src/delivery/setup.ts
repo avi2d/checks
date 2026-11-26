@@ -37,10 +37,11 @@ const decodeKitManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(KitMa
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
 const decodeRecord = Schema.decodeUnknownEffect(JsonRecord);
 
+const LINT_COMMAND = "oxlint && checks-lint";
 const TYPECHECK_COMMAND = "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict";
 
 const DEFAULT_SCRIPTS: Record<string, string> = {
-  lint: "oxlint && checks-lint",
+  lint: LINT_COMMAND,
   typecheck: TYPECHECK_COMMAND,
   test: TEST_COMMAND,
   "test:fast": FAST_COMMAND,
@@ -203,16 +204,15 @@ const setupTsconfig = Effect.fn("setupTsconfig")(function* (root: string, oxlint
   yield* Console.log(NAME + ": wrote tsconfig.json");
 });
 
+function exactScriptFault(scripts: Record<string, unknown>, name: "lint" | "typecheck", command: string, runs: string): string | undefined {
+  const found = scripts[name];
+  if (found === undefined || found === command) return undefined;
+  return `package.json scripts.${name} must run ${runs}: use ${JSON.stringify(command)}`;
+}
+
 function scriptFault(scripts: Record<string, unknown>): string | undefined {
-  const lint = scripts["lint"];
-  if (typeof lint === "string" && (!lint.includes("oxlint") || !lint.includes("checks-lint"))) {
-    return "package.json scripts.lint must run oxlint and the layout check: use \"oxlint && checks-lint\"";
-  }
-  const typecheck = scripts["typecheck"];
-  if (typecheck !== undefined && (typeof typecheck !== "string" || typecheck.trim() !== TYPECHECK_COMMAND)) {
-    return `package.json scripts.typecheck must run tsc and the Effect diagnostics: use ${JSON.stringify(TYPECHECK_COMMAND)}`;
-  }
-  return undefined;
+  return exactScriptFault(scripts, "lint", LINT_COMMAND, "oxlint and the layout check")
+    ?? exactScriptFault(scripts, "typecheck", TYPECHECK_COMMAND, "tsc and the Effect diagnostics");
 }
 
 const parsePackageRecord = (raw: string): Effect.Effect<MutableRecord, SetupError> =>

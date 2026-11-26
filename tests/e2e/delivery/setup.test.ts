@@ -301,6 +301,46 @@ expect(manifest.scripts?.["test:e2e"]).toBeUndefined();
 );
 
 test(
+"it refuses a retained lint script that only echoes the checker names",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "echo oxlint checks-lint", test: "checks-test" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain('scripts.lint must run oxlint and the layout check: use "oxlint && checks-lint"');
+},
+60_000,
+);
+
+test(
+"it keeps a retained standard lint script instead of refusing it",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
+expect(manifest.scripts?.["lint"]).toBe("oxlint && checks-lint");
+},
+60_000,
+);
+
+test(
+"it refuses a retained typecheck script padded with whitespace",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test", typecheck: " tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict " } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain("scripts.typecheck must run tsc and the Effect diagnostics");
+},
+60_000,
+);
+
+test(
 "it refuses a retained lint script that skips the oxlint half",
 async () => {
 const repo = await open({
