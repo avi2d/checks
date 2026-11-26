@@ -76,7 +76,7 @@ With `--check` it only compares.
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths and the kit's severities, or was written to hold them |
 | 1 | with `--check`, `tsconfig.json` holds other Effect paths or other severities for the kit's keys |
-| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse or lacks the objects the gate writes into |
+| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a hidden or pruned path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse or lacks the objects the gate writes into |
 
 ## Sample output
 
