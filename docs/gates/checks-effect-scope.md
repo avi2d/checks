@@ -11,28 +11,38 @@ As a gate it fails when either differs from what it would write.
 
 It loads the default export of `oxlint.config.ts`.
 An override that names all six Effect rules sets the paths for the scoped diagnostics in `src/quality/presets/effect.language-service.json`.
+If all six rules are off, the override turns off all six scoped diagnostics on those paths.
 The `oxc/no-async-await` and `promise/avoid-new` settings also set `asyncFunction` and `newPromise`, whether they appear in the root rules or in an override.
 Later matching overrides replace only the severities they set, including `off`.
+Oxlint severities `allow` and `deny` map to `off` and `error`, and an unsupported scoped rule severity is refused.
 With `effect: false` and neither paired rule configured, the plugin holds no `overrides`.
 The TypeScript project keeps its own file selection, so the shared Effect diagnostics still run outside these paths.
 With `--check` it fails when the override or the kit's severities in `tsconfig.json` differ from what it would write, and writes nothing.
 
 ## What it reads
 
-It reads `oxlint.config.ts`, `tsconfig.json`, the repository's `.gitignore` files, and Git's `info/exclude`.
-It adds paths from oxlint `ignorePatterns` and Git ignore files to the exclusion list for each scoped override.
+It reads `oxlint.config.ts`, `tsconfig.json`, and tracked `.gitignore` files.
+It adds paths from oxlint `ignorePatterns` and tracked Git ignore files to the exclusion list for each scoped override.
+It does not use Git's `info/exclude` or untracked `.gitignore` files for scope exclusions, so the committed output does not depend on clone-local ignores.
 It supports relative paths, `*`, `?`, and `**`.
 A basename glob in `files` or `excludeFiles` matches in every directory unless it starts with `./`.
-Brace expansion and character classes are refused.
+In `files` and `excludeFiles`, brace expansion and character classes are refused.
 Use a separate glob for each alternative.
-Ignore patterns must be positive, so a pattern that starts with `!` is refused.
+A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare directory name.
+An ignore pattern with `!`, a character class, braces, or a backslash is refused if it may affect a TypeScript path inside an include.
+The gate recognizes simple non-TypeScript extension patterns, including `!.vscode/extensions.json` and `*.py[cod]`.
+Patterns under a directory disjoint from every include also pass.
+When the gate cannot establish that a pattern is unrelated, it refuses the pattern.
 Use positive patterns that exclude only the paths you want to skip.
-A second oxlint config, `extends`, or `.eslintignore` is refused because it can change the paths or severities the root config describes.
+When scoped overrides exist, a second oxlint config, `extends`, or `.eslintignore` is refused because it can change their paths or severities.
+The same condition refuses a `style` or `restriction` category unless it is off, since either category can enable paired rules.
+Without scoped overrides, these scope-only checks do not run.
 It reads `tsconfig.json` as TypeScript does, so a comment or a trailing comma parses, and refuses one that does not parse as a JSONC object.
-It rewrites only the `overrides` value of the `@effect/language-service` plugin and the kit's keys in its `diagnosticSeverity`, as JSON with two spaces of indent.
+It writes the `overrides` value of the `@effect/language-service` plugin and the kit's keys in its `diagnosticSeverity`, as JSON with two spaces of indent.
 The six scoped keys belong in overrides, so the gate removes any of those keys from the plugin's top-level `diagnosticSeverity`.
 When that value is missing it adds the member, and the plugin, `plugins` or `compilerOptions` holding it, after the last member of each.
-Each key of the `diagnosticSeverity` in the kit's `tsconfig.effect.json` gets the kit's value, and a key the repository added stays.
+Each key of the `diagnosticSeverity` in the kit's `tsconfig.effect.json` gets the kit's value.
+A key the repository added stays unless it is one of the six scoped keys.
 A key a release drops from `tsconfig.effect.json` stays in the repository's entry until the repository removes it.
 It refuses a `compilerOptions` or `plugins` set to `null`, or a `diagnosticSeverity` that is not an object, which would leave no place for what it writes.
 When no overrides apply, it deletes the `overrides` member and its comma, and leaves the comments beside it.

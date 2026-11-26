@@ -237,6 +237,7 @@ test("scope check does not certify brace or basename paths or paths ignored only
     const { scope, extra, ignore } = entry;
     await consumer();
     await tree.put(".gitignore", "node_modules/\n" + ignore);
+    expect((await tree.run("git", ["add", ".gitignore"])).exitCode).toBe(0);
     await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
 export default defineConfig({ effect: ${scope}${extra} });
 `);
@@ -270,6 +271,155 @@ export default defineConfig({ effect: { files: ["scripts/**/task?.ts"], excludeF
   await tree.put("scripts/nested/task4.ts", ASYNC_PLANT);
   expect((await scopeGate("--check")).exitCode).toBe(0);
   await expectAsyncPaths(["scripts/task1.ts", "scripts/nested/task2.ts", "scripts/nested/task4.ts"]);
+}, 180_000);
+
+test("effect-free configs do not refuse irrelevant scope paths, categories, extends, or ignore files", async () => {
+  for (const config of [
+    'export default {};',
+    'export default { ...defineConfig({ effect: false }), extends: ["other.json"], categories: { restriction: "deny" }, overrides: [{ files: ["scripts/{a,b}.ts"], rules: { "eslint/no-debugger": "error" } }] };',
+  ]) {
+    await consumer();
+    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";\n${config}\n`);
+    await tree.put(".gitignore", "node_modules/\n!.vscode/extensions.json\n");
+    await tree.put(".eslintignore", "scripts/\n");
+    await tree.put(".oxlintrc.json", "{}");
+    await tree.put("scripts/oxlint.config.ts", "export default {};");
+    expect((await scopeGate()).exitCode).toBe(0);
+    expect((await scopeGate("--check")).exitCode).toBe(0);
+    await tree.put(SCOPED, PLANT);
+    const diagnosed = await diagnostics();
+    for (const rule of SCOPE_SERVICE) expect(diagnosed.get(SCOPED) ?? []).not.toContain(rule);
+    expect(diagnosed.get(SCOPED)).toEqual(expect.arrayContaining(KIT_SERVICE));
+  }
+}, 180_000);
+
+test("allow and deny do not leave paired diagnostics at an earlier override severity", async () => {
+  await consumer();
+  await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({
+  effect: false,
+  rules: { "oxc/no-async-await": "deny" },
+  overrides: [
+    { files: ["scripts/host/**"], rules: { "oxc/no-async-await": ["allow"], "promise/avoid-new": "deny" } },
+    { files: ["scripts/host/again.ts"], rules: { "oxc/no-async-await": "deny", "promise/avoid-new": "allow" } },
+  ],
+});
+`);
+  for (const file of ["scripts/a.ts", "scripts/host/off.ts", "scripts/host/again.ts"]) await tree.put(file, ASYNC_PLANT);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths(["scripts/a.ts", "scripts/host/again.ts"]);
+  const { linted } = await oxlint([]);
+  const diagnosed = await diagnostics();
+  for (const file of ["scripts/a.ts", "scripts/host/off.ts", "scripts/host/again.ts"]) {
+    const expected = file === "scripts/host/off.ts";
+    expect((linted.get(file) ?? []).includes("promise(avoid-new)")).toBe(expected);
+    expect((diagnosed.get(file) ?? []).includes("newPromise")).toBe(expected);
+  }
+}, 180_000);
+
+test("unsupported scoped severities and active categories cannot be certified as current", async () => {
+  for (const extra of [
+    'rules: { "oxc/no-async-await": "invalid" }',
+    'overrides: [{ files: ["scripts/**"], rules: { "promise/avoid-new": [] } }]',
+    'overrides: [{ files: ["scripts/**"], rules: { "node/no-sync": null } }]',
+    'categories: { restriction: "deny" }',
+    'categories: { style: "invalid" }',
+  ]) {
+    await consumer();
+    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default { ...defineConfig({ effect: true }), ${extra} };
+`);
+    for (const args of [[], ["--check"]]) expect((await scopeGate(...args)).exitCode).toBe(2);
+  }
+}, 180_000);
+
+test("all six rules off does not leave unpaired diagnostics enabled or block later re-enabling", async () => {
+  await consumer();
+  await tree.put("oxlint.config.ts", `import { defineConfig, effectRules } from "@avi2dg/checks/oxlint";
+const off = effectRules(["scripts/host/**"]);
+export default defineConfig({
+  effect: { files: ["scripts/**/*.ts"] },
+  overrides: [
+    { ...off, rules: Object.fromEntries(Object.keys(off.rules).map((rule) => [rule, "allow"])) },
+    effectRules(["scripts/host/again.ts"]),
+  ],
+});
+`);
+  const active = ["scripts/a.ts", "scripts/host/again.ts"];
+  for (const file of [...active, "scripts/host/off.ts", UNSCOPED]) await tree.put(file, PLANT);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths(active);
+  const diagnosed = await diagnostics();
+  for (const file of active) expect(diagnosed.get(file)).toEqual(expect.arrayContaining(SCOPE_SERVICE));
+  for (const file of ["scripts/host/off.ts", UNSCOPED]) {
+    for (const rule of SCOPE_SERVICE) expect(diagnosed.get(file) ?? []).not.toContain(rule);
+    expect(diagnosed.get(file)).toEqual(expect.arrayContaining(KIT_SERVICE));
+  }
+}, 180_000);
+
+test("slash-less directory and wildcard ignores do not diagnose skipped files or swallow sibling names", async () => {
+  for (const source of ["gitignore", "ignorePatterns"]) {
+    await consumer();
+    const ignores = ["scripts/generated", "coverage", "scripts/repos/*"];
+    await tree.put(".gitignore", ["node_modules/", ...(source === "gitignore" ? ignores : [])].join("\n") + "\n");
+    expect((await tree.run("git", ["add", ".gitignore"])).exitCode).toBe(0);
+    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: { files: ["scripts/**/*.ts"] }, ignorePatterns: ${JSON.stringify(source === "ignorePatterns" ? ignores : [])} });
+`);
+    const active = ["scripts/a.ts", "scripts/generatedFile.ts", "scripts/coverageFile.ts"];
+    for (const file of [...active, "scripts/generated/client.ts", "scripts/coverage/plant.ts", "scripts/repos/vendor/client.ts"]) await tree.put(file, ASYNC_PLANT);
+    expect((await scopeGate()).exitCode).toBe(0);
+    await tree.put("scripts/generated/new.ts", ASYNC_PLANT);
+    expect((await scopeGate("--check")).exitCode).toBe(0);
+    await expectAsyncPaths(active);
+  }
+}, 180_000);
+
+test("unrelated unsupported ignores pass without accepting a negation of a scoped TypeScript path", async () => {
+  for (const source of ["gitignore", "ignorePatterns"]) {
+    await consumer();
+    const unrelated = [".vscode/*", "!.vscode/extensions.json", "*.py[cod]", "!outside/**"];
+    const configure = async (patterns: readonly string[]) => {
+      await tree.put(".gitignore", ["node_modules/", ...(source === "gitignore" ? patterns : [])].join("\n") + "\n");
+      expect((await tree.run("git", ["add", ".gitignore"])).exitCode).toBe(0);
+      await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: { files: ["scripts/**/*.ts"] }, ignorePatterns: ${JSON.stringify(source === "ignorePatterns" ? patterns : [])} });
+`);
+    };
+    await configure(unrelated);
+    await tree.put(SCOPED, ASYNC_PLANT);
+    expect((await scopeGate()).exitCode).toBe(0);
+    expect((await scopeGate("--check")).exitCode).toBe(0);
+    await expectAsyncPaths([SCOPED]);
+    for (const refused of ["!scripts/*.ts", "scripts/[ab]/*.cts", "scripts/\\*.tsx"]) {
+      await configure([...unrelated, refused]);
+      for (const args of [[], ["--check"]]) {
+        const result = await scopeGate(...args);
+        expect(result.exitCode).toBe(2);
+        expect(result.text).toContain(JSON.stringify(refused));
+      }
+    }
+  }
+}, 180_000);
+
+test("clone-local ignores do not change committed scope while tracked nested ignores still apply", async () => {
+  await consumer();
+  await tree.put(".gitignore", "node_modules/\n");
+  await tree.put("scripts/tracked/.gitignore", "ignored/\n");
+  expect((await tree.run("git", ["add", ".gitignore", "scripts/tracked/.gitignore"])).exitCode).toBe(0);
+  for (const file of [SCOPED, "scripts/local/a.ts", "scripts/untracked/a.ts", "scripts/tracked/ignored/a.ts"]) await tree.put(file, ASYNC_PLANT);
+  expect((await scopeGate()).exitCode).toBe(0);
+  const before = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
+  await tree.put(".git/info/exclude", "scripts/local/\n");
+  await tree.put("scripts/untracked/.gitignore", "*\n");
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect(await readFile(join(tree.dir, "tsconfig.json"), "utf8")).toBe(before);
+  const diagnosed = await diagnostics();
+  for (const file of [SCOPED, "scripts/local/a.ts", "scripts/untracked/a.ts"]) expect(diagnosed.get(file)).toContain(ASYNC_DIAGNOSTIC);
+  expect(diagnosed.get("scripts/tracked/ignored/a.ts") ?? []).not.toContain(ASYNC_DIAGNOSTIC);
 }, 180_000);
 
 test(

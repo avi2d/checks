@@ -68,6 +68,8 @@ const PAIRS = {
   promise: { rule: "avoid-new", diagnostic: "newPromise" },
 } as const satisfies Readonly<Record<string, { readonly rule: string; readonly diagnostic: ScopedDiagnostic }>>;
 
+const ruleNames = (plugin: string, rule: string) => [rule, `${plugin}/${rule}`, `eslint-plugin-${plugin}/${rule}`];
+
 const SERVICE: readonly [Step, ...Step[]] = ["compilerOptions", "plugins", { name: LANGUAGE_SERVICE }];
 
 const SERVICE_OVERRIDES: readonly [Step, ...Step[]] = [...SERVICE, "overrides"];
@@ -80,9 +82,9 @@ const KIT_SEVERITY = kitTsconfig.compilerOptions.plugins.find(({ name }) => name
 
 function severityOf(setting: unknown): Severity | undefined {
   const severity: unknown = Array.isArray(setting) ? setting[0] : setting;
-  if (severity === "off" || severity === 0) return "off";
+  if (severity === "off" || severity === "allow" || severity === 0) return "off";
   if (severity === "warn" || severity === 1) return "warning";
-  if (severity === "error" || severity === 2) return "error";
+  if (severity === "error" || severity === "deny" || severity === 2) return "error";
   return undefined;
 }
 
@@ -91,11 +93,15 @@ const SCOPED_DEFAULTS = Object.fromEntries(
 );
 
 function diagnosticSeverityOf({ rules = {}, plugins = [] }: typeof RuleSettings.Type, basePlugins: readonly string[]) {
-  const diagnosticSeverity: Partial<Record<ScopedDiagnostic, Severity>> = EFFECT_RULE_NAMES.every((rule) => rule in rules) ? { ...SCOPED_DEFAULTS } : {};
+  const namesEffectScope = EFFECT_RULE_NAMES.every((rule) => rule in rules);
+  const allOff = namesEffectScope && EFFECT_RULE_NAMES.every((rule) => severityOf(rules[rule]) === "off");
+  const diagnosticSeverity: Partial<Record<ScopedDiagnostic, Severity>> = namesEffectScope
+    ? Object.fromEntries(Object.entries(SCOPED_DEFAULTS).map(([key, severity]) => [key, allOff ? "off" : severity]))
+    : {};
   for (const [plugin, { rule, diagnostic }] of Object.entries(PAIRS)) {
     delete diagnosticSeverity[diagnostic];
     if (!basePlugins.includes(plugin) && !plugins.includes(plugin)) continue;
-    const setting = Object.entries(rules).findLast(([key]) => key === rule || key === `${plugin}/${rule}` || key === `eslint-plugin-${plugin}/${rule}`);
+    const setting = Object.entries(rules).findLast(([key]) => ruleNames(plugin, rule).includes(key));
     const severity = severityOf(setting?.[1]);
     if (severity !== undefined) diagnosticSeverity[diagnostic] = severity;
   }
@@ -141,23 +147,42 @@ const loadOxlint = Effect.fn("loadOxlint")(function* (file: string, mode: Config
   return config;
 });
 
+const SCOPED_RULE_NAMES = new Set([...EFFECT_RULE_NAMES, ...Object.entries(PAIRS).flatMap(([plugin, { rule }]) => ruleNames(plugin, rule))]);
+
+const validateRuleSeverities = Effect.fn("validateRuleSeverities")(function* (settings: readonly (typeof RuleSettings.Type)[]) {
+  for (const { rules = {} } of settings) {
+    for (const [rule, setting] of Object.entries(rules)) {
+      if (SCOPED_RULE_NAMES.has(rule) && severityOf(setting) === undefined) {
+        return yield* new EffectScopeError({ message: `oxlint rule ${rule} has an unsupported severity; use off, allow, warn, error, deny, 0, 1, or 2` });
+      }
+    }
+  }
+});
+
 const readScope = Effect.fn("readScope")(function* (root: string, mode: ConfigLoad) {
   const file = (yield* Path.Path).join(root, OXLINT_CONFIG);
   const config = yield* loadOxlint(file, mode);
+  const base: typeof Override.Type = { ...config, files: ["**/*"] };
+  const settings = [base, ...(config.overrides ?? [])];
+  yield* validateRuleSeverities(settings);
+  const overrides = serviceOverrides(settings, config.plugins);
+  if (overrides.length === 0) return [];
   if ((config.extends?.length ?? 0) > 0) {
     return yield* new EffectScopeError({ message: "oxlint extends may change the Effect scope; put those rules in oxlint.config.ts instead" });
   }
-  if (["style", "restriction"].some((category) => severityOf(config.categories?.[category]) === "error" || severityOf(config.categories?.[category]) === "warning")) {
-    return yield* new EffectScopeError({ message: "oxlint style and restriction categories can enable paired Effect rules; set those rules by name instead" });
+  for (const category of ["style", "restriction"]) {
+    if (category in (config.categories ?? {}) && severityOf(config.categories?.[category]) !== "off") {
+      return yield* new EffectScopeError({ message: `oxlint ${category} category may enable paired Effect rules; set those rules by name instead` });
+    }
   }
-  const base: typeof Override.Type = { ...config, files: ["**/*"] };
-  const overrides = serviceOverrides([base, ...(config.overrides ?? [])], config.plugins);
-  const ignored = yield* globalExcludes(root, config.ignorePatterns ?? []);
-  return yield* Effect.forEach(overrides, ({ include, exclude = [], options }) => Effect.gen(function* () {
-    const files = yield* scopeGlobs(include, "oxlint files");
-    const excluded = [...new Set([...(yield* scopeGlobs(exclude, "oxlint excludeFiles")), ...ignored])];
-    return { include: files, ...(excluded.length === 0 ? {} : { exclude: excluded }), options };
+  const translated = yield* Effect.forEach(overrides, ({ include, exclude = [], options }) => Effect.gen(function* () {
+    return { include: yield* scopeGlobs(include, "oxlint files"), exclude: yield* scopeGlobs(exclude, "oxlint excludeFiles"), options };
   }));
+  const ignored = yield* globalExcludes(root, config.ignorePatterns ?? [], translated.flatMap(({ include }) => include));
+  return translated.map(({ include, exclude, options }) => {
+    const excluded = [...new Set([...exclude, ...ignored])];
+    return { include, ...(excluded.length === 0 ? {} : { exclude: excluded }), options };
+  });
 });
 
 const placeOfService = Effect.fn("placeOfService")(function* (tsconfig: JsonObject) {

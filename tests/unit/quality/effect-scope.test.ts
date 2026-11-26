@@ -8,11 +8,11 @@ import { defineConfig, effectRules } from "../../../src/quality/presets/oxlint.t
 
 test("the language service takes the paths of the Effect override and nothing from the other overrides", () => {
   const { overrides = [] } = defineConfig({ effect: { files: ["src/**/*.ts"], excludeFiles: ["src/host/**"] } });
-  expect(serviceOverrides(overrides)).toEqual([{ include: ["src/**/*.ts"], exclude: ["src/host/**"], options: { diagnosticSeverity: expect.objectContaining(severities.diagnosticSeverity) } }]);
+  expect(serviceOverrides(overrides)).toEqual([{ include: ["src/**/*.ts"], exclude: ["src/host/**"], options: { diagnosticSeverity: severities.diagnosticSeverity } }]);
 });
 
 test("an Effect override with nothing excluded writes no exclude, and effect: false writes no override", () => {
-  expect(serviceOverrides([effectRules(["scripts/**/*.ts"])])).toEqual([{ include: ["scripts/**/*.ts"], options: { diagnosticSeverity: expect.objectContaining(severities.diagnosticSeverity) } }]);
+  expect(serviceOverrides([effectRules(["scripts/**/*.ts"])])).toEqual([{ include: ["scripts/**/*.ts"], options: { diagnosticSeverity: severities.diagnosticSeverity } }]);
   expect(serviceOverrides(defineConfig({ effect: false }).overrides ?? [])).toEqual([]);
 });
 

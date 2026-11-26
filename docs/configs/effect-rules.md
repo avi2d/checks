@@ -75,7 +75,7 @@ Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
 The kit owns the shared severities and writes the scoped severities in path overrides.
-A repository can add its own keys without changing the kit's.
+A repository can add its own keys except the six scoped keys, which the gate removes from the top-level `diagnosticSeverity`.
 
 ## Related topics
 
