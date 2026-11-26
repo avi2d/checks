@@ -12,9 +12,12 @@ function lintCommand(): unknown {
   return commands.lint;
 }
 
-test("a lint command that runs oxlint alone fails, since the typecheck and the docs build must run too", () => {
+test("a lint command that omits the drift check or masks a step failure fails", () => {
   const lint = lintCommand();
-  for (const step of ["bun run lint", "bun run typecheck", "bun run build"]) {
-    expect(lint).toEqual(expect.stringContaining(step));
-  }
+  expect(typeof lint === "string" ? lint.split("&&").map((step) => step.trim()) : lint).toEqual([
+    "bun run lint",
+    "bun run build",
+    "git diff --exit-code",
+    "bun run typecheck",
+  ]);
 });
