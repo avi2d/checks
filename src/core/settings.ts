@@ -27,6 +27,12 @@ export const TestFileMaxSeconds = Schema.Finite.check(
 
 export const TestFileSkips = Schema.Array(Schema.NonEmptyString);
 
+export const TestFileTimings = Schema.Record(Schema.NonEmptyString, Schema.Finite.check(Schema.isGreaterThan(0)));
+
+const ShardCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(256));
+export const TestTierShards = Schema.Struct({ unit: Schema.optionalKey(ShardCount), e2e: Schema.optionalKey(ShardCount) });
+export type TestTierShards = typeof TestTierShards.Type;
+
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
 export const Reach = Schema.Record(Schema.String, Schema.Array(Schema.String));
@@ -88,6 +94,8 @@ export const Settings = Schema.Struct({
     description: "The time limit in seconds for each test file in CI.",
     default: DEFAULT_TEST_FILE_MAX_SECONDS,
   })),
+  testTierShards: Schema.optionalKey(TestTierShards.annotate({ description: "The number of parallel CI jobs for each test tier." })),
+  testFileTimings: Schema.optionalKey(TestFileTimings.annotate({ description: "The recorded seconds per test file, which balance the shards." })),
   testFileSkips: Schema.optionalKey(TestFileSkips.annotate({
     description: "The repository-relative paths of test files to exclude from checks-test.",
     default: [],

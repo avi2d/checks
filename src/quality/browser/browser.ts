@@ -28,7 +28,8 @@ import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 import { reachedRoutes } from "./route-scope.ts";
 import { compareReport, PAGE_OF, planCells } from "./schedule.ts";
-import { planShard, runsInShard, type RouteWork, type Shard, type ShardPlan } from "./shard.ts";
+import type { Shard } from "../../core/shard.ts";
+import { planShard, runsInShard, type RouteWork, type ShardPlan } from "./shard.ts";
 import { BrowserTimings, decodeSetting, loadSettings } from "../../core/settings.ts";
 
 const NO_TARGET = "scanned no target";

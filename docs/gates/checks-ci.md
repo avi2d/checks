@@ -28,7 +28,7 @@ Each command runs one step and reads its inputs from the environment the step se
 | `pages-publish` | pushes the build to the production repository | `DEPLOY_KEY`, `SITE_PATH`, `DIRECTORY`, `REPOSITORY`, `CNAME`, `BRANCH`, `COMMIT_MESSAGE`, `SOURCE_SHA` |
 | `lighthouse` | audits each page and writes the median scores to the job summary | `SITE`, `REPORTS`, `RUNS`, `CHROME`, `PAGES`, `ORIGIN`, `LIGHTHOUSE` |
 | `secrets-pack` | writes the private secrets pack to a file and exports its path as `CHECKS_SECRETS_PACK`, or with `IF_MISSING` `skip` writes `configured=false` to `GITHUB_OUTPUT` when `PACK` is empty | `PACK`, `IF_MISSING`, `RUNNER_TEMP`, `GITHUB_ENV`, `GITHUB_STEP_SUMMARY` |
-| `test` | runs `bun run test` when `CHECK_RELEASE` is `true`, and `bunx checks-test --pr` when it is `false` or unset, appending `--tier=<tier>` from `TEST_TIER` when set | `CHECK_RELEASE`, `TEST_TIER` |
+| `test` | runs `bun run test` when `CHECK_RELEASE` is `true`, and `bunx checks-test --pr` when it is `false` or unset, appending `--tier=<tier>` from `TEST_TIER` and `--shard=<index>/<count>` from `TEST_SHARD` when set | `CHECK_RELEASE`, `TEST_TIER`, `TEST_SHARD` |
 | `release-version` | fails unless `TAG` is `v` and the version the manifest holds, and writes `version` to `GITHUB_OUTPUT` | `PACKAGE_PATH`, `TAG` |
 | `mutation` | with `score`, writes the score of `reports/mutation/mutation.json` to the job summary, and with `shards`, splits the tree into `SHARDS` shard globs with `checks-mutation-scope` and writes them as `shards` to `GITHUB_OUTPUT` | `SHARDS`, `RUNNER_TEMP`, `GITHUB_STEP_SUMMARY`, `GITHUB_OUTPUT` |
 | `gitleaks` | downloads and verifies the gitleaks binary the kit pins in its shared cache | `HOME` |
@@ -40,6 +40,8 @@ The tests-only rule includes helpers under those directories and holds with or w
 A change to `checks.config.ts` also counts as tests-only when it changes only reach map entries and every other changed path is under those test directories.
 The command compares the loaded settings at the merge base and the head.
 When either config cannot load or another setting changes, the config makes the change full.
+
+`test` refuses a malformed `TEST_SHARD` or one set without `TEST_TIER`.
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 

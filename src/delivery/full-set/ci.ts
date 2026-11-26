@@ -1,5 +1,5 @@
 import { type CallerSet } from "../site-names.ts";
-import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, isBrowserWalk, runnerOf } from "../ci-jobs.ts";
+import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, RELEASE_TEST_RUN, isBrowserWalk, runnerOf, testTierOf } from "../ci-jobs.ts";
 import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
@@ -146,16 +146,21 @@ const siteJob = (set: CallerSet): Job => ({
 });
 
 const testStep = (set: CallerSet, test: TestJob): Step => {
-  const tier = test.run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : test.run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
+  const tier = testTierOf(test.run);
+  const count = tier === undefined ? undefined : set.testTierShards?.[tier];
+  const shard = count === undefined || count === 1 ? undefined : expression("matrix.shard") + "/" + count;
   return checksRelease(set) && tier !== undefined
-    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")], ["TEST_TIER", tier]], run: RELEASE_TEST_RUN }
-    : { id: TEST_STEP, run: scalar(test.run) };
+    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")], ["TEST_TIER", tier], ...(shard === undefined ? [] : [["TEST_SHARD", shard] as const])], run: RELEASE_TEST_RUN }
+    : { id: TEST_STEP, run: scalar(test.run + (shard === undefined ? "" : ` --shard=${shard}`)) };
 };
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined, kit: boolean): Job {
   const hold = holds(set, test);
+  const tier = testTierOf(test.run);
+  const count = tier === undefined ? undefined : set.testTierShards?.[tier];
   return {
     id: test.name,
+    ...(count === undefined || count === 1 ? {} : { matrix: ["shard", "[" + Array.from({ length: count }, (_, index) => index + 1).join(", ") + "]"] as const, failFast: false as const }),
     ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
     ...(isBrowserWalk(test) ? { if: "needs.site.outputs.browser != 'false'" } : {}),
     runsOn: scalar(test.runsOn),

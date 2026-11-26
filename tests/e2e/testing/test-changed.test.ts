@@ -49,6 +49,32 @@ test("--pr with a tier excludes the other tier and tests untouched by the pull r
   expect(e2e.text).not.toContain("1 fail");
 }, 60_000);
 
+test("two pull request shards run each selected file once and leave untouched files out", async () => {
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "shard-fixture", type: "module" }),
+    "bunfig.toml": UNVENDORED_BUNFIG,
+    "checks.config.ts": 'export default { testFileTimings: { "tests/unit/b.test.ts": 10, "tests/unit/c.test.ts": 2 } };\n',
+    "tests/unit/a.test.ts": FAILING,
+    "tests/unit/b.test.ts": PASSING,
+    "tests/unit/c.test.ts": PASSING,
+    "tests/unit/d.test.ts": FAILING,
+  });
+  await repo.commit("feat: base");
+  await branchedFromOrigin(repo);
+  await repo.write({ "tests/unit/b.test.ts": PASSING + "\n", "tests/unit/c.test.ts": PASSING + "\n" });
+  await repo.commit("test: change two files");
+  const sha = (await $`git rev-parse HEAD`.cwd(repo.dir).text()).trim();
+  const event = join(repo.dir, "event.json");
+  await Bun.write(event, JSON.stringify({ pull_request: { number: 1, title: "test change", base: { ref: "main" }, head: { sha } } }));
+  const env = { ...withoutPullRequestEvent(), CI: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event };
+  const script = join(CHECKOUT, "src", "testing", "test.ts");
+  const results = await Promise.all([1, 2].map((index) => ran($`bun ${script} --pr --tier=unit --shard=${`${index}/2`} --parallel=1`.cwd(repo.dir).env(env))));
+  for (const result of results) expect(result.exitCode).toBe(0);
+  const output = results.map((result) => result.text).join("\n");
+  for (const file of ["b", "c"]) expect(output.match(new RegExp(`tests/unit/${file}\\.test\\.ts:`, "g"))?.length).toBe(1);
+  for (const file of ["a", "d"]) expect(output).not.toContain(`tests/unit/${file}.test.ts:`);
+}, 60_000);
+
 async function runPullRequest(repo: FixtureRepo, flag: "--pr" | "--pr-screens"): Promise<Ran> {
   const sha = (await $`git rev-parse HEAD`.cwd(repo.dir).text()).trim();
   const event = join(repo.dir, "event.json");

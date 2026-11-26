@@ -72,6 +72,10 @@ The preset turns these diagnostics to errors:
 
 Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
+It turns off `catchAllToMapError`, `catchToIgnore`, and `catchToOrElseSucceed`.
+A mixed cause can make `Effect.catch` and `Effect.mapError` produce different failures.
+`catchToIgnore` suggests `Effect.ignore`, which the oxlint base refuses.
+`catchToOrElseSucceed` turns a blind `Effect.catch` fallback, which the oxlint base refuses, into `Effect.orElseSucceed`, the same blind recovery under another name.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
 The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
 
