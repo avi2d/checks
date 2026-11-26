@@ -31,8 +31,8 @@ To move a repository to a newer release of the kit:
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, then restore any own preload entry beside the shipped one, since `checks-test-layout` compares the copy with the installed preset.
-1. When the repository still holds the workflow the previous kit wrote for the whole-tree gates, delete that workflow.
-   Run the gates with `checks-lint --whole-tree` instead.
+1. When the repository still holds a whole-tree workflow the previous kit wrote or the repository wrote itself, delete that workflow.
+   Run `bunx checks-workflows --write` to write the current `whole-tree-run.yml`.
    [Set up a repository](set-up-a-repository.md) and [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) show the current names.
 1. A stale workflow left behind still passes `checks-ci-wiring`, but dispatching it fails, so delete it before dispatching it.
 1. The release notes hold the old-to-new name mapping for the workflow, label, artifacts and report file.
