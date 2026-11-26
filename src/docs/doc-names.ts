@@ -38,22 +38,13 @@ class InstalledUnreadable extends Schema.TaggedError<InstalledUnreadable>()("Ins
   message: Schema.String,
 }) {}
 
-// git grep exits 1 when nothing matches, which is an answer rather than a failure.
 const matchedAt = Effect.fn("matchedAt")(function* (root: string, rev: string, names: readonly string[]) {
   if (names.length === 0) return new Set<string>();
-  const found = yield* git(["grep", "-I", "-F", "-o", "-h", "--no-color", "-f", "-", rev, "--", ...OUTSIDE_DOCS], root, {
+  const found = yield* git(["grep", "-I", "-F", "-h", "--no-color", "-f", "-", rev, "--", ...OUTSIDE_DOCS], root, {
     input: `${names.join("\n")}\n`,
   }).pipe(Effect.catchTag("GitFailure", () => Effect.succeed("")));
   const paths = (yield* pathsAt(rev, [], root)).join("\n");
-  return new Set([...found.split("\n"), ...names.filter((name) => paths.includes(name))]);
-});
-
-// -o reports one pattern per match, so a name inside a longer name's match is confirmed on its own.
-const heldAt = Effect.fn("heldAt")(function* (root: string, rev: string, name: string) {
-  return yield* git(["grep", "-I", "-F", "-q", "-e", name, rev, "--", ...OUTSIDE_DOCS], root).pipe(
-    Effect.as(true),
-    Effect.catchTag("GitFailure", () => Effect.succeed(false)),
-  );
+  return new Set(names.filter((name) => found.includes(name) || paths.includes(name)));
 });
 
 const installedDirs = Effect.fn("installedDirs")(function* (root: string, deps: readonly string[]) {
@@ -83,12 +74,7 @@ export const vanishedNames = Effect.fn("vanishedNames")(function* (
   const atHead = yield* matchedAt(root, head, names);
   const candidates = names.filter((name) => !atHead.has(name));
   const atBase = yield* matchedAt(root, base, candidates);
-  const heldAtBase = yield* Effect.forEach(candidates, (name) => (atBase.has(name) ? Effect.succeed(true) : heldAt(root, base, name)), {
-    concurrency: 8,
-  });
-  const gone = candidates.filter((_, index) => heldAtBase[index] === true);
-  const confirmed = yield* Effect.forEach(gone, (name) => heldAt(root, head, name), { concurrency: 8 });
-  const unheld = gone.filter((_, index) => confirmed[index] === false);
+  const unheld = candidates.filter((name) => atBase.has(name));
   const dirs = yield* installedDirs(root, manifest.deps);
   const installed = yield* Effect.forEach(unheld, (name) => installedHolds(root, dirs, name), { concurrency: 8 });
   const vanished = new Set(unheld.filter((_, index) => installed[index] === false));
