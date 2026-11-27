@@ -138,6 +138,8 @@ export default defineConfig({
 
 The TypeScript config type and the generated [JSON Schema](../../dist/checks.schema.json) both come from the grouped settings.
 The type and the schema accept only the grouped keys, while the loader also reads the flat keys in the table and prints deprecation notes on standard error.
+Each flat setting produces at most one note per process for its current config file.
+Historical config reads produce no deprecation notes.
 Two definitions of one setting fail, even when their values match.
 The kit loads a TypeScript file, not a JSON config.
 

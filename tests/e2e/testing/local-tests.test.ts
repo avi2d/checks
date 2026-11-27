@@ -35,12 +35,12 @@ test("the query defaults to blocked instead of allowing an undeclared setting", 
   expect(result.text).toBe("blocked\n");
 });
 
-test("the query rejects an invalid setting instead of treating it as allowed", async () => {
+test("the query rejects an invalid grouped boolean without inventing an allowLocal member", async () => {
   const dir = await repository('test: { allowAgentRunsOutsideCI: "true" }');
   const result = await query(dir);
   expect(result.exitCode).toBe(2);
   expect(result.text).toContain("key test.allowAgentRunsOutsideCI does not decode");
-  expect(result.text).toContain('at ["allowLocal"]');
+  expect(result.text).not.toContain('["allowLocal"]');
 });
 
 test("the query names the replacement key instead of honoring the old opt-in", async () => {

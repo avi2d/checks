@@ -338,7 +338,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, the file timings on a `--shard` run, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `test.extraLocalFiles` or `test.affected`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, the file timings on a `--shard` run, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
 
 ## Sample output
 
@@ -356,6 +356,7 @@ checks-test: tests/e2e/checkout.test.ts took 132.48s (limit 120s)
 A run with a JUnit report prints measured file times:
 
 ```
+checks-test: record these file times in test.fileTimingsSeconds
 checks-test: testFileTimings {"tests/e2e/checkout.test.ts":24.6}
 ```
 

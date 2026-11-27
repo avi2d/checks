@@ -52,6 +52,6 @@ export const readReachChange = Effect.fn("readReachChange")(function* (root: str
     const tree = yield* checkoutFiles(mergeBase, files, yield* fs.makeTempDirectoryScoped({ prefix: "checks-reach-" }), root);
     const modules = path.join(root, "node_modules");
     if (yield* fs.exists(modules)) yield* fs.symlink(modules, path.join(tree, "node_modules"));
-    return yield* compareLoadedSettings(loadSettings(tree).pipe(Effect.map(({ values }) => values)), loadSettings(root).pipe(Effect.map(({ values }) => values)));
+    return yield* compareLoadedSettings(loadSettings(tree, "historical").pipe(Effect.map(({ values }) => values)), loadSettings(root).pipe(Effect.map(({ values }) => values)));
   }).pipe(Effect.scoped, Effect.catchTag(["GitFailure", "PlatformError"], () => Effect.succeed<ReachChange>({ kind: "full" })));
 });

@@ -218,6 +218,7 @@ export const Settings = Schema.Struct({
 });
 
 const SETTING_KEYS = [...Object.keys(Settings.fields), ...Object.keys(legacy).filter((key) => !Object.hasOwn(Settings.fields, key))];
+const reportedDeprecations = new Set<string>();
 
 export type SettingLocations = Readonly<Partial<Record<SettingKey, string>>>;
 
@@ -252,11 +253,11 @@ const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optiona
 const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
 
 const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
-  location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[],
+  location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[], recommended = known,
 ) {
   const unknown = Object.keys(raw).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
-    return yield* new Usage({ message: `${location} sets ${unknown.join(", ")}, which no command reads; its keys are ${known.join(", ")}` });
+    return yield* new Usage({ message: `${location} sets ${unknown.join(", ")}, which no command reads; its keys are ${recommended.join(", ")}` });
   }
 });
 
@@ -277,19 +278,19 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
     const repeated = agentPolicy
       ? old !== undefined && Object.hasOwn(yield* decodeSetting(legacyKey, AgentTests, old, legacyKey), "allowLocal")
       : Object.hasOwn(settings, legacyKey);
+    const newPath = `${section}.${key}`;
     if (repeated) {
       const oldPath = agentPolicy ? "agentTests.allowLocal" : legacyKey;
-      const newPath = `${section}.${key}`;
       return yield* new Usage({ message: `${SETTINGS_FILE} key ${oldPath} and ${SETTINGS_FILE} key ${newPath} set the same setting; keep only ${newPath}` });
     }
-    locations[legacyKey] = `${section}.${key}`;
-    settings[legacyKey] = agentPolicy ? { allowLocal: values[key] } : values[key];
+    locations[legacyKey] = newPath;
+    settings[legacyKey] = agentPolicy ? { allowLocal: yield* decodeSetting(legacyKey, AllowAgentRunsOutsideCI, values[key], newPath) } : values[key];
   }
 });
 
-export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
+export const loadSettings = Effect.fn("loadSettings")(function* (root: string, source: "current" | "historical" = "current") {
   const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, SETTINGS_FILE);
+  const file = (yield* Path.Path).resolve(root, SETTINGS_FILE);
   if (!(yield* fs.exists(file))) return { values: {}, locations: {} } satisfies LoadedSettings;
   const loaded: unknown = yield* Effect.tryPromise({
     try: () => import(file),
@@ -301,7 +302,7 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
   if (Object.hasOwn(settings, "localTests")) {
     return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use test.allowAgentRunsOutsideCI instead` });
   }
-  yield* refuseUnknownSettings(SETTINGS_FILE, settings, SETTING_KEYS);
+  yield* refuseUnknownSettings(SETTINGS_FILE, settings, SETTING_KEYS, Object.keys(Settings.fields));
   const normalized = { ...settings };
   const locations: Partial<Record<SettingKey, string>> = {};
   for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
@@ -309,6 +310,10 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
     for (const key of Object.values(keys)) {
       if (!Object.hasOwn(settings, key)) continue;
       locations[key] ??= key;
+      if (source === "historical") continue;
+      const deprecationId = `${file}\0${key}`;
+      if (reportedDeprecations.has(deprecationId)) continue;
+      reportedDeprecations.add(deprecationId);
       yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${settingPath(key)}`);
     }
   }
