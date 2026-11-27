@@ -15,7 +15,9 @@ The check follows package scripts and shell scripts for these calls.
 The kit requires `bunx checks-commit-title` on every pull request.
 A step that calls `bun src/delivery/commit-title.ts` or `./node_modules/.bin/commitlint` directly still satisfies the check.
 It requires `bun run lint`, `bun run build`, `bun run typecheck` and `bun run test` for each of those scripts that `package.json` defines.
-When `package.json` defines both `test:unit` and `test:e2e`, a step for each of `bun run test:unit` and `bun run test:e2e` also satisfies `bun run test`.
+When `package.json` defines both `test:unit` and `test:e2e`, a pull request step for each tier also satisfies `bun run test`.
+A tier step runs `bun run test:unit`, `bun run test:e2e`, or `bunx checks-ci test` with `TEST_TIER` set to `unit` or `e2e` in the step's environment.
+A full suite run outside pull requests cannot replace a missing pull request tier.
 A `build` script also requires `git diff --exit-code`.
 The target branch is the pull request base in CI, else the branch `refs/remotes/origin/HEAD` names, else the default branch of the repository in GitHub's event, else `main`.
 A `pull_request` trigger without a branch filter covers every target branch.
