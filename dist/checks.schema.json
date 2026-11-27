@@ -140,6 +140,13 @@
       },
       "description": "The runner labels for mutation jobs in a private repository."
     },
+    "mutationShardCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 256,
+      "description": "The maximum number of shards in the generated mutation refresh, as an integer from 1 to 256.",
+      "default": 12
+    },
     "selfHostedRunners": {
       "type": "array",
       "items": {

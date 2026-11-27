@@ -55,3 +55,38 @@ test.each([false, true])("default tier shards survive a write and reread instead
   const reread = await ran($`bun ${SCRIPT}`.cwd(repo.dir).env(env));
   expect(reread.exitCode).toBe(0);
 });
+
+const MUTATION_PATH = ".github/workflows/mutation.yml";
+const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
+
+test.each([
+  { config: {}, count: "12" },
+  { config: { mutationShardCount: 4 }, count: "4" },
+])("the mutation workflow writes $count shards instead of losing the setting or cancelling sibling shards", async ({ config, count }) => {
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "acme", private: true }),
+    "checks.config.ts": `export default ${JSON.stringify(config)};\n`,
+    ".bun-version": await Bun.file(join(CHECKOUT, ".bun-version")).text(),
+    "CHANGELOG.md": "# Changelog\n",
+  });
+  await repo.commit("test: configure a mutation refresh");
+  const env = withoutPullRequestEvent();
+  const written = await ran($`bun ${SCRIPT} --write`.cwd(repo.dir).env(env));
+  expect(written.exitCode).toBe(0);
+  const document: unknown = Bun.YAML.parse(await Bun.file(join(repo.dir, MUTATION_PATH)).text());
+  expect(document).toMatchObject({
+    jobs: {
+      "refresh-plan": { steps: expect.arrayContaining([expect.objectContaining({ id: "shards", env: { SHARDS: count } })]) },
+      "refresh-shard": { strategy: { "fail-fast": false, "max-parallel": 4 } },
+    },
+  });
+  expect((await ran($`bun ${WIRING}`.cwd(repo.dir).env(env))).exitCode).toBe(0);
+});
+
+test.each([0, -1, 1.5, "4", 257])("workflow generation refuses mutationShardCount %j instead of writing an invalid matrix", async (count) => {
+  const repo = await open({ "checks.config.ts": `export default { mutationShardCount: ${JSON.stringify(count)} };\n` });
+  const result = await ran($`bun ${SCRIPT} --write`.cwd(repo.dir).env(withoutPullRequestEvent()));
+  expect(result.exitCode).toBe(2);
+  expect(result.text).toContain("checks.config.ts key mutationShardCount does not decode");
+  expect(await Bun.file(join(repo.dir, MUTATION_PATH)).exists()).toBe(false);
+});

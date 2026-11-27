@@ -116,6 +116,7 @@ export default defineConfig({
 | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
 | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
 | `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `mutationShardCount` | `12` | The maximum number of shards in the generated mutation refresh, as an integer from 1 to 256. | [checks-mutation](../gates/checks-mutation.md#running-it-in-ci) |
 | `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
 | `browser` | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
 | `browserRoutes` | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
