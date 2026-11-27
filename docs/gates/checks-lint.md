@@ -26,6 +26,17 @@ Gates requiring tracked TypeScript files begin running when the repository track
 `checks-no-mistakes-test` begins running when the repository tracks `.no-mistakes.yaml` at its root.
 All other gates run for every repository.
 
+## Assertions in Bun tests
+
+When your lint script runs oxlint, the kit's preset enables `bun-test/require-assertion` under `tests/` and in `*.test.ts` and `*.test.tsx` files.
+The rule checks `test` and `it` imports from `bun:test`, including aliases, namespace imports, and forms such as `test.each` and `test.only`.
+A test passes when its body calls an `expect` matcher or `expect.unreachable` from `bun:test`.
+Calling `expect` without a matcher does not count.
+The rule also counts assertions inside inline callbacks passed to calls and inside called functions it can resolve in the same file.
+If a helper lives in another file, return a value from it and assert on that value in the test.
+The rule does not check `test.skip` or `test.todo`.
+It checks for a call in the source and does not prove that the call runs.
+
 ## Stages
 
 Each gate belongs to one of two stages, by what it reads:

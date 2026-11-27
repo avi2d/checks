@@ -324,6 +324,40 @@ test(
   180_000,
 );
 
+test.each(["json", "typescript"])(
+  "the packed %s preset rejects a Bun test without a matcher but accepts direct and same-file helper assertions",
+  async (preset) => {
+    await useConsumer("tarball", { scripts: { lint: "oxlint --type-aware" } });
+    const testFile = "tests/unit/widget.test.ts";
+    await writeWidgetRepo(testFile, "../../widget.ts");
+    if (preset === "typescript") {
+      await rm(join(dir, ".oxlintrc.json"));
+      await writeFile(join(dir, "oxlint.config.ts"), `import { defineConfig } from "@avi2dg/checks/oxlint";\nexport default defineConfig({ effect: false });\n`);
+    }
+
+    const file = join(dir, testFile);
+    await writeFile(file, `import { expect, test, it as example } from "bun:test";
+test("has no assertion", () => {});
+example.each([42])("creates a matcher without calling it", (value) => { expect(value); });
+`);
+    const red = await runScript("lint");
+    expect(red.exitCode).toBe(1);
+    expect(red.text.match(/bun-test\(require-assertion\)/g)).toHaveLength(2);
+    expect(red.text).toContain(`${testFile}:2:1`);
+    expect(red.text).toContain(`${testFile}:3:1`);
+
+    await writeFile(file, `import { expect, test, it as example } from "bun:test";
+function check(value: number): void {
+  expect(value).not.toBe(0);
+}
+test("matches directly", () => expect(42).toBe(42));
+example.each([42])("calls a helper with a matcher", (value) => check(value));
+`);
+    expect((await runScript("lint")).exitCode).toBe(0);
+  },
+  60_000,
+);
+
 const RESET_LEAKS = `export const port: number = JSON.parse("8080");\nexport const first = (value: unknown): string => (Array.isArray(value) ? value[0] : "");\n`;
 const RESET_CHECKED = `export const port = Number(JSON.parse("8080"));\nexport const first = (value: unknown): string => (Array.isArray(value) && typeof value[0] === "string" ? value[0] : "");\n`;
 

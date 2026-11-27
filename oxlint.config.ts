@@ -7,6 +7,7 @@ export default defineConfig({
       "src/quality/effect-channel/**",
       "src/complexity/readability/**",
       "src/quality/data-shape/**",
+      "src/testing/bun-test/**",
       // Each tool takes a config's default export as a plain value, so these builders cannot run an Effect.
       "src/quality/presets/oxlint.ts",
       "src/quality/presets/knip.ts",

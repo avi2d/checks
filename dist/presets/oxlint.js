@@ -20,7 +20,7 @@ var TESTS = ["tests/**", "**/*.test.ts", "**/*.test.tsx"];
 var PLUGINS = ["typescript", "oxc", "eslint", "import"];
 var EFFECT_ONLY_PLUGINS = ["node", "promise", "unicorn"];
 var EFFECT_PLUGINS = [...PLUGINS, ...EFFECT_ONLY_PLUGINS];
-var JS_PLUGINS = ["dist/effect-channel/index.js", "dist/readability/index.js", "dist/data-shape/index.js"];
+var JS_PLUGINS = ["dist/effect-channel/index.js", "dist/readability/index.js", "dist/data-shape/index.js", "dist/bun-test/index.js"];
 var EFFECT_RULES = {
   "node/no-sync": "error",
   "oxc/no-async-await": "error",
@@ -62,7 +62,7 @@ var BASE = {
       files: ["**/*.ts", "**/*.tsx"],
       rules: { "data-shape/readonly-collection-param": "error", "data-shape/schema-twin": "error" }
     },
-    { files: [...TESTS], rules: { "data-shape/no-shell-in-strings": "off" } },
+    { files: [...TESTS], rules: { "data-shape/no-shell-in-strings": "off", "bun-test/require-assertion": "error" } },
     {
       files: ["**/*.ts", "**/*.tsx"],
       excludeFiles: ["tests/**"],

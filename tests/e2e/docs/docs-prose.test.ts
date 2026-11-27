@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { docsRepos, GUIDE, OPENING, plantRedThenGreen, type Plant } from "../lib/docs-repo.ts";
+import { docsRepos, expectedDocsChange, GUIDE, OPENING, plantRedThenGreen, type Plant } from "../lib/docs-repo.ts";
 import { CHECKOUT } from "../lib/fixture-repo.ts";
 
 const FIXTURES = join(CHECKOUT, "tests", "fixtures", "docs");
@@ -43,12 +43,8 @@ const repository = docsRepos();
 test(
   "each prose rule goes red on a line a change adds to a living doc, and green once the line is rewritten",
   async () => {
-    await plantRedThenGreen(
-      await repository(),
-      PLANTS,
-      ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`],
-      "living doc(s) or agent file(s) hold to the prose rules",
-    );
+    const results = await plantRedThenGreen(await repository(), PLANTS, ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`]);
+    expect(results).toEqual(PLANTS.map(({ refusal }) => expectedDocsChange(refusal, "living doc(s) or agent file(s) hold to the prose rules")));
   },
   120_000,
 );

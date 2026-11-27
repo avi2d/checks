@@ -1,5 +1,5 @@
-import { test } from "bun:test";
-import { docsRepos, plantRedThenGreen, putAgentFiles, putVision, type Plant } from "../lib/docs-repo.ts";
+import { expect, test } from "bun:test";
+import { docsRepos, expectedDocsChange, plantRedThenGreen, putAgentFiles, putVision, type Plant } from "../lib/docs-repo.ts";
 
 const PLANTS: readonly (Plant & { readonly pin: string })[] = [
   {
@@ -26,12 +26,9 @@ test(
     await repo.put(".bun-version", "1.4.3\n");
     await putAgentFiles(repo.put);
     await putVision(repo.put);
-    await plantRedThenGreen(
-      repo,
-      PLANTS,
-      ({ pin }) => [`plant ${pin}`, `name what holds ${pin}`],
-      "docs: no line the range adds or edits copies a version package.json or .bun-version pins",
-    );
+    const results = await plantRedThenGreen(repo, PLANTS, ({ pin }) => [`plant ${pin}`, `name what holds ${pin}`]);
+    const held = "docs: no line the range adds or edits copies a version package.json or .bun-version pins";
+    expect(results).toEqual(PLANTS.map(({ refusal }) => expectedDocsChange(refusal, held)));
   },
   120_000,
 );
