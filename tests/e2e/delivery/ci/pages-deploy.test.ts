@@ -23,7 +23,7 @@ function deploy(overrides: Readonly<Record<string, string>> = {}) {
     ...apiEnv(stub, scratch.at("output")),
     PATH: `${scratch.at("bin")}:${process.env["PATH"] ?? ""}`,
     STUB_RECORD: scratch.at("calls"),
-    WRANGLER_VERSION: "4.156.1",
+    WRANGLER_VERSION: "4.168.0",
     DIRECTORY: "dist",
     PROJECT: "example-site",
     BRANCH: "main",
@@ -41,7 +41,7 @@ test("a deploy whose wrangler call drops the project, branch or commit fails", a
   const ran = await deploy();
   expect(ran.exitCode).toBe(0);
   expect(calls()).toEqual([
-    ["wrangler@4.156.1", "pages", "deploy", "dist", "--project-name", "example-site", "--branch", "main", "--commit-hash", SHA, "--commit-message", "Stage main 0123456"],
+    ["wrangler@4.168.0", "pages", "deploy", "dist", "--project-name", "example-site", "--branch", "main", "--commit-hash", SHA, "--commit-message", "Stage main 0123456"],
   ]);
 });
 

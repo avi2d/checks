@@ -79,7 +79,7 @@ const failureOf = async (url: string, sha256: string, binary: string) => (await 
 const listed = (dir: string) => readdir(dir).catch(() => []);
 
 test("the pinned download installs only bytes whose SHA-256 matches, then reuses the verified copy and refuses a tampered one", async () => {
-  const dir = join(await scratch("checks-osv-install-"), "2.6.0");
+  const dir = join(await scratch("checks-osv-install-"), "2.7.1");
   const binary = join(dir, "osv-scanner");
   const server = release();
   try {
