@@ -28,6 +28,7 @@
     "!src/complexity/readability/",
     "!src/quality/data-shape/",
     "!src/quality/effect-channel/",
+    "!src/testing/bun-test/",
     "!src/quality/presets/knip.ts",
     "!src/quality/presets/postcss-value-parser.d.ts",
     "!src/testing/mutation-guard-plugin.ts",
