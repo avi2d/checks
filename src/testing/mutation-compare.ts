@@ -77,7 +77,7 @@ export type Options = {
   readonly advisory: boolean;
 };
 
-export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
+export class MutationCompareReportError extends Schema.TaggedError<MutationCompareReportError>()("MutationCompareReportError", {
   message: Schema.String,
 }) {}
 
@@ -105,9 +105,9 @@ const decodeKillRun = Schema.decodeUnknownEffect(
   ),
 );
 
-const notAReport = (source: string) => (cause: { readonly message: string }) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` });
+const notAReport = (source: string) => (cause: { readonly message: string }) => new MutationCompareReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` });
 
-export const parseReport = (source: string, text: string): Effect.Effect<Map<string, ReportFile>, ReportError> =>
+export const parseReport = (source: string, text: string): Effect.Effect<Map<string, ReportFile>, MutationCompareReportError> =>
   decodeReport(text).pipe(
     Effect.map(({ files }) => new Map(Object.entries(files))),
     Effect.mapError(notAReport(source)),
@@ -118,7 +118,7 @@ function bailOf(config: { readonly disableBail?: boolean } | undefined): KillRun
   return config.disableBail === true ? "off" : "on";
 }
 
-export const parseKillRun = (source: string, text: string): Effect.Effect<KillRun, ReportError> =>
+export const parseKillRun = (source: string, text: string): Effect.Effect<KillRun, MutationCompareReportError> =>
   decodeKillRun(text).pipe(
     Effect.map(({ files, testFiles, config }) => ({
       files: new Map(Object.entries(files)),
@@ -294,7 +294,7 @@ export function passes(comparison: Comparison, advisory: boolean): boolean {
 
 const load = Effect.fn("load")(function* (path: string) {
   const fs = yield* FileSystem.FileSystem;
-  const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new ReportError({ message: `cannot read ${path}` })));
+  const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new MutationCompareReportError({ message: `cannot read ${path}` })));
   return yield* parseReport(path, text);
 });
 

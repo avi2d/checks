@@ -2,7 +2,20 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Exit } from "effect";
-import { fileSeconds, parseReport } from "../../../src/testing/test-report.ts";
+import { MutationCompareReportError } from "../../../src/testing/mutation-compare.ts";
+import { fileSeconds, parseReport, ReportError } from "../../../src/testing/test-report.ts";
+
+test("each report handler leaves the other module’s error uncaught", () => {
+  const mutationError = new MutationCompareReportError({ message: "mutation" });
+  const testError = new ReportError({ message: "test" });
+  const { _tag: mutationTag } = mutationError;
+  const { _tag: testTag } = testError;
+  const failure = (error: MutationCompareReportError | ReportError) => Effect.fail(error);
+  const mutationWithTestHandler = failure(mutationError).pipe(Effect.catchTag(testTag, () => Effect.succeed("caught")));
+  const testWithMutationHandler = failure(testError).pipe(Effect.catchTag(mutationTag, () => Effect.succeed("caught")));
+  expect(Exit.isFailure(Effect.runSyncExit(mutationWithTestHandler))).toBe(true);
+  expect(Exit.isFailure(Effect.runSyncExit(testWithMutationHandler))).toBe(true);
+});
 
 const FIXTURES = join(import.meta.dir, "..", "..", "fixtures", "test-report");
 const REPORT = join(FIXTURES, "bun.xml");
