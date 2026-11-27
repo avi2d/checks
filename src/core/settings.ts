@@ -253,7 +253,7 @@ const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optiona
 const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
 
 const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
-  location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[], recommended = known,
+  location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[], recommended: readonly string[] = known,
 ) {
   const unknown = Object.keys(raw).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
@@ -288,6 +288,17 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
   }
 });
 
+function flatKeysPresent(settings: Readonly<Record<string, unknown>>): SettingKey[] {
+  return Object.values(TRANSITION_KEYS).flatMap((keys) => Object.values(keys)).filter((key) => Object.hasOwn(settings, key));
+}
+
+const reportDeprecation = Effect.fn("reportDeprecation")(function* (file: string, key: SettingKey) {
+  const deprecationId = `${file}\0${key}`;
+  if (reportedDeprecations.has(deprecationId)) return;
+  reportedDeprecations.add(deprecationId);
+  yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${settingPath(key)}`);
+});
+
 export const loadSettings = Effect.fn("loadSettings")(function* (root: string, source: "current" | "historical" = "current") {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).resolve(root, SETTINGS_FILE);
@@ -306,16 +317,9 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string, s
   const normalized = { ...settings };
   const locations: Partial<Record<SettingKey, string>> = {};
   for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
-  for (const keys of Object.values(TRANSITION_KEYS)) {
-    for (const key of Object.values(keys)) {
-      if (!Object.hasOwn(settings, key)) continue;
-      locations[key] ??= key;
-      if (source === "historical") continue;
-      const deprecationId = `${file}\0${key}`;
-      if (reportedDeprecations.has(deprecationId)) continue;
-      reportedDeprecations.add(deprecationId);
-      yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${settingPath(key)}`);
-    }
+  for (const key of flatKeysPresent(settings)) {
+    locations[key] ??= key;
+    if (source === "current") yield* reportDeprecation(file, key);
   }
   return { values: normalized, locations } satisfies LoadedSettings;
 });
