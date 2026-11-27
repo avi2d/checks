@@ -255,12 +255,6 @@ export const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function
   }
 });
 
-function setsLegacyAgentPolicy(value: unknown): boolean {
-  if (value === undefined) return false;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return true;
-  return Object.hasOwn(value, "allowLocal");
-}
-
 const normalizeSection = Effect.fn("normalizeSection")(function* (
   settings: Record<string, unknown>, locations: Partial<Record<SettingKey, string>>, section: string, keys: Readonly<Record<string, SettingKey>>,
 ) {
@@ -274,7 +268,10 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
   for (const [key, legacyKey] of Object.entries(keys)) {
     if (!Object.hasOwn(values, key)) continue;
     const agentPolicy = legacyKey === "agentTests";
-    const repeated = agentPolicy ? setsLegacyAgentPolicy(settings[legacyKey]) : Object.hasOwn(settings, legacyKey);
+    const old = settings[legacyKey];
+    const repeated = agentPolicy
+      ? old !== undefined && Object.hasOwn(yield* decodeSetting(legacyKey, AgentTests, old, legacyKey), "allowLocal")
+      : Object.hasOwn(settings, legacyKey);
     const newPath = `${section}.${key}`;
     if (repeated) {
       const oldPath = agentPolicy ? "agentTests.allowLocal" : legacyKey;
@@ -291,7 +288,7 @@ const DEPRECATED_KEYS = [
 ];
 
 function flatKeysPresent(settings: Readonly<Record<string, unknown>>): SettingKey[] {
-  return DEPRECATED_KEYS.filter((key) => key === "agentTests" ? setsLegacyAgentPolicy(settings[key]) : Object.hasOwn(settings, key));
+  return DEPRECATED_KEYS.filter((key) => Object.hasOwn(settings, key));
 }
 
 function isOldBrowserKey(key: string): key is keyof typeof LegacyBrowserFields {
@@ -334,6 +331,7 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string, s
   const locations: Partial<Record<SettingKey, string>> = {};
   for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
   for (const key of flatKeysPresent(settings)) {
+    if (key === "agentTests" && (settings[key] === undefined || !Object.hasOwn(yield* decodeSetting(key, AgentTests, settings[key], key), "allowLocal"))) continue;
     locations[key] ??= key;
     if (source === "current") yield* reportDeprecation(file, key);
   }

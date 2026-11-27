@@ -47,12 +47,13 @@ test("a path mapped to no routes reaches no route instead of running every route
   expect(await selected(root, ["tests/unit/home.test.ts"])).toEqual({ kind: "routes", routes: new Set([]) });
 });
 
-const pages = { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] };
+const LOCATION = "checks.browser.config.ts key affectedRoutes";
+const pages = { value: { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] }, location: LOCATION };
 
 test("an unmapped path no mapped file imports widens instead of narrowing to the mapped route", () => {
   const sources = new Map([["src/home.ts", ""], ["src/new.ts", ""]]);
-  expect(scopeRoutes(["src/home.ts", "src/new.ts"], { "src/home.ts": ["/"] }, sources, declaration))
-    .toEqual({ kind: "full", because: "src/new.ts has no affectedRoutes mapping and no mapped file imports it" });
+  expect(scopeRoutes(["src/home.ts", "src/new.ts"], { value: { "src/home.ts": ["/"] }, location: LOCATION }, sources, declaration))
+    .toEqual({ kind: "full", because: "src/new.ts has no mapping in checks.browser.config.ts key affectedRoutes and no mapped file imports it" });
 });
 
 test("an unmapped component narrows to the route of the page that imports it instead of walking every route", () => {
@@ -81,7 +82,7 @@ test("an unmapped page that imports the component widens instead of narrowing to
     ["src/components/Card.astro", "<div>card</div>\n"],
   ]);
   expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration))
-    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no affectedRoutes mapping" });
+    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no mapping in checks.browser.config.ts key affectedRoutes" });
 });
 
 test("a component one page imports through a tsconfig alias widens instead of narrowing to the relative importer", () => {
@@ -127,9 +128,9 @@ test("a component an unmapped one reaches through an alias widens instead of nar
     .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/components/Section.astro, which src/pages/other.astro names outside a relative import" });
 });
 
-test("an unknown route widens instead of narrowing to it", async () => {
+test("an unknown route from the flat key widens and names checks.config.ts key browserRoutes instead of affectedRoutes", async () => {
   const root = await rootWith('{ "src/home.ts": ["/missing/"] }');
-  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "affectedRoutes names undeclared route /missing/" });
+  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "checks.config.ts key browserRoutes names undeclared route /missing/" });
 });
 
 test("an unconnected test beside a mapped component does not widen to every route", () => {
@@ -158,6 +159,6 @@ test("a missing map widens instead of narrowing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);
   await writeFile(join(dir, "checks.config.ts"), "export default {};\n");
-  expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "affectedRoutes is not configured" });
+  expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "no affectedRoutes is set in checks.browser.config.ts" });
 });
 

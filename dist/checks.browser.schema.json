@@ -5,7 +5,7 @@
     "site": {
       "type": "string",
       "minLength": 1,
-      "description": "The directory of the built site, served on a local port."
+      "description": "The directory of the built site, which the runner serves on a local port, with an index.html answering for its directory."
     },
     "routes": {
       "type": "array",
@@ -102,7 +102,7 @@
           }
         ]
       },
-      "description": "The pages to visit, with a path and locale or the every-page preset and a locale."
+      "description": "Each page to visit, as a path from the site root and the locale it renders, or the every-page preset with a locale."
     },
     "viewports": {
       "type": "array",
@@ -221,7 +221,7 @@
           }
         ]
       },
-      "description": "The window sizes to visit, with a name, width, and height in pixels, optional touch and device settings, or a screen-size preset."
+      "description": "Each window to visit in, with a name, a width and a height in pixels, touch for a phone that has touch and a mobile viewport, and device as phone, tablet or desktop, or the anchor or full preset, which stands for a set of screen sizes."
     },
     "states": {
       "type": "array",
@@ -404,7 +404,7 @@
           }
         ]
       },
-      "description": "The conditions to visit, with a name and optional text size, motion preference, and checks, or the enlarged-text preset."
+      "description": "Each condition to visit in, with a name, textPx for the browser's default text size, reducedMotion as reduce or no-preference, and checks when it runs only some of the declared checks, or the enlarged-text preset."
     },
     "targets": {
       "type": "array",
@@ -487,7 +487,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The named controls or texts to check, with CSS selectors and optional routes, focus, and contrast settings."
+      "description": "Each named control or text the checks judge, with a CSS selector, the routes it is on when not every route, focusable when Tab must reach it, and contrast when the contrast check measures its text."
     },
     "checks": {
       "type": "array",
@@ -528,7 +528,7 @@
           "look"
         ]
       },
-      "description": "The built-in checks to run."
+      "description": "The built-in checks to run, from layout, keyboard, motion, axe, nesting, html, links, assets, contrast, weight, shift and look."
     },
     "weight": {
       "type": "object",
@@ -555,7 +555,7 @@
         "imageBytes"
       ],
       "additionalProperties": false,
-      "description": "The byte budgets for each page: outside images, in scripts, and in images."
+      "description": "The byte budgets each page must hold, as nonImageBytes outside images, scriptBytes in scripts and imageBytes in images."
     },
     "shift": {
       "type": "object",
@@ -569,7 +569,7 @@
         "max"
       ],
       "additionalProperties": false,
-      "description": "The largest total layout shift allowed on a cold load."
+      "description": "The largest total layout movement a cold load may report, as max."
     },
     "roles": {
       "type": "object",
@@ -591,12 +591,12 @@
           "minLength": 1
         }
       },
-      "description": "The named text roles and their CSS selectors for the look check."
+      "description": "Each role a text plays on the page, named, with the CSS selectors of the elements that play it, for the look check."
     },
     "hooks": {
       "type": "string",
       "minLength": 1,
-      "description": "The module of product hooks, relative to the directory the runner runs in."
+      "description": "The module of product hooks, as a path from the directory the runner runs in."
     },
     "affectedRoutes": {
       "type": "object",

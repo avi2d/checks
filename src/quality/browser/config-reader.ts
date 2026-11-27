@@ -48,10 +48,13 @@ const readOption = Effect.fn("readOption")(function* <A>(
 ) {
   const { legacy, config } = yield* loadBrowserConfig(root);
   if (config !== undefined && Object.hasOwn(config, key)) {
-    return yield* decodeSettingAt(`${BROWSER_SETTINGS_FILE} key ${key}`, schema, config[key]);
+    const location = `${BROWSER_SETTINGS_FILE} key ${key}`;
+    return { value: yield* decodeSettingAt(location, schema, config[key]), location };
   }
   const oldKey = LEGACY_BROWSER_OPTIONS[key];
-  return legacy[oldKey] === undefined ? undefined : yield* decodeSettingAt(`${SETTINGS_FILE} key ${oldKey}`, schema, legacy[oldKey]);
+  if (legacy[oldKey] === undefined) return undefined;
+  const location = `${SETTINGS_FILE} key ${oldKey}`;
+  return { value: yield* decodeSettingAt(location, schema, legacy[oldKey]), location };
 });
 
 export const readAffectedRoutes = Effect.fn("readAffectedRoutes")(function* (root: string) {
@@ -59,9 +62,9 @@ export const readAffectedRoutes = Effect.fn("readAffectedRoutes")(function* (roo
 });
 
 export const readBuildCommand = Effect.fn("readBuildCommand")(function* (root: string) {
-  return yield* readOption(root, "buildCommand", BrowserSettings.fields.buildCommand);
+  return (yield* readOption(root, "buildCommand", BrowserSettings.fields.buildCommand))?.value;
 });
 
 export const readTimings = Effect.fn("readTimings")(function* (root: string) {
-  return yield* readOption(root, "timingsMs", BrowserSettings.fields.timingsMs);
+  return (yield* readOption(root, "timingsMs", BrowserSettings.fields.timingsMs))?.value;
 });

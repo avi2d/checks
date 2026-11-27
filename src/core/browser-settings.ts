@@ -6,6 +6,10 @@ const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links
 
 export type CheckName = (typeof CHECKS)[number];
 
+function listed(values: readonly string[], conjunction: "and" | "or"): string {
+  return values.length < 2 ? values.join("") : `${values.slice(0, -1).join(", ")} ${conjunction} ${values.at(-1)}`;
+}
+
 const Name = Schema.NonEmptyString;
 const Pixels = Schema.Int.check(Schema.isGreaterThan(0));
 const Bytes = Schema.Int.check(Schema.isGreaterThan(0));
@@ -29,10 +33,12 @@ const Viewport = Schema.Struct({
 
 const ScreenSizeSet = Schema.Struct({ preset: Schema.Literals(SCREEN_SIZE_SETS) });
 
+const MOTION_PREFERENCES = ["reduce", "no-preference"] as const;
+
 const State = Schema.Struct({
   name: Name,
   textPx: Schema.optionalKey(Pixels),
-  reducedMotion: Schema.optionalKey(Schema.Literals(["reduce", "no-preference"])),
+  reducedMotion: Schema.optionalKey(Schema.Literals(MOTION_PREFERENCES)),
   checks: Schema.optionalKey(Schema.NonEmptyArray(Schema.Literals(CHECKS))),
 });
 
@@ -61,28 +67,34 @@ const ShiftBound = Schema.Struct({
 const Roles = Schema.Record(Name, Schema.NonEmptyArray(Name));
 
 const Declaration = Schema.Struct({
-  site: Name.annotate({ description: "The directory of the built site, served on a local port." }),
+  site: Name.annotate({ description: "The directory of the built site, which the runner serves on a local port, with an index.html answering for its directory." }),
   routes: Schema.NonEmptyArray(Route),
   viewports: Schema.NonEmptyArray(Viewport),
   states: Schema.NonEmptyArray(State),
   targets: Schema.NonEmptyArray(Target).annotate({
-    description: "The named controls or texts to check, with CSS selectors and optional routes, focus, and contrast settings.",
+    description: "Each named control or text the checks judge, with a CSS selector, the routes it is on when not every route, focusable when Tab must reach it, and contrast when the contrast check measures its text.",
   }),
-  checks: Schema.NonEmptyArray(Schema.Literals(CHECKS)).annotate({ description: "The built-in checks to run." }),
-  weight: Schema.optionalKey(WeightBudgets.annotate({ description: "The byte budgets for each page: outside images, in scripts, and in images." })),
-  shift: Schema.optionalKey(ShiftBound.annotate({ description: "The largest total layout shift allowed on a cold load." })),
-  roles: Schema.optionalKey(Roles.annotate({ description: "The named text roles and their CSS selectors for the look check." })),
-  hooks: Schema.optionalKey(Name.annotate({ description: "The module of product hooks, relative to the directory the runner runs in." })),
+  checks: Schema.NonEmptyArray(Schema.Literals(CHECKS)).annotate({ description: `The built-in checks to run, from ${listed(CHECKS, "and")}.` }),
+  weight: Schema.optionalKey(WeightBudgets.annotate({
+    description: "The byte budgets each page must hold, as nonImageBytes outside images, scriptBytes in scripts and imageBytes in images.",
+  })),
+  shift: Schema.optionalKey(ShiftBound.annotate({ description: "The largest total layout movement a cold load may report, as max." })),
+  roles: Schema.optionalKey(Roles.annotate({
+    description: "Each role a text plays on the page, named, with the CSS selectors of the elements that play it, for the look check.",
+  })),
+  hooks: Schema.optionalKey(Name.annotate({ description: "The module of product hooks, as a path from the directory the runner runs in." })),
 });
 
 export const Listed = Schema.Struct({
   ...Declaration.fields,
-  routes: Schema.NonEmptyArray(Schema.Union([Route, RoutePreset])).annotate({ description: "The pages to visit, with a path and locale or the every-page preset and a locale." }),
+  routes: Schema.NonEmptyArray(Schema.Union([Route, RoutePreset])).annotate({
+    description: `Each page to visit, as a path from the site root and the locale it renders, or the ${listed(ROUTE_PRESETS, "or")} preset with a locale.`,
+  }),
   viewports: Schema.NonEmptyArray(Schema.Union([Viewport, ScreenSizeSet])).annotate({
-    description: "The window sizes to visit, with a name, width, and height in pixels, optional touch and device settings, or a screen-size preset.",
+    description: `Each window to visit in, with a name, a width and a height in pixels, touch for a phone that has touch and a mobile viewport, and device as ${listed(DEVICES, "or")}, or the ${listed(SCREEN_SIZE_SETS, "or")} preset, which stands for a set of screen sizes.`,
   }),
   states: Schema.NonEmptyArray(Schema.Union([State, StatePreset])).annotate({
-    description: "The conditions to visit, with a name and optional text size, motion preference, and checks, or the enlarged-text preset.",
+    description: `Each condition to visit in, with a name, textPx for the browser's default text size, reducedMotion as ${listed(MOTION_PREFERENCES, "or")}, and checks when it runs only some of the declared checks, or the ${listed(STATE_PRESETS, "or")} preset.`,
   }),
 });
 

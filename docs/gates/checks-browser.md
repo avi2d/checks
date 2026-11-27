@@ -233,7 +233,8 @@ export default defineBrowserConfig({
 ```
 
 The runner accepts deprecated flat browser keys in `checks.config.ts` and prints a deprecation note for each.
-When `checks.browser.config.ts` sets only options, the runner can read the plan from `checks.config.ts`.
+During the move, a `checks.browser.config.ts` that sets only options, such as `timingsMs`, works at runtime, and the runner reads the plan from the `browser` key of `checks.config.ts`.
+`defineBrowserConfig` and the browser JSON Schema require the full plan, so write such a file as a plain `export default { ... }`.
 If both files set the same option or plan, the runner refuses both definitions.
 A `browser-checks.json` left in that directory fails the run and names `checks.browser.config.ts` as its replacement.
 Here is a plan with more than one route, viewport, and state:
@@ -275,16 +276,16 @@ Here is a plan with more than one route, viewport, and state:
 
 | Field | Required | What it holds |
 | --- | --- | --- |
-| `site` | Yes | The directory of the built site, served on a local port. |
-| `routes` | Yes | The pages to visit, with a path and locale or the every-page preset and a locale. |
-| `viewports` | Yes | The window sizes to visit, with a name, width, and height in pixels, optional touch and device settings, or a screen-size preset. |
-| `states` | Yes | The conditions to visit, with a name and optional text size, motion preference, and checks, or the enlarged-text preset. |
-| `targets` | Yes | The named controls or texts to check, with CSS selectors and optional routes, focus, and contrast settings. |
-| `checks` | Yes | The built-in checks to run. |
-| `weight` | No | The byte budgets for each page: outside images, in scripts, and in images. |
-| `shift` | No | The largest total layout shift allowed on a cold load. |
-| `roles` | No | The named text roles and their CSS selectors for the look check. |
-| `hooks` | No | The module of product hooks, relative to the directory the runner runs in. |
+| `site` | Yes | The directory of the built site, which the runner serves on a local port, with an index.html answering for its directory. |
+| `routes` | Yes | Each page to visit, as a path from the site root and the locale it renders, or the every-page preset with a locale. |
+| `viewports` | Yes | Each window to visit in, with a name, a width and a height in pixels, touch for a phone that has touch and a mobile viewport, and device as phone, tablet or desktop, or the anchor or full preset, which stands for a set of screen sizes. |
+| `states` | Yes | Each condition to visit in, with a name, textPx for the browser's default text size, reducedMotion as reduce or no-preference, and checks when it runs only some of the declared checks, or the enlarged-text preset. |
+| `targets` | Yes | Each named control or text the checks judge, with a CSS selector, the routes it is on when not every route, focusable when Tab must reach it, and contrast when the contrast check measures its text. |
+| `checks` | Yes | The built-in checks to run, from layout, keyboard, motion, axe, nesting, html, links, assets, contrast, weight, shift and look. |
+| `weight` | No | The byte budgets each page must hold, as nonImageBytes outside images, scriptBytes in scripts and imageBytes in images. |
+| `shift` | No | The largest total layout movement a cold load may report, as max. |
+| `roles` | No | Each role a text plays on the page, named, with the CSS selectors of the elements that play it, for the look check. |
+| `hooks` | No | The module of product hooks, as a path from the directory the runner runs in. |
 | `affectedRoutes` | No | The repository paths that can affect each browser route. |
 | `buildCommand` | No | The command that builds the site for the browser test-only proof. |
 | `timingsMs` | No | The measured milliseconds of each browser check at each route, which browser shards balance on. |

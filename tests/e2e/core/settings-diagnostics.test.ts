@@ -45,18 +45,6 @@ test.each(["flat", "grouped"] as const)("a pull request with %s settings emits n
   expect(stderr.split("\n").filter((line) => line.includes(" is deprecated;"))).toEqual(shape === "flat" ? [REACH_NOTE, AGENT_NOTE, TIMEOUT_NOTE] : []);
 }, 60_000);
 
-test("workflow generation does not decode the legacy local agent policy", async () => {
-  const repo = await open({ [CONFIG]: 'export default { agentTests: { allowLocal: "true" } };\n' });
-  const workflows = await repo.script("delivery/workflows.ts", "--write");
-  expect(workflows.exitCode, workflows.text).toBe(0);
-  expect(workflows.text).toContain(AGENT_NOTE);
-
-  const local = await repo.script("testing/local-tests-command.ts");
-  expect(local.exitCode).toBe(2);
-  expect(local.text).toContain('key agentTests does not decode: Expected boolean');
-  expect(local.text).toContain('["allowLocal"]');
-});
-
 test("unknown root key advice does not recommend deprecated flat keys", async () => {
   const repo = await open({ [CONFIG]: "export default { typo: true };\n" });
   const result = await repo.script("testing/local-tests-command.ts");

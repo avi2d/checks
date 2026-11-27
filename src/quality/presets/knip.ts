@@ -4,6 +4,7 @@ export type ChecksKnipConfig = Omit<KnipConfiguration, "entry" | "include"> & {
   readonly entry: readonly string[];
 };
 
+// Knip's dependency-cruiser plugin knows only the dotted config names, its oxlint plugin runs only when package.json declares oxlint, and no plugin knows either checks config file, so each would report its config as an unused file.
 export const DEFAULT_ENTRY = ["tests/**/*.test.ts", "dependency-cruiser.config.ts", "oxlint.config.ts", "checks.config.ts", "checks.browser.config.ts"] as const;
 
 const REFUSED_ENTRY = "@avi2dg/checks/knip: set entry to the files nothing imports, or [] when package.json scripts and tests name them all";
