@@ -14,7 +14,7 @@ type Report = {
   readonly crashedFiles: readonly string[];
 };
 
-export class TestReportError extends Schema.TaggedError<TestReportError>()("TestReportError", {
+export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
   message: Schema.String,
 }) {}
 
@@ -59,9 +59,9 @@ function attributesOf(source: string): Readonly<Record<string, string>> {
   return attributes;
 }
 
-const malformed = (reason: string) => new TestReportError({ message: `the junit report is malformed: ${reason}` });
+const malformed = (reason: string) => new ReportError({ message: `the junit report is malformed: ${reason}` });
 
-const takeTag = Effect.fnUntraced(function* (open: Element[], match: RegExpExecArray): Effect.fn.Return<void, TestReportError> {
+const takeTag = Effect.fnUntraced(function* (open: Element[], match: RegExpExecArray): Effect.fn.Return<void, ReportError> {
   const [, closing, tag, attributes, selfClosing] = match;
   if (tag === undefined) return;
   const parent = open.at(-1);
@@ -76,7 +76,7 @@ const takeTag = Effect.fnUntraced(function* (open: Element[], match: RegExpExecA
   if (selfClosing !== "/") open.push(element);
 });
 
-const parseElements = Effect.fnUntraced(function* (xml: string): Effect.fn.Return<Element, TestReportError> {
+const parseElements = Effect.fnUntraced(function* (xml: string): Effect.fn.Return<Element, ReportError> {
   const document: Element = { tag: "", attributes: {}, children: [] };
   const open: Element[] = [document];
   let consumed = 0;
@@ -107,9 +107,9 @@ const collect = Effect.fnUntraced(function* (
   suite: Element,
   describes: readonly string[],
   report: { readonly results: TestResult[]; readonly crashedFiles: string[] },
-): Effect.fn.Return<void, TestReportError> {
+): Effect.fn.Return<void, ReportError> {
   const unreadable = (tag: string) => (cause: { readonly message: string }) =>
-    new TestReportError({ message: `the junit report holds a <${tag}> bun never writes: ${cause.message}` });
+    new ReportError({ message: `the junit report holds a <${tag}> bun never writes: ${cause.message}` });
   for (const child of suite.children) {
     if (child.tag === "testsuite") {
       const { name } = yield* decodeSuite(child.attributes).pipe(Effect.mapError(unreadable(child.tag)));
@@ -142,7 +142,7 @@ export const fileSeconds = Effect.fn("fileSeconds")(function* (xml: string) {
   for (const fileSuite of root.children) {
     if (fileSuite.tag !== "testsuite") continue;
     const { file, time } = yield* decodeTimed(fileSuite.attributes).pipe(
-      Effect.mapError((cause) => new TestReportError({ message: `the junit report holds a <testsuite> with no file or time: ${cause.message}` })),
+      Effect.mapError((cause) => new ReportError({ message: `the junit report holds a <testsuite> with no file or time: ${cause.message}` })),
     );
     seconds.set(file, time);
   }

@@ -2,7 +2,7 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Random, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
-import { NAME_SEPARATOR, parseReport, TestReportError, reporterArgs, type TestResult } from "./test-report.ts";
+import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 import { KIT_PACKAGE_NAME, ownTestScriptToBin, scriptOptions } from "../core/test-script.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
 import { resolveWorkerCount } from "./test.ts";
@@ -105,7 +105,7 @@ const assignmentOf = Effect.fn("assignmentOf")(function* (log: string) {
   const byWorker = new Map<number, string[]>();
   for (const line of (yield* fs.readFileString(log)).split("\n").filter((entry) => entry !== "")) {
     const { worker, file } = yield* decodeWorkerLine(line).pipe(
-      Effect.mapError((cause) => new TestReportError({ message: `the worker log is malformed: ${cause.message}` })),
+      Effect.mapError((cause) => new ReportError({ message: `the worker log is malformed: ${cause.message}` })),
     );
     byWorker.set(worker, [...(byWorker.get(worker) ?? []), path.relative(process.cwd(), file)]);
   }
@@ -132,7 +132,7 @@ const runOnce = Effect.fn("runOnce")(function* (seed: number, outfile: string, w
   const passed = (yield* spawnSuite(seed, outfile, workers, log)) === ChildProcessSpawner.ExitCode(0);
   const assignment = yield* assignmentOf(log);
   if (!(yield* fs.exists(outfile))) {
-    if (passed) return yield* new TestReportError({ message: `bun test passed with seed ${seed} but wrote no report` });
+    if (passed) return yield* new ReportError({ message: `bun test passed with seed ${seed} but wrote no report` });
     return { seed, passed, tests: 0, failed: [], crashedFiles: [], assignment } satisfies Run;
   }
   const { results, crashedFiles } = yield* parseReport(yield* fs.readFileString(outfile));
@@ -206,7 +206,7 @@ const replayOf = Effect.fn("replayOf")(function* (worker: FailingWorker, dir: st
   const ran = (yield* fs.readFileString(log)).split("\n").filter((entry) => entry !== "").map(Number);
   const listed = slots.map((_, slot) => worker.files[ran.indexOf(slot)]);
   if (ran.length !== slots.length || !listed.every((file): file is string => file !== undefined)) {
-    return yield* new TestReportError({ message: `bun ran the replay probe for seed ${worker.seed} in the order ${ran.join(", ")}` });
+    return yield* new ReportError({ message: `bun ran the replay probe for seed ${worker.seed} in the order ${ran.join(", ")}` });
   }
   return { ...worker, command: replayCommand(worker.seed, listed) } satisfies Replay;
 });
