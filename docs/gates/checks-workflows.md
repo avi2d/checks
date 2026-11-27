@@ -313,7 +313,8 @@ For each default tier, that step runs `bun run test --tier=<tier>` on the releas
 For a sharded tier, the step also sets `TEST_SHARD` to `${{ matrix.shard }}/<count>`.
 Without the release wrapper, the default test command instead appends `--shard=${{ matrix.shard }}/<count>`.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
-Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
+Jobs that skip release runs read the `release` output of `changes`.
+A private root with a `test` script also reads `check-release` to keep its checks running.
 
 The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
@@ -347,8 +348,9 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 | code | `unit` and, when `tests/e2e/` holds a test file, `e2e` |
 | site | `unit`, `e2e` when present, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
 
-The `unit` job runs `bunx checks-test --pr --tier=unit`.
-The `e2e` job runs `bunx checks-test --pr --tier=e2e`.
+The default `unit` job runs `bunx checks-test --pr --tier=unit`.
+The default `e2e` job runs `bunx checks-test --pr --tier=e2e`.
+A private root with a `test` script uses the release wrapper described above instead.
 The `checks` job requires both jobs when both exist.
 Rulesets that require individual test jobs must require `unit` and, when present, `e2e`.
 A ruleset requiring only the aggregate `checks` job needs no change.
