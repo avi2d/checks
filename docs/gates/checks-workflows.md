@@ -220,6 +220,42 @@ npm installs only the optional dependency whose `os`, `cpu` and `libc` match the
 `checks-workflows` refuses the setting when the root has no `release:assets` script, in a site, in the kit, and when `repositoryVisibility` is `private`.
 It also refuses a private root without exactly one public workspace.
 
+### Add a test job with its own setup
+
+Set `extraTestJobs` in `checks.config.ts` to add a test job that needs its own environment or a tool installed first:
+
+```ts
+export default defineConfig({
+  extraTestJobs: [
+    {
+      name: "sandbox",
+      env: { SANDBOX_TESTS: "1" },
+      setup: ["npm install --global acme-sandbox@1.2.3"],
+      run: "bunx checks-test --tier=live",
+    },
+  ],
+});
+```
+
+`name` is the id of the job in `ci.yml`.
+`env` sets environment variables on the job, so the setup and test commands both read them.
+`setup` lists commands that each run in a step of their own, in order, before the test command.
+`run` is the test command, and it runs in the step whose id is `test`.
+`env` and `setup` are optional.
+
+`ci.yml` holds each declared job after the other test jobs, in the order the setting lists them.
+The job runs after `changes`, skips where the default test jobs skip, and `checks` requires it.
+It checks out the pull request head, sets up Bun, and uploads `artifacts/`.
+In a code repository, it also holds the draft pull request cancel step.
+
+The check accepts exactly the declared jobs.
+A job with a setup step or an `env` that the setting does not declare fails the check.
+A hand edit to a declared job fails it too.
+Each setup command and the test command go through the [checks-plain-steps](checks-plain-steps.md) policy, so each is one plain command.
+`checks-workflows` refuses a command list such as `a && b`, a pipe, and a command named only at run time, such as `${{ matrix.install }}`.
+It also refuses a name listed twice and a name `ci.yml` already gives a job.
+Those names are `changes`, `static`, `site`, `docs`, `checks`, `unit`, `e2e` and `browser`.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:
@@ -251,7 +287,7 @@ Each job reads the rule once from the `release` output of `changes`, as `if: nee
 
 The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
-A job whose step with id `test` runs a command is a test job.
+A job whose step with id `test` runs a command is a test job, unless `extraTestJobs` declares its name, which makes `checks.config.ts` its record.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
 A single all-tier `test` or `unit` job using `bunx checks-test --pr` or `bun run test --pr` becomes separate tier jobs.
 The split keeps a `--parallel` argument and moves the browser setup to `e2e`.
@@ -293,6 +329,7 @@ The generated mutation workflow always uses hosted runners.
 The default test runner follows the setting even when a previous `ci.yml` holds the other default.
 
 To add a test job, copy the `unit` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
+A test job that needs its own environment or setup steps goes in [`extraTestJobs`](#add-a-test-job-with-its-own-setup) instead.
 
 ## What it reads
 
@@ -325,8 +362,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 1 | `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 
