@@ -164,7 +164,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
     ...(count === undefined || count === 1 ? {} : { matrix: ["shard", "[" + Array.from({ length: count }, (_, index) => index + 1).join(", ") + "]"] as const, failFast: false as const }),
     ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
     ...(isBrowserWalk(test) ? { if: "needs.site.outputs.browser != 'false'" } : {}),
-    runsOn: scalar(test.runsOn),
+    runsOn: typeof test.runsOn === "string" ? scalar(test.runsOn) : JSON.stringify(test.runsOn),
     timeout: 30,
     permissions: holdPermissions(hold),
     steps: [
