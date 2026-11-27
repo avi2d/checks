@@ -34,7 +34,7 @@ No workflow runs the long test tiers, the whole-tree sweep or the issue filing o
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
 The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
 It reports every suppression count and every repeated line still present until it is removed.
-Issue filing runs only under a workflow the owner writes when one is wanted, from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows.
+Consumer repositories run issue filing through the workflow [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) describes.
 [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
 It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
@@ -42,9 +42,8 @@ A failed mutation run still leaves each failing test filed, and records no score
 A run started on a branch other than `main` lists its findings in the log and files no issue.
 Each issue is fixed in a pull request of its own, so no pull request waits for a whole-tree run.
 Run `bunx stryker run --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
-The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
+`@hughescr/stryker-bun-runner` honours Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout`.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.
-The patch applies only to this repository's install, not to a repository that installs the kit.
 
 ## Regenerate what is committed
 

@@ -11,7 +11,7 @@ A repository owner follows these steps to picture one block at the kit's screen 
 - `playwright-core` installed at the version the kit's `package.json` lists among its `peerDependencies`.
 - Playwright's Chromium headless shell and WebKit, installed with `bunx playwright-core install --with-deps chromium-headless-shell webkit`.
 - A `test:pixel` script set to `checks-test --tier=pixel`, as [checks-test-layout](../gates/checks-test-layout.md) says.
-- A `whole-tree-run` workflow in the repository, as [Running it by hand](../gates/checks-whole-tree-run.md#running-it-by-hand) describes.
+- The `whole-tree-run.yml` workflow that [checks-setup](../gates/checks-setup.md) writes, as [Running it by hand](../gates/checks-whole-tree-run.md#running-it-by-hand) describes.
 
 ## Add a suite
 

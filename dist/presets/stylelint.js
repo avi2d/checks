@@ -265,7 +265,6 @@ function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, 
     rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },
-      { files: [...HTML_AND_ASTRO], rules: { "declaration-block-single-line-max-declarations": null } },
       ...tokenRules.overrides,
       ...overrides
     ]

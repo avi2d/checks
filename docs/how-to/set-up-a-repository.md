@@ -155,26 +155,9 @@ To run the gates in CI:
    The `static` job fails the pull request when a workflow file differs or an extra one appears.
    A new repository gets the same files from [checks-setup](../gates/checks-setup.md).
 
-To run the four whole-tree gates on demand, a repository adds a whole-tree-run workflow:
-
-   ```yaml
-   name: whole-tree-run
-   on:
-     workflow_dispatch:
-   jobs:
-     gates:
-       runs-on: ubuntu-latest
-       timeout-minutes: 20
-       steps:
-         - uses: actions/checkout@v7
-           with:
-             fetch-depth: 0
-         - uses: oven-sh/setup-bun@v2
-           with:
-             bun-version-file: .bun-version
-         - run: bun install --frozen-lockfile
-         - run: bunx checks-lint --whole-tree
-   ```
+The whole-tree gates run on demand through the `whole-tree-run.yml` that [checks-setup](../gates/checks-setup.md) and `checks-workflows --write` write in a site or code repository.
+Start it with `gh workflow run whole-tree-run`, as [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) says.
+To run only the four gates from a local shell, run `bunx checks-lint --whole-tree`.
 
 `checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](../configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.

@@ -42,8 +42,8 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, set: CallerSet, 
   const directory = (yield* Path.Path).join(root, WORKFLOWS);
   yield* fs.makeDirectory(directory, { recursive: true });
   const held = new Set(present.map(({ name }) => name));
-  const byHand = byHandSet(set).filter(({ name }) => held.has(name));
   const required = requiredSet(set, kit);
+  const byHand = byHandSet(set, kit).filter(({ name }) => held.has(name));
   const written = [...required, ...byHand];
   for (const { name, text } of written) yield* fs.writeFileString(`${directory}/${name}`, text);
   const kept = new Set(written.map(({ name }) => name));
@@ -70,6 +70,7 @@ const reportedSet = (present: readonly HeldFile[], flags: SiteNameFlags, inputs:
     inputs.releaseAssets,
     inputs.platformPackages,
     inputs.testTierShards,
+    inputs.extraTestJobs,
   );
 
 const checkSet = Effect.fn("checkSet")(function* (root: string, set: CallerSet, present: readonly HeldFile[], kit: boolean) {

@@ -155,7 +155,7 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, pl
         steps: [
           checkout({ history: true, credentials: true }),
           SETUP,
-          { note: "npm takes a trusted publish only from the Node it set up with its registry.", uses: SETUP_NODE, with: [["node-version", '"24"'], ["registry-url", "https://registry.npmjs.org"]] },
+          { note: "npm takes a trusted publish only from the Node it set up with its registry.", uses: SETUP_NODE, with: [["node-version", '"26"'], ["registry-url", "https://registry.npmjs.org"]] },
           ...(packaged ? [downloadBinaries] : []),
           {
             ...(releaseAssets ? { id: "release" } : {}),

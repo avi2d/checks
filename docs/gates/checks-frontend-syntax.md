@@ -45,13 +45,12 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G9 class-only flat selectors | `selector-max-type` at 0, `selector-max-id` at 0, `selector-max-universal` at 0, `selector-max-compound-selectors` at 2, `max-nesting-depth` at 0, `selector-max-attribute` at 0, and `selector-pseudo-class-disallowed-list` over the positional pseudo-classes, from `:first-child` to `:nth-last-of-type` | off until `flatSelectors` is `true` |
 | G10 page-wide has refused | `selector-disallowed-list` with `splitList` over a pattern that refuses a `:has` beside `html`, `body`, `main` or `:root` in one selector of a list, across line breaks in the selector, and one that refuses a `:has` in a compound of pseudo-classes alone, such as `:has(.hero)`, `:scope:has(.hero)` or `:not(.card):has(.hero)`, whose subject can be the root. A nested `:has` escapes it unless G9 refuses the nesting | off until `noPageHas` is `true` |
 
-The builder changes four of the shared config's rules:
+The builder changes three of the shared config's rules:
 
 - `no-descending-specificity` is off, since it compares only the last compound selector and has no access to the DOM.
   It reports components that never match one element.
 - `property-no-vendor-prefix` keeps reporting without a fix, and passes `-webkit-user-select`, since its fix deletes the prefix Safari still needs.
 - `selector-class-pattern` holds BEM names while `bem` is `true`, since the shared kebab case refuses `__` and `--`.
-- In an `.html` or `.astro` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line.
 
 The comment rule refuses every comment but a sourcemap `/*# */` one, which stylelint passes to keep the map.
 CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json` instead.
@@ -177,7 +176,7 @@ The repository installs the optional peers the gate loads, at the versions the k
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
 ```sh
-bun add -d postcss-html@2.0.1 stylelint@17.16.0 stylelint-config-standard@40.0.0 stylelint-plugin-use-baseline@1.5.0
+bun add -d postcss-html@2.0.1 stylelint@18.1.0 stylelint-config-standard@41.1.0 stylelint-plugin-use-baseline@1.5.0
 ```
 
 <!-- end generated install -->

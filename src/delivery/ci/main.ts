@@ -25,6 +25,7 @@ import { main as releaseVersion } from "./release-version.ts";
 import { main as requireSuccess } from "./require-success.ts";
 import { main as secretsPack } from "./secrets-pack.ts";
 import { main as test } from "./test.ts";
+import { main as wholeTree } from "./whole-tree.ts";
 
 const COMMANDS = {
   changes: () => changes,
@@ -48,14 +49,19 @@ const COMMANDS = {
   "require-success": () => requireSuccess.pipe(Effect.as(true)),
   "secrets-pack": () => secretsPack,
   test: () => test,
+  "whole-tree": wholeTree,
 } as const;
 
 const isCommand = (name: string | undefined): name is keyof typeof COMMANDS => name !== undefined && Object.hasOwn(COMMANDS, name);
 
-const [command, part] = process.argv.slice(2);
-if (isCommand(command)) {
-  const chosen: Effect.Effect<boolean, { readonly message: string }, BunServices.BunServices> = COMMANDS[command](part);
-  runCheck(chosen);
-} else {
-  runExitMain(Console.log(`::error::checks-ci takes one of ${Object.keys(COMMANDS).join(", ")}, not ${command ?? "nothing"}`).pipe(Effect.as(UNDECIDED)));
-}
+const main = (): void => {
+  const [command, part] = process.argv.slice(2);
+  if (isCommand(command)) {
+    const chosen: Effect.Effect<boolean, { readonly message: string }, BunServices.BunServices> = COMMANDS[command](part);
+    runCheck(chosen);
+  } else {
+    runExitMain(Console.log(`::error::checks-ci takes one of ${Object.keys(COMMANDS).join(", ")}, not ${command ?? "nothing"}`).pipe(Effect.as(UNDECIDED)));
+  }
+};
+
+if (import.meta.main) main();

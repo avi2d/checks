@@ -9,7 +9,7 @@ export const DOWNLOAD = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac
 export const CONFIGURE_PAGES = "actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0";
 export const UPLOAD_PAGES = "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0";
 export const DEPLOY_PAGES = "actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1";
-export const WRANGLER_VERSION = "4.156.1";
+export const WRANGLER_VERSION = "4.168.0";
 
 export type Pair = readonly [key: string, value: string];
 
@@ -133,7 +133,7 @@ export const keepArtifacts = (name: string, path: string): Step => ({
 export const claudeInstall = (version: string | undefined): readonly Step[] =>
   version === undefined ? [] : [{ run: scalar("npm install --global @anthropic-ai/claude-code@" + version) }];
 
-export const node24 = (tool: "Wrangler" | "Lighthouse"): Step => ({ note: tool + " needs Node 22 or later, and bunx runs it under whatever node the runner has.", uses: SETUP_NODE, with: [["node-version", "24"]] });
+export const node26 = (tool: "Wrangler" | "Lighthouse"): Step => ({ note: tool + " needs Node 22 or later, and bunx runs it under whatever node the runner has.", uses: SETUP_NODE, with: [["node-version", "26"]] });
 
 export const servedStep = (origin: string): Step =>
   ciCommand("pages-served", { name: "wait until the origin serves every built file as built" }, [

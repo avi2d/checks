@@ -1,6 +1,6 @@
 import { type SiteNames } from "../site-names.ts";
 import { PLAYWRIGHT_USES, runnerOf } from "../ci-jobs.ts";
-import { CHECKOUT, WRANGLER_VERSION, type Pair, type Workflow, expression, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, node24, servedStep, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { CHECKOUT, WRANGLER_VERSION, type Pair, type Workflow, expression, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, node26, servedStep, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_BRANCH, PULL_REQUEST_NUMBER, BY_HAND, gitleaksCache } from "./ci.ts";
 
 export const PREVIEW_CLOSE = (names: SiteNames, publishes: boolean): Workflow => ({
@@ -52,7 +52,7 @@ export const SITE_MAIN = (names: SiteNames): Workflow => ({
         SETUP,
         { env: [TOKEN], run: "bunx checks-release-tag" },
         { run: "bun run build:site" },
-        node24("Wrangler"),
+        node26("Wrangler"),
         ciCommand("pages-deploy", { name: "deploy the built pages" }, [
           ...cloudflare,
           ["WRANGLER_SEND_METRICS", '"false"'],
@@ -128,7 +128,7 @@ export const PRODUCTION = (names: SiteNames, browserWalk: boolean, kit: boolean)
           ["SOURCE_SHA", STAGED],
         ]),
         servedStep(PRODUCTION_ORIGIN),
-        node24("Lighthouse"),
+        node26("Lighthouse"),
         ciCommand("lighthouse", { name: "audit each page and write the median scores to the summary" }, [
           ["SITE", "dist"],
           ["RUNS", '"3"'],

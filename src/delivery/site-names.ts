@@ -1,8 +1,8 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
-import { decodeSetting, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE } from "../core/settings.ts";
+import { decodeSetting, ExtraTestJobs, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE, type ExtraTestJob } from "../core/settings.ts";
 import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
-import { ciJobsOf, testTierOf, type CiJobs } from "./ci-jobs.ts";
+import { ciJobsOf, extraTestJobFault, testTierOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { readTestScriptContext } from "./test-scripts.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
@@ -34,7 +34,7 @@ export type SiteNameFlags = Readonly<Partial<Record<SiteNameKey, string>>>;
 export type CallerSet = (
   | { readonly kind: "code"; readonly ci: CiJobs; readonly options: CallerOptions }
   | { readonly kind: "site"; readonly names: SiteNames; readonly ci: CiJobs; readonly options: CallerOptions }
-) & { readonly testTierShards?: TestTierShards };
+) & { readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[] };
 
 class CallerSetFault extends Schema.TaggedError<CallerSetFault>()("CallerSetFault", {
   message: Schema.String,
@@ -128,8 +128,8 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
   );
 }
 
-const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, hasE2e: boolean | undefined) =>
-  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, hasE2e }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, hasE2e: boolean | undefined, declared: readonly string[]) =>
+  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, hasE2e, declared }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
 function releaseAssetsFault(site: boolean, publicRepository: boolean): string | undefined {
   if (site) return `${SETTINGS_FILE} sets releaseAssets, but a site's main.yml holds no release job to attach the assets to, so remove it`;
@@ -149,7 +149,7 @@ function testTierShardsFault(ci: CiJobs, testTierShards: TestTierShards | undefi
   return tier === undefined ? undefined : `${SETTINGS_FILE} sets testTierShards.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key`;
 }
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards, extraTestJobs?: readonly ExtraTestJob[]) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
@@ -165,10 +165,13 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
   const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes, publishWorkspaces);
   if (packagesFault !== undefined) return yield* new CallerSetFault({ message: packagesFault });
-  const ci = yield* heldCiJobs(site ? "site" : "code", workflows, publicRepository, buildDocs, hasE2e);
+  const extraFault = (extraTestJobs ?? []).map((job) => extraTestJobFault(job)).find((fault) => fault !== undefined);
+  if (extraFault !== undefined) return yield* new CallerSetFault({ message: extraFault });
+  const ci = yield* heldCiJobs(site ? "site" : "code", workflows, publicRepository, buildDocs, hasE2e, (extraTestJobs ?? []).map(({ name }) => name));
   const shardsFault = testTierShardsFault(ci, testTierShards);
   if (shardsFault !== undefined) return yield* new CallerSetFault({ message: shardsFault });
-  if (!site) return { kind: "code", ci, options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
+  const settled = { ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined || extraTestJobs.length === 0 ? {} : { extraTestJobs }) };
+  if (!site) return { kind: "code", ci, options, ...settled } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -178,7 +181,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site workflows name no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci, options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
+  return { kind: "site", names, ci, options, ...settled } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));
@@ -225,7 +228,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[] };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
@@ -255,8 +258,10 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   }
   const configuredShards = settings["testTierShards"];
   const testTierShards = configuredShards === undefined ? undefined : yield* decodeSetting("testTierShards", TestTierShards, configuredShards);
+  const configuredExtra = settings["extraTestJobs"];
+  const extraTestJobs = configuredExtra === undefined ? undefined : yield* decodeSetting("extraTestJobs", ExtraTestJobs, configuredExtra);
   const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerInputs;
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined ? {} : { extraTestJobs }) } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

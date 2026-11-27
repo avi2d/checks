@@ -501,12 +501,14 @@ expect(privWiring.exitCode).toBe(0);
 );
 
 test(
-"a site repository named by the three flags gains the site workflows with the names in their env and no mutation workflow, and passes checks-workflows without --write",
+"a site setup does not omit mutation or whole-tree workflows and passes checks-workflows without --write",
 async () => {
 const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }) });
 const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com", "--production", "shop/shop.example.com");
 expect(run.exitCode).toBe(0);
-expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/mutation.yml"), "utf8"))).toMatchObject({ on: { workflow_dispatch: null, workflow_call: null } });
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/whole-tree-run.yml"), "utf8"))).toMatchObject({ on: { workflow_dispatch: null } });
+expect(run.text.split("\n").filter((line) => line.includes(".github/workflows/mutation.yml"))).toEqual(["checks-setup: wrote .github/workflows/mutation.yml"]);
 const ci = await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8");
 expectNoRemoteUses("ci.yml", ci);
 expect(workflowSteps(ci).runs).toContain("bunx checks-ci require-success");
@@ -538,10 +540,12 @@ expect(await Bun.file(join(partial.dir, ".github/workflows/main.yml")).exists())
 );
 
 test(
-"the generated mutation workflow is the full file checks-workflows compares and calls no workflow of another repository, so a shared caller never reaches a fresh repository",
+"code setup writes mutation once without reporting it kept or calling another repository",
 async () => {
 const dir = await scratch("mutation-workflow");
-expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const run = await ran($`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir));
+expect(run.exitCode).toBe(0);
+expect(run.text.split("\n").filter((line) => line.includes(".github/workflows/mutation.yml"))).toEqual(["checks-setup: wrote .github/workflows/mutation.yml"]);
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
 expect(text).toBe(MUTATION_WORKFLOW);
 expectNoRemoteUses("mutation.yml", text);
@@ -565,6 +569,22 @@ expect((await setup(pinned)).exitCode).toBe(0);
 const kept = decodeManifest(await readFile(join(pinned.dir, "package.json"), "utf8")).devDependencies;
 expect(kept?.["@stryker-mutator/core"]).toBe("9.0.0");
 expect(kept?.["@hughescr/stryker-bun-runner"]).toBe(kitDev["@hughescr/stryker-bun-runner"]);
+},
+60_000,
+);
+
+test(
+"setup pins the kit's typescript, so the runner's typescript below 7 peer cannot install typescript 6 in its place",
+async () => {
+const kitDev = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ devDependencies: Schema.Record(Schema.String, Schema.String) })))(await kitFile("package.json")).devDependencies;
+const dir = await scratch("typescript-pin");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const fresh = decodeManifest(await readFile(join(dir, "package.json"), "utf8")).devDependencies;
+expect(fresh?.["typescript"]).toBe(kitDev["typescript"]);
+expect(kitDev["typescript"]).toMatch(/^7\./);
+const pinned = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", devDependencies: { typescript: "7.0.0" } }) });
+expect((await setup(pinned)).exitCode).toBe(0);
+expect(decodeManifest(await readFile(join(pinned.dir, "package.json"), "utf8")).devDependencies?.["typescript"]).toBe("7.0.0");
 },
 60_000,
 );
