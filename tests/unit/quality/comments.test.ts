@@ -73,7 +73,7 @@ test("jscpd ignore directives cannot hide repeated code from the comment gate", 
 });
 
 test("every refused directive name is refused, and a name outside the list is not", () => {
-  for (const name of Matchers.REFUSED_DIRECTIVES) {
+  for (const { name } of Matchers.REFUSED_DIRECTIVES) {
     expect(Effect.runSync(refused("src/probe.ts", `// ${name}\n`)), name).not.toEqual([]);
   }
   expect(Effect.runSync(refused("src/probe.ts", "// stylelint-enable\n"))).toEqual([]);
