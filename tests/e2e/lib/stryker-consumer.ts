@@ -141,8 +141,8 @@ export async function unpackConsumer(): Promise<{ readonly packDir: string; read
       type: "module",
       devDependencies: {
         "@avi2dg/checks": `file:${tarball}`,
-        "@hughescr/stryker-bun-runner": "1.4.0",
-        "@stryker-mutator/core": "10.0.0",
+        "@hughescr/stryker-bun-runner": "1.6.0",
+        "@stryker-mutator/core": "10.1.1",
         "@types/bun": "1.4.5",
         effect: "4.1.6",
       },

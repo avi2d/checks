@@ -26,6 +26,7 @@ const KitManifest = Schema.Struct({
     "@stryker-mutator/core": Schema.String,
     "@hughescr/stryker-bun-runner": Schema.String,
     "@types/bun": Schema.String,
+    typescript: Schema.String,
   }),
 });
 
