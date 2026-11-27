@@ -106,12 +106,12 @@ Rerunning a seed with bun test --randomize --seed=<seed> --parallel=4 reproduces
 
 ## When it runs
 
-Only a workflow the repository starts by hand runs it.
+Only a workflow the repository starts runs it, by hand or on the schedule `flakeCron` sets.
 
 ## Running it by hand
 
 A repository runs it from a workflow someone starts with `gh workflow run`, and keeps the record of a failed run as an artifact.
-The workflow holds no schedule, since [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses one:
+Without `flakeCron` the workflow holds no schedule, and [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses a schedule it did not write from `flakeCron`:
 
 ```yaml
 on:
