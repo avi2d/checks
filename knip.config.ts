@@ -12,5 +12,11 @@ export default defineConfig({
     "src/testing/flake-preload.ts",
     "scripts/native-meta.ts",
     "src/quality/nested-oxlint.ts",
+    // scripts/build.ts and scripts/prepare.ts spawn these by path, which knip does not follow.
+    "scripts/configs-write.ts",
+    "scripts/doc-templates-write.ts",
+    "scripts/doc-blocks-write.ts",
+    "scripts/launchers-write.ts",
+    "scripts/self-bins.ts",
   ],
 });
