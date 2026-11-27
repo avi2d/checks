@@ -4,6 +4,12 @@ title = "checks-secrets"
 useDefault = true
 
 [[rules]]
+id = "claude-login-token"
+description = "A Claude login access or refresh token"
+regex = '''sk-ant-(?:oat01|ort01)-[A-Za-z0-9_-]+'''
+keywords = ["sk-ant-oat01-", "sk-ant-ort01-"]
+
+[[rules]]
 id = "wireguard-key"
 description = "A WireGuard or AmneziaWG private or pre-shared key"
 regex = '''(?i)(?:private[_-]?key|pre[_-]?shared[_-]?key|psk)["']?[ \t]*[:=][ \t]*["']?([A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)'''

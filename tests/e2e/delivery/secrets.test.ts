@@ -57,6 +57,9 @@ function cases(): readonly Case[] {
   const dotKeyFile = ["wireguard-dot-key-file"];
   const passes: readonly string[] = [];
   const lines: readonly Omit<Case, "file">[] = [
+    { line: `${["sk-ant", "oat01"].join("-")}-${alphanumeric(40)}`, rules: ["claude-login-token"] },
+    { line: `${["sk-ant", "ort01"].join("-")}-${alphanumeric(40)}`, rules: ["claude-login-token"] },
+    { line: "ordinary string", rules: passes },
     { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
@@ -235,7 +238,7 @@ test(
 );
 
 test(
-  "each link and key line fails on exactly the rules its row names, and a row naming none passes",
+  "token, link and key lines fail on exactly their named rules, while ordinary strings pass",
   async () => {
     const table = cases();
     const { repo, base } = await started();
