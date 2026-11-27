@@ -20,7 +20,10 @@ async function fixedStringLines(dir: string, names: readonly string[]): Promise<
   return (await $`git grep -I -F -h --no-color -f - HEAD -- ${OUTSIDE_DOCS} < ${listed}`.cwd(dir).nothrow().quiet()).stdout.toString();
 }
 
-for (const syntax of ["-P", "-E"] satisfies readonly Syntax[]) {
+const hasPcre = (await $`git -C ${import.meta.dir} grep -P -q -e . HEAD -- :/tests/e2e/docs/docs-names-grep.test.ts`.nothrow().quiet()).exitCode === 0;
+const syntaxes: readonly Syntax[] = hasPcre ? ["-P", "-E"] : ["-E"];
+
+for (const syntax of syntaxes) {
   test(`with ${syntax}, the escaped names select the lines -F selects, and no name matches as a pattern`, async () => {
     const { dir, write, commit } = await repository();
     await write({ "patterns.ts": READ_AS_PATTERNS, "literal.ts": HELD_LITERALLY, "notes.md": "sprocket only in a doc\n" });
@@ -44,7 +47,7 @@ test("names past what one PCRE pattern compiles split into alternations git acce
 
   const alternations = alternationsOf(names);
   const refused = await run(
-    Effect.forEach(alternations, (alternation) => linesMatching(dir, "HEAD", "-P", alternation)).pipe(
+    Effect.forEach(alternations, (alternation) => linesMatching(dir, "HEAD", hasPcre ? "-P" : "-E", alternation)).pipe(
       Effect.map((found) => found.filter((lines) => lines === undefined).length),
     ),
   );
