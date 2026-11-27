@@ -43,7 +43,8 @@ In a code repository it writes `mutation.yml` under `.github/workflows/`, which 
 It starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 No run starts after a merge to `main`.
 It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets the `mutate` globs to the sources under `src/`.
-It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.
+It adds the kit's own pins of `@stryker-mutator/core`, `@hughescr/stryker-bun-runner` and `typescript` to `devDependencies`, and keeps a pin it finds.
+The `typescript` pin stops the runner's `typescript` peer range below 7 from installing a TypeScript the Effect diagnostics cannot find.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
 It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
 If the root has no `VISION.md`, it copies `dist/templates/vision.md` there.
@@ -60,7 +61,7 @@ It reads a `package.json` it finds for the fields and scripts it keeps, replaces
 It reads `checks.config.ts` for the repository visibility that selects the workflow runners and for `releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
 It also reads `platformPackages`, which adds the `binaries` job to `main.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
-It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins, its `@types/bun` version, and each template.
+It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins, its `typescript` pin, its `@types/bun` version, and each template.
 
 ## Arguments
 

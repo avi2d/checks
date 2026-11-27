@@ -568,3 +568,19 @@ expect(kept?.["@hughescr/stryker-bun-runner"]).toBe(kitDev["@hughescr/stryker-bu
 },
 60_000,
 );
+
+test(
+"setup pins the kit's typescript, so the runner's typescript below 7 peer cannot install typescript 6 in its place",
+async () => {
+const kitDev = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ devDependencies: Schema.Record(Schema.String, Schema.String) })))(await kitFile("package.json")).devDependencies;
+const dir = await scratch("typescript-pin");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const fresh = decodeManifest(await readFile(join(dir, "package.json"), "utf8")).devDependencies;
+expect(fresh?.["typescript"]).toBe(kitDev["typescript"]);
+expect(kitDev["typescript"]).toMatch(/^7\./);
+const pinned = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", devDependencies: { typescript: "7.0.0" } }) });
+expect((await setup(pinned)).exitCode).toBe(0);
+expect(decodeManifest(await readFile(join(pinned.dir, "package.json"), "utf8")).devDependencies?.["typescript"]).toBe("7.0.0");
+},
+60_000,
+);
