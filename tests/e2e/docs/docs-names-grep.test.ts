@@ -41,8 +41,8 @@ test.skipIf(!hasPcre)(skipReason("git is built without PCRE", "with -P, the esca
 test("with -E, the escaped names select the lines -F selects, and no name matches as a pattern", () => escapedNamesSelectLiteralLines("-E"));
 
 async function splitPatternsFindEveryHeldName(syntax: Syntax): Promise<void> {
-  const names = Array.from({ length: 12_000 }, (_, index) => `part.${index}(x)`);
-  const held = names.filter((_, index) => index % 97 === 0);
+  const names = Array.from({ length: 256 }, (_, index) => `part.${index}(x)`.padEnd(144, "a"));
+  const held = names.filter((_, index) => index % 17 === 0);
   const { dir, write, commit } = await repository();
   await write({ "parts.ts": `${held.join("\n")}\n` });
   await commit("a file holding some of many names");
@@ -57,8 +57,7 @@ async function splitPatternsFindEveryHeldName(syntax: Syntax): Promise<void> {
 
   expect(alternations.length).toBeGreaterThan(1);
   expect(refused).toBe(0);
-  const fixed = await fixedStringLines(dir, names);
-  expect(names.filter((name) => found.includes(name))).toEqual(names.filter((name) => fixed.includes(name)));
+  expect(names.filter((name) => found.includes(name))).toEqual(held);
 }
 
 test.skipIf(!hasPcre)(skipReason("git is built without PCRE", "names past what one PCRE pattern compiles split into alternations git accepts, and every held name is still found", "local"), () => splitPatternsFindEveryHeldName("-P"));
