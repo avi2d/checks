@@ -63,6 +63,15 @@ test("a machine-read directive is refused wherever it sits", () => {
   expect(Effect.runSync(refused("run.sh", "# eslint-disable\n")), "a directive in a hash comment").not.toEqual([]);
 });
 
+test("jscpd ignore directives cannot hide repeated code from the comment gate", () => {
+  for (const directive of ["jscpd:ignore-start", "jscpd:ignore-end", "jscpd:ignore", "jscpd:ignore-next-line"]) {
+    expect(Effect.runSync(refused("src/probe.ts", `// ${directive}\n`)), directive).toEqual([
+      `src/probe.ts:1 carries the machine-read directive \`${directive}\`. Remove the repeat instead`,
+    ]);
+  }
+  expect(Effect.runSync(refused("src/probe.ts", 'const value = "jscpd:ignore-start";\n'))).toEqual([]);
+});
+
 test("every refused directive name is refused, and a name outside the list is not", () => {
   for (const name of Matchers.REFUSED_DIRECTIVES) {
     expect(Effect.runSync(refused("src/probe.ts", `// ${name}\n`)), name).not.toEqual([]);
