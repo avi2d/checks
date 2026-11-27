@@ -29,12 +29,18 @@ class JscpdUnreadable extends Schema.TaggedError<JscpdUnreadable>()("JscpdUnread
   message: Schema.String,
 }) {}
 
+class BaselineUnreadable extends Schema.TaggedError<BaselineUnreadable>()("BaselineUnreadable", {
+  message: Schema.String,
+}) {}
+
 const NAME = "repetition";
-const USAGE = "usage: repetition.ts <ref> | <base-ref> <head-ref> | --whole-tree <head-ref>";
+const WRITE_BASELINE = "--write-baseline";
+const USAGE = `usage: repetition.ts <ref> | <base-ref> <head-ref> | ${WHOLE_TREE} <head-ref> | ${WRITE_BASELINE} <head-ref>`;
 const MIN_TOKENS = 50;
 const MIN_LINES = 5;
 const MEASURE = `at ${MIN_TOKENS} tokens and ${MIN_LINES} lines`;
 const CONFIG = ".jscpd.json";
+const BASELINE = ".jscpd-baseline.json";
 const KIT_DEFAULT = JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts"] });
 const JSCPD_FINISHED = 0;
 const REPORT = "jscpd-report.json";
@@ -53,6 +59,8 @@ const decodeReport = Schema.decodeUnknownEffect(
 const decodeConfigPaths = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ path: Schema.optional(Schema.Array(Schema.String)) })),
 );
+
+const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Int)));
 
 type Scan = { readonly sources: number; readonly clones: readonly Clone[] };
 
@@ -170,12 +178,40 @@ const runHold = Effect.fn("runHold")(function* (root: string, config: string, ba
   return heldOf(sources, rises, after) satisfies Held;
 });
 
+const fileAt = Effect.fn("fileAt")(function* (head: string, root: string, file: string) {
+  if ((yield* pathsAt(head, [`:(literal)${file}`], root)).length === 0) return undefined;
+  return yield* git(["show", `${head}:${file}`], root);
+});
+
+const baselineAt = Effect.fn("baselineAt")(function* (head: string, root: string) {
+  const content = yield* fileAt(head, root, BASELINE);
+  if (content === undefined) return undefined;
+  const recorded = yield* decodeBaseline(content).pipe(
+    Effect.mapError((cause) => new BaselineUnreadable({ message: `cannot read ${BASELINE}: ${cause.message}` })),
+  );
+  return new Map(Object.entries(recorded));
+});
+
+const headScan = Effect.fn("headScan")(function* (root: string, config: string, head: string) {
+  return yield* scan(root, head, config, yield* configPathsOf(config));
+});
+
 const runWholeTree = Effect.fn("runWholeTree")(function* (root: string, config: string, head: string) {
-  const configPaths = yield* configPathsOf(config);
-  const { sources, clones } = yield* scan(root, head, config, configPaths);
+  const baseline = yield* baselineAt(head, root);
+  const { sources, clones } = yield* headScan(root, config, head);
   const after = repeatedLines(clones);
-  const rises = risesOf([...after.keys()], new Map(), after, new Map(), clones);
-  return heldOf(sources, rises, after) satisfies Held;
+  const rises = risesOf([...after.keys()], baseline ?? new Map(), after, new Map(), clones);
+  yield* Console.log(reportWholeTree(heldOf(sources, rises, after), baseline !== undefined));
+  return rises.length === 0;
+});
+
+const writeBaseline = Effect.fn("writeBaseline")(function* (root: string, config: string, head: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const counts = [...repeatedLines((yield* headScan(root, config, head)).clones)].toSorted(([a], [b]) => a.localeCompare(b));
+  yield* fs.writeFileString(path.join(root, BASELINE), `${JSON.stringify(Object.fromEntries(counts), null, 2)}\n`);
+  yield* Console.log(`${NAME}: wrote ${BASELINE} from ${head}, ${counts.length} file(s) that repeat lines`);
+  return true;
 });
 
 function cloneLines(clones: readonly Clone[]): readonly string[] {
@@ -206,7 +242,14 @@ export function report({ measured, rises, advisory }: Held): string {
   return [...verdict, ...noticeOf(advisory)].join("\n");
 }
 
-export function reportWholeTree({ measured, rises }: Held): string {
+export function reportWholeTree({ measured, rises, advisory }: Held, baselined = false): string {
+  if (baselined) {
+    const verdict =
+      rises.length === 0
+        ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no more lines than ${BASELINE} records, ${MEASURE}`]
+        : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat more lines than ${BASELINE} records, ${MEASURE}:`, ...rises.flatMap(describe)];
+    return [...verdict, ...noticeOf(advisory)].join("\n");
+  }
   const verdict =
     rises.length === 0
       ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no lines at the head, ${MEASURE}`]
@@ -215,9 +258,8 @@ export function reportWholeTree({ measured, rises }: Held): string {
 }
 
 const configAt = Effect.fn("configAt")(function* (head: string, root: string) {
-  if ((yield* pathsAt(head, [`:(literal)${CONFIG}`], root)).length > 0) {
-    return { kind: "configured", config: yield* git(["show", `${head}:${CONFIG}`], root) } as const;
-  }
+  const config = yield* fileAt(head, root, CONFIG);
+  if (config !== undefined) return { kind: "configured", config } as const;
   if ((yield* pathsAt(head, TYPESCRIPT_SOURCE.pathspecs, root)).length > 0) {
     yield* Console.log(`${NAME}: the head tracks TypeScript and holds no ${CONFIG}, so add one such as the kit's default ${KIT_DEFAULT}`);
     return { kind: "refused" } as const;
@@ -229,15 +271,13 @@ const configAt = Effect.fn("configAt")(function* (head: string, root: string) {
 const hold = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const args = process.argv.slice(2);
-  if (args[0] === WHOLE_TREE) {
-    const headArg = args[1];
+  if (args[0] === WHOLE_TREE || args[0] === WRITE_BASELINE) {
+    const [mode, headArg] = args;
     if (args.length !== 2 || headArg === undefined) return yield* new Usage({ message: USAGE });
-    const wholeHead = yield* commitOf(headArg);
-    const wholeConfig = yield* configAt(wholeHead, root);
-    if (wholeConfig.kind !== "configured") return wholeConfig.kind === "unmeasured";
-    const whole = yield* runWholeTree(root, wholeConfig.config, wholeHead);
-    yield* Console.log(reportWholeTree(whole));
-    return whole.rises.length === 0;
+    const head = yield* commitOf(headArg, root);
+    const config = yield* configAt(head, root);
+    if (config.kind !== "configured") return mode === WHOLE_TREE && config.kind === "unmeasured";
+    return yield* (mode === WRITE_BASELINE ? writeBaseline(root, config.config, head) : runWholeTree(root, config.config, head));
   }
   const { base, head } = yield* rangeFromArgs(args, USAGE, root);
   const headConfig = yield* configAt(head, root);

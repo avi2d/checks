@@ -54,7 +54,7 @@ The builder changes three of the shared config's rules:
 
 The comment rule refuses every comment but a sourcemap `/*# */` one, which stylelint passes to keep the map.
 CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json` instead.
-[checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow, and on the whole-tree run on every repeated line left.
+[checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow, and on the whole-tree run when it repeats more lines than the committed `.jscpd-baseline.json` records.
 A stylesheet's length is not a family of this gate either, and [checks-css-size](checks-css-size.md) fails one that holds more than 400 lines.
 
 ### The type token rules
