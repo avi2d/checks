@@ -11,5 +11,6 @@ export default defineConfig({
     "src/dependencies/kit-defaults.ts",
     "src/testing/flake-preload.ts",
     "scripts/native-meta.ts",
+    "src/quality/nested-oxlint.ts",
   ],
 });
