@@ -44,6 +44,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 Four of these gates also run on the whole-tree run, which someone starts by hand.
 They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
+`checks-repetition --write-baseline HEAD` writes the repeated-line counts for whole-tree scans to `.jscpd-baseline.json`.
 `checks-lint --whole-tree` hands each of these range gates `--whole-tree HEAD`, so the four judge the whole tree with no base.
 
 These bins run on their own:
