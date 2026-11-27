@@ -245,7 +245,8 @@ export default defineConfig({
 
 `ci.yml` holds each declared job after the other test jobs, in the order the setting lists them.
 The job runs after `changes`, skips where the default test jobs skip, and `checks` requires it.
-It checks out the pull request head, sets up Bun, uploads `artifacts/` and holds the draft pull request cancel step, as the default test jobs do.
+It checks out the pull request head, sets up Bun, and uploads `artifacts/`.
+In a code repository, it also holds the draft pull request cancel step.
 
 The check accepts exactly the declared jobs.
 A job with a setup step or an `env` that the setting does not declare fails the check.
@@ -361,8 +362,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 1 | `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 

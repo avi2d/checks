@@ -91,7 +91,9 @@
           "run"
         ],
         "additionalProperties": false
-      }
+      },
+      "description": "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
+      "default": []
     },
     "trackerKeyPrefixes": {
       "type": "array",

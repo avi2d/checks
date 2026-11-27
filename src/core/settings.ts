@@ -90,8 +90,13 @@ export const ExtraTestJob = Schema.Struct({
 
 export type ExtraTestJob = typeof ExtraTestJob.Type;
 
-export const ExtraTestJobs = Schema.Array(ExtraTestJob).check(
-  Schema.makeFilter((jobs) => new Set(jobs.map(({ name }) => name)).size === jobs.length || "names a job twice"),
+const EXTRA_TEST_JOBS_ANNOTATIONS = {
+  description: "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
+  default: [],
+};
+
+export const ExtraTestJobs = Schema.Array(ExtraTestJob).annotate(EXTRA_TEST_JOBS_ANNOTATIONS).check(
+  Schema.makeFilter((jobs) => new Set(jobs.map(({ name }) => name)).size === jobs.length || "names a job twice", EXTRA_TEST_JOBS_ANNOTATIONS),
 );
 
 export const Settings = Schema.Struct({
@@ -103,10 +108,7 @@ export const Settings = Schema.Struct({
   platformPackages: Schema.optionalKey(PlatformPackages.annotate({
     description: "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies.",
   })),
-  extraTestJobs: Schema.optionalKey(ExtraTestJobs.annotate({
-    description: "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
-    default: [],
-  })),
+  extraTestJobs: Schema.optionalKey(ExtraTestJobs),
   trackerKeyPrefixes: Schema.optionalKey(TrackerKeyPrefixes.annotate({
     description: "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
     default: [],

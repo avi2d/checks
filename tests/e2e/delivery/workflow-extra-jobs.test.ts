@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran } from "../lib/fixture-repo.ts";
 
@@ -29,6 +30,14 @@ const repoWith = async (config: string | undefined) => {
 
 const ciOf = async (dir: string): Promise<unknown> => Bun.YAML.parse(await Bun.file(join(dir, ".github/workflows/ci.yml")).text());
 
+const decodeSandboxCi = Schema.decodeUnknownSync(Schema.Struct({
+  jobs: Schema.Struct({
+    sandbox: Schema.Struct({
+      steps: Schema.Array(Schema.Struct({ id: Schema.optionalKey(Schema.String), run: Schema.optionalKey(Schema.String) })),
+    }),
+  }),
+}));
+
 test("a declared extra test job is written with its env, setup and command, and the checks job requires it instead of leaving it out", async () => {
   const repo = await repoWith(configWith([SANDBOX]));
   const env = withoutPullRequestEvent();
@@ -50,13 +59,16 @@ test("a declared extra test job is written with its env, setup and command, and 
   expect(steps.exitCode).toBe(0);
 });
 
-test("the setup command runs before the test command instead of after it", async () => {
+test("the setup command runs before the test step in the same job instead of after it or in another job", async () => {
   const repo = await repoWith(configWith([SANDBOX]));
   const written = await ran($`bun ${WORKFLOWS} --write`.cwd(repo.dir).env(withoutPullRequestEvent()));
   expect(written.exitCode).toBe(0);
-  const text = await Bun.file(join(repo.dir, ".github/workflows/ci.yml")).text();
-  expect(text.indexOf("run: npm install --global acme-sandbox@1.2.3")).toBeGreaterThan(-1);
-  expect(text.indexOf("run: npm install --global acme-sandbox@1.2.3")).toBeLessThan(text.indexOf("run: bunx checks-test --tier=live"));
+  const { jobs: { sandbox: { steps } } } = decodeSandboxCi(await ciOf(repo.dir));
+  const setupIndex = steps.findIndex((step) => step.run === "npm install --global acme-sandbox@1.2.3");
+  const testIndex = steps.findIndex((step) => step.id === "test");
+  expect(setupIndex).toBeGreaterThan(-1);
+  expect(testIndex).toBeGreaterThan(-1);
+  expect(setupIndex).toBeLessThan(testIndex);
 });
 
 test("a hand-written extra test job still fails the workflow-set check instead of being kept as custom", async () => {
