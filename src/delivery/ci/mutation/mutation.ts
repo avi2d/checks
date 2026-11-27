@@ -1,4 +1,5 @@
 import { Config, Console, Data, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { mutatedBy } from "../../../testing/mutation-scope.ts";
 import { commandExit, commandOutput } from "../lib/run.ts";
 import { anyStopped, DOWNLOADED_DIRECTORY, Report, scoreSummary, SHARD_DIRECTORY, shardsOf, STATE_PREFIX, stateName, stoppedName } from "./report.ts";
 
@@ -11,6 +12,9 @@ const STOP_MINUTES = 30;
 const TIMED_OUT = 124;
 
 const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Report));
+const decodeState = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.StructWithRest(Schema.Struct({ files: Schema.Record(Schema.String, Schema.Unknown) }), [Schema.Record(Schema.String, Schema.Unknown)])),
+);
 
 const readReport = Effect.fn("readReport")(function* (file: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -56,8 +60,14 @@ const shard = Effect.gen(function* () {
   if (exit !== 0 && !stopped) return yield* new MutationStepError({ message: `stryker exited ${exit}` });
   const modified = (yield* fs.exists(INCREMENTAL_STATE)) ? Option.getOrUndefined((yield* fs.stat(INCREMENTAL_STATE)).mtime)?.getTime() : undefined;
   if (modified === undefined || modified === previousModified) return yield* new MutationStepError({ message: `stryker wrote no new ${INCREMENTAL_STATE}, so shard ${index} has no state to hand on` });
+  const state = yield* fs.readFileString(INCREMENTAL_STATE).pipe(
+    Effect.flatMap(decodeState),
+    Effect.mapError(() => new MutationStepError({ message: `shard ${index} state at ${INCREMENTAL_STATE} has no files object` })),
+  );
+  const belongsToShard = mutatedBy(mutate.split(","), path.resolve("."));
+  const files = Object.fromEntries(Object.entries(state.files).filter(([file]) => belongsToShard(file)));
   yield* fs.makeDirectory(SHARD_DIRECTORY, { recursive: true });
-  yield* fs.copyFile(INCREMENTAL_STATE, path.join(SHARD_DIRECTORY, stateName(index)));
+  yield* fs.writeFileString(path.join(SHARD_DIRECTORY, stateName(index)), `${JSON.stringify({ ...state, files })}\n`);
   if (stopped) {
     yield* fs.writeFileString(path.join(SHARD_DIRECTORY, stoppedName(index)), "stopped\n");
     yield* Console.log(`::notice::shard ${index} stopped after ${STOP_MINUTES} minutes, so the next run resumes it`);

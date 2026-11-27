@@ -1,5 +1,7 @@
+import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, utimesSync } from "node:fs";
+import { join } from "node:path";
 import { recordedCalls, runCi, stubBin, useScratch } from "../../lib/ci-command.ts";
 
 const scratch = useScratch("mutation-shard");
@@ -57,4 +59,48 @@ test("a first pass must upload new state without a restored input", async () => 
   const ran = await shard(`mkdir -p reports\nprintf '%s\\n' '{"files":{"src/a.ts":{"mutants":[]}}}' > ${STATE}\nexit 0`);
   expect(ran.exitCode).toBe(0);
   expect(scratch.read(OUTPUT)).toBe(WRITTEN);
+});
+
+test.each([0, 124])("a shard keeps only its own files instead of handing on the whole restored state after Stryker exits %i", async (exit) => {
+  const state = {
+    schemaVersion: "1.0",
+    files: {
+      "src/[a].ts": { source: "brackets", mutants: [] },
+      "src/b*.ts": { source: "asterisk", mutants: [] },
+      "src/a.ts": { source: "plain", mutants: [] },
+    },
+    testFiles: { "tests/unit/a.test.ts": { source: "shared", tests: [{ id: "0", name: "shared test" }] } },
+    thresholds: { high: 80, low: 60 },
+  };
+  scratch.write("whole-state.json", JSON.stringify(state));
+  stubBin(scratch.at("node_modules", ".bin"), "stryker", `cp whole-state.json ${STATE}\nexit ${exit}`);
+
+  for (const [index, mutate, files] of [
+    ["0", "src/[[]a[]].ts,src/b[*].ts", { "src/[a].ts": state.files["src/[a].ts"], "src/b*.ts": state.files["src/b*.ts"] }],
+    ["1", "src/a.ts", { "src/a.ts": state.files["src/a.ts"] }],
+  ] as const) {
+    restoreState();
+    const ran = await runCi("mutation", ["shard"], {
+      PATH: process.env["PATH"] ?? "",
+      STUB_RECORD: scratch.at("calls"),
+      SHARD: mutate,
+      INDEX: index,
+    }, scratch.at());
+    expect(ran.exitCode).toBe(0);
+    expect(JSON.parse(scratch.read(`reports/shard/state-${index}.json`))).toEqual({ ...state, files });
+    expect(existsSync(scratch.at(`reports/shard/stopped-${index}`))).toBe(exit === 124);
+  }
+
+  const merge = join(import.meta.dir, "../../../../src/testing/mutation-merge.ts");
+  const merged = await $`${process.execPath} ${merge} merged.json reports/shard/state-0.json reports/shard/state-1.json`.cwd(scratch.at()).quiet().nothrow();
+  expect(merged.exitCode).toBe(0);
+  expect(JSON.parse(scratch.read("merged.json"))).toEqual(state);
+});
+
+test.each([{}, { files: null }, { files: [] }])("a shard refuses new state with no files object instead of uploading it: %j", async (state) => {
+  restoreState();
+  const ran = await shard(`printf '%s\\n' '${JSON.stringify(state)}' > ${STATE}\nexit 0`);
+  expect(ran.exitCode).toBe(1);
+  expect(ran.stdout).toContain(`shard 2 state at ${STATE} has no files object`);
+  expect(existsSync(scratch.at(OUTPUT))).toBe(false);
 });

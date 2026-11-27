@@ -197,28 +197,35 @@ That storage accrues by the hour over the month, so an artifact deleted early st
 A baseline job on a hosted runner uploads the whole `reports` directory as a `mutation-baseline` artifact with `retention-days: 7` instead.
 The restore reads only down to the newest push on `main`.
 
-A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored:
+A refresh job restores the previous full report and incremental state with `--full` for shard balancing and resumes unfinished mutants.
+It ignores static mutants.
+The plan restores both destinations:
 
 ```yaml
-- name: Restore the previous full report
+- name: Restore the previous full report and incremental state
   env:
     GH_TOKEN: ${{ github.token }}
-  run: bunx checks-mutation-baseline --full "$RUNNER_TEMP/last-full/mutation.json"
+  run: bunx checks-mutation-baseline --full "$RUNNER_TEMP/last-full/mutation.json" "$RUNNER_TEMP/last-full/stryker-incremental.json"
 ```
 
 The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
 
-A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a scope step with `--full` reads on any runner.
-It slims the report first:
+When every shard finishes, the refresh merge uploads its slimmed report and incremental state as `mutation-baseline-full`.
+A scope step with `--full` reads that artifact on any runner.
+The merge prepares both files before the upload:
 
 ```yaml
 - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
+- run: cp "$RUNNER_TEMP/full/mutation.json" "$RUNNER_TEMP/full/stryker-incremental.json"
 - uses: actions/upload-artifact@v7
   with:
     name: mutation-baseline-full
     path: ${{ runner.temp }}/full/
     retention-days: 30
 ```
+
+When a shard stops, the merge instead uploads the slimmed incremental state as `mutation-refresh-state`, with no report.
+The next refresh restores that state to resume.
 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
 A scope step with a full report loses its coverage when no full baseline outlives the gap.

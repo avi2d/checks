@@ -22,7 +22,9 @@ A log where every named gate is undecided files `checks-lint` itself, with no pe
 A log with no passing run and no named gate files `checks-lint` itself, so a gate run that never finished still reaches an issue.
 A file whose test worker crashed is one finding, since Bun reports none of its tests.
 With no previous run it compares no score and still files each failing test.
-Each mutation report `--mutation` names that does not exist is a finding, since the mutation job that writes it failed, timed out or was cancelled.
+Each mutation report `--mutation` names that does not exist is a finding.
+A mutation job that fails, times out or is cancelled leaves no report.
+A successful mutation job with a stopped shard also publishes no report, only the state a later run resumes from.
 With no mutation report it compares and records no score and still files each failing test.
 With some mutation reports missing it compares the files the others hold and records no score.
 The next run then compares every file with the last run that scored them all.
