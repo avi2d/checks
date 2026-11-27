@@ -251,7 +251,7 @@ type RefusedDirective = {
 
 const FIX_OR_STOP = "Fix what the tool is reporting, or stop running the tool on this file";
 
-export const REFUSED_DIRECTIVES = [
+const DIRECTIVES = [
   { name: "@ts-expect-error", family: false, refusal: FIX_OR_STOP },
   { name: "@ts-ignore", family: false, refusal: FIX_OR_STOP },
   { name: "@ts-nocheck", family: false, refusal: FIX_OR_STOP },
@@ -263,6 +263,8 @@ export const REFUSED_DIRECTIVES = [
   { name: "stylelint-disable", family: true, refusal: FIX_OR_STOP },
 ] as const satisfies readonly RefusedDirective[];
 
+export const REFUSED_DIRECTIVES: readonly string[] = DIRECTIVES.map(({ name }) => name);
+
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const directiveSource = ({ name, family }: RefusedDirective): string => {
@@ -273,9 +275,9 @@ const directiveSource = ({ name, family }: RefusedDirective): string => {
 
 // No name is a prefix of another, so a match starts with exactly one name.
 const directiveRefusal = (match: string): string =>
-  REFUSED_DIRECTIVES.find(({ name }) => match.startsWith(name))?.refusal ?? FIX_OR_STOP;
+  DIRECTIVES.find(({ name }) => match.startsWith(name))?.refusal ?? FIX_OR_STOP;
 
-const DIRECTIVE = new RegExp(REFUSED_DIRECTIVES.map(directiveSource).join("|"));
+const DIRECTIVE = new RegExp(DIRECTIVES.map(directiveSource).join("|"));
 
 type Check = {
   readonly find: (text: string) => string | undefined;
