@@ -2,157 +2,301 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "repositoryVisibility": {
-      "type": "string",
-      "enum": [
-        "public",
-        "private"
-      ],
-      "description": "The GitHub repository visibility that selects generated workflow runners.",
-      "default": "public"
-    },
-    "releaseAssets": {
-      "type": "boolean",
-      "description": "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
-      "default": false
-    },
-    "platformPackages": {
+    "workflows": {
       "type": "object",
       "properties": {
-        "binary": {
+        "repositoryVisibility": {
           "type": "string",
-          "description": "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>."
+          "enum": [
+            "public",
+            "private"
+          ],
+          "description": "The GitHub repository visibility that selects generated workflow runners.",
+          "default": "public"
         },
-        "platforms": {
+        "releaseAssets": {
+          "type": "boolean",
+          "description": "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
+          "default": false
+        },
+        "platformPackages": {
+          "type": "object",
+          "properties": {
+            "binary": {
+              "type": "string",
+              "description": "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>."
+            },
+            "platforms": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "darwin-arm64",
+                    "darwin-x64",
+                    "linux-arm64",
+                    "linux-x64"
+                  ]
+                }
+              ],
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "darwin-arm64",
+                  "darwin-x64",
+                  "linux-arm64",
+                  "linux-x64"
+                ]
+              }
+            }
+          },
+          "required": [
+            "binary",
+            "platforms"
+          ],
+          "additionalProperties": false,
+          "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
+        },
+        "extraTestJobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The id of the job in ci.yml, which the checks job requires."
+              },
+              "env": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The environment variables the job sets for its setup and test commands."
+              },
+              "setup": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The commands the job runs, one step each, before the test command, such as one that installs a tool."
+              },
+              "run": {
+                "type": "string",
+                "description": "The test command."
+              }
+            },
+            "required": [
+              "name",
+              "run"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
+          "default": []
+        },
+        "mutationRunsOn": {
           "type": "array",
           "prefixItems": [
             {
               "type": "string",
-              "enum": [
-                "darwin-arm64",
-                "darwin-x64",
-                "linux-arm64",
-                "linux-x64"
-              ]
+              "minLength": 1
             }
           ],
           "minItems": 1,
           "items": {
             "type": "string",
-            "enum": [
-              "darwin-arm64",
-              "darwin-x64",
-              "linux-arm64",
-              "linux-x64"
-            ]
+            "minLength": 1
+          },
+          "description": "The runner labels for mutation jobs in a private repository."
+        },
+        "selfHostedRunsOn": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": "The other sets of self-hosted runner labels that jobs in a private repository may use."
+        },
+        "testShards": {
+          "type": "object",
+          "properties": {
+            "unit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 256
+            },
+            "e2e": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 256
+            }
+          },
+          "additionalProperties": false,
+          "description": "The number of parallel CI jobs for each test tier."
+        }
+      },
+      "additionalProperties": false
+    },
+    "test": {
+      "type": "object",
+      "properties": {
+        "extraLocalFiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The extra test files to run with the local unit tier."
+        },
+        "affected": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "The tests to run when a changed path is missing from the import graph."
+        },
+        "allowAgentRunsOutsideCI": {
+          "type": "boolean",
+          "description": "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
+          "default": false
+        },
+        "fileTimeoutSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120,
+          "description": "The time limit in seconds for each test file in CI.",
+          "default": 120
+        },
+        "fileTimingsSeconds": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "The recorded seconds per test file, which balance the shards."
+        },
+        "excludeFiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The repository-relative paths of test files to exclude from checks-test.",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "copy": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
           }
         }
       },
       "required": [
-        "binary",
-        "platforms"
+        "inputs"
       ],
       "additionalProperties": false,
-      "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
+      "description": "The input globs for the copy gate."
     },
-    "extraTestJobs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The id of the job in ci.yml, which the checks job requires."
-          },
-          "env": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "The environment variables the job sets for its setup and test commands."
-          },
-          "setup": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The commands the job runs, one step each, before the test command, such as one that installs a tool."
-          },
-          "run": {
-            "type": "string",
-            "description": "The test command."
-          }
-        },
-        "required": [
-          "name",
-          "run"
-        ],
-        "additionalProperties": false
-      },
-      "description": "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
-      "default": []
-    },
-    "trackerKeyPrefixes": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
-      "default": []
-    },
-    "smoke": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "The extra test files to run with the local unit tier."
-    },
-    "reach": {
+    "frontendSyntax": {
       "type": "object",
-      "additionalProperties": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "description": "The tests to run when a changed path is missing from the import graph."
-    },
-    "mutationRunner": {
-      "type": "array",
-      "prefixItems": [
-        {
-          "type": "string",
-          "minLength": 1
-        }
-      ],
-      "minItems": 1,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "The runner labels for mutation jobs in a private repository."
-    },
-    "selfHostedRunners": {
-      "type": "array",
-      "items": {
-        "type": "array",
-        "prefixItems": [
-          {
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "minItems": 1,
+          "items": {
             "type": "string",
             "minLength": 1
           }
-        ],
-        "minItems": 1,
-        "items": {
-          "type": "string",
-          "minLength": 1
         }
       },
-      "description": "The other sets of self-hosted runner labels that jobs in a private repository may use."
+      "required": [
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "description": "The input globs for the frontend syntax gate."
+    },
+    "commentGate": {
+      "type": "object",
+      "properties": {
+        "trackerKeyPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "lintCoverage": {
+      "type": "object",
+      "properties": {
+        "allowedNestedOxlintRules": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets."
+        }
+      },
+      "additionalProperties": false
     },
     "browser": {
       "type": "object",
@@ -803,136 +947,6 @@
         }
       },
       "description": "The measured milliseconds of each browser check at each route, which browser shards balance on."
-    },
-    "copy": {
-      "type": "object",
-      "properties": {
-        "inputs": {
-          "type": "array",
-          "prefixItems": [
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ],
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      },
-      "required": [
-        "inputs"
-      ],
-      "additionalProperties": false,
-      "description": "The input globs for the copy gate."
-    },
-    "frontendSyntax": {
-      "type": "object",
-      "properties": {
-        "inputs": {
-          "type": "array",
-          "prefixItems": [
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ],
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      },
-      "required": [
-        "inputs"
-      ],
-      "additionalProperties": false,
-      "description": "The input globs for the frontend syntax gate."
-    },
-    "nestedOxlintConfigs": {
-      "type": "object",
-      "propertyNames": {
-        "type": "string",
-        "minLength": 1
-      },
-      "additionalProperties": {
-        "type": "array",
-        "prefixItems": [
-          {
-            "type": "string",
-            "minLength": 1
-          }
-        ],
-        "minItems": 1,
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "description": "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets."
-    },
-    "agentTests": {
-      "type": "object",
-      "properties": {
-        "allowLocal": {
-          "type": "boolean",
-          "description": "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
-          "default": false
-        }
-      },
-      "additionalProperties": false,
-      "description": "The settings for test runs started by agents.",
-      "default": {
-        "allowLocal": false
-      }
-    },
-    "testFileMaxSeconds": {
-      "type": "number",
-      "exclusiveMinimum": 0,
-      "maximum": 120,
-      "description": "The time limit in seconds for each test file in CI.",
-      "default": 120
-    },
-    "testTierShards": {
-      "type": "object",
-      "properties": {
-        "unit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 256
-        },
-        "e2e": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 256
-        }
-      },
-      "additionalProperties": false,
-      "description": "The number of parallel CI jobs for each test tier."
-    },
-    "testFileTimings": {
-      "type": "object",
-      "propertyNames": {
-        "type": "string",
-        "minLength": 1
-      },
-      "additionalProperties": {
-        "type": "number",
-        "exclusiveMinimum": 0
-      },
-      "description": "The recorded seconds per test file, which balance the shards."
-    },
-    "testFileSkips": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "The repository-relative paths of test files to exclude from checks-test.",
-      "default": []
     }
   },
   "additionalProperties": false,

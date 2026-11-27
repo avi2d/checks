@@ -8,12 +8,12 @@ const MANIFEST = "package.json";
 
 export const DEFAULT_AGENT_TESTS = { allowLocal: false } as const;
 
-export const AgentTests = Schema.Struct({
-  allowLocal: Schema.optionalKey(Schema.Boolean.annotate({
-    description: "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
-    default: DEFAULT_AGENT_TESTS.allowLocal,
-  })),
-}).annotate({
+const AllowAgentRunsOutsideCI = Schema.Boolean.annotate({
+  description: "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
+  default: DEFAULT_AGENT_TESTS.allowLocal,
+});
+
+export const AgentTests = Schema.Struct({ allowLocal: Schema.optionalKey(AllowAgentRunsOutsideCI) }).annotate({
   description: "The settings for test runs started by agents.",
   default: DEFAULT_AGENT_TESTS,
 });
@@ -101,7 +101,7 @@ export const ExtraTestJobs = Schema.Array(ExtraTestJob).annotate(EXTRA_TEST_JOBS
   Schema.makeFilter((jobs) => new Set(jobs.map(({ name }) => name)).size === jobs.length || "names a job twice", EXTRA_TEST_JOBS_ANNOTATIONS),
 );
 
-export const Settings = Schema.Struct({
+export const LegacySettings = Schema.Struct({
   repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   releaseAssets: Schema.optionalKey(ReleaseAssets.annotate({
     description: "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
@@ -141,13 +141,52 @@ export const Settings = Schema.Struct({
   })),
 });
 
-export type SettingKey = keyof typeof Settings.fields;
+const legacy = LegacySettings.fields;
 
-const SETTING_KEYS = Object.keys(Settings.fields);
+const GroupedSettings = {
+  workflows: Schema.Struct({
+    repositoryVisibility: legacy.repositoryVisibility,
+    releaseAssets: legacy.releaseAssets,
+    platformPackages: legacy.platformPackages,
+    extraTestJobs: legacy.extraTestJobs,
+    mutationRunsOn: legacy.mutationRunner,
+    selfHostedRunsOn: legacy.selfHostedRunners,
+    testShards: legacy.testTierShards,
+  }),
+  test: Schema.Struct({
+    extraLocalFiles: legacy.smoke,
+    affected: legacy.reach,
+    allowAgentRunsOutsideCI: Schema.optionalKey(AllowAgentRunsOutsideCI),
+    fileTimeoutSeconds: legacy.testFileMaxSeconds,
+    fileTimingsSeconds: legacy.testFileTimings,
+    excludeFiles: legacy.testFileSkips,
+  }),
+  commentGate: Schema.Struct({ trackerKeyPrefixes: legacy.trackerKeyPrefixes }),
+  lintCoverage: Schema.Struct({ allowedNestedOxlintRules: legacy.nestedOxlintConfigs }),
+};
+
+export const Settings = Schema.Struct({
+  workflows: Schema.optionalKey(GroupedSettings.workflows),
+  test: Schema.optionalKey(GroupedSettings.test),
+  copy: legacy.copy,
+  frontendSyntax: legacy.frontendSyntax,
+  commentGate: Schema.optionalKey(GroupedSettings.commentGate),
+  lintCoverage: Schema.optionalKey(GroupedSettings.lintCoverage),
+  browser: legacy.browser,
+  browserRoutes: legacy.browserRoutes,
+  browserBuild: legacy.browserBuild,
+  browserTimings: legacy.browserTimings,
+});
+
+export type SettingKey = keyof typeof legacy;
+
+const SETTING_KEYS = [...Object.keys(Settings.fields), ...Object.keys(legacy).filter((key) => !Object.hasOwn(Settings.fields, key))];
 
 export type OldPlace = { readonly file: string } | { readonly manifestKey: string };
 
-const SettingsModule = Schema.Struct({ default: Schema.Record(Schema.String, Schema.Unknown) });
+const UnknownFields = Schema.Record(Schema.String, Schema.Unknown);
+
+const SettingsModule = Schema.Struct({ default: UnknownFields });
 
 const decodeSettingsModule = Schema.decodeUnknownEffect(SettingsModule);
 
@@ -155,9 +194,62 @@ const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optiona
 
 const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
 
-function isSettingKey(key: string): key is SettingKey {
-  return SETTING_KEYS.some((known) => known === key);
-}
+const TRANSITION_KEYS = {
+  workflows: {
+    repositoryVisibility: "repositoryVisibility",
+    releaseAssets: "releaseAssets",
+    platformPackages: "platformPackages",
+    extraTestJobs: "extraTestJobs",
+    mutationRunsOn: "mutationRunner",
+    selfHostedRunsOn: "selfHostedRunners",
+    testShards: "testTierShards",
+  },
+  test: {
+    extraLocalFiles: "smoke",
+    affected: "reach",
+    allowAgentRunsOutsideCI: "agentTests",
+    fileTimeoutSeconds: "testFileMaxSeconds",
+    fileTimingsSeconds: "testFileTimings",
+    excludeFiles: "testFileSkips",
+  },
+  commentGate: { trackerKeyPrefixes: "trackerKeyPrefixes" },
+  lintCoverage: { allowedNestedOxlintRules: "nestedOxlintConfigs" },
+} satisfies { [Section in keyof typeof GroupedSettings]: Record<keyof (typeof GroupedSettings)[Section]["fields"], SettingKey> };
+
+const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
+  location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[],
+) {
+  const unknown = Object.keys(raw).filter((key) => !known.includes(key));
+  if (unknown.length > 0) {
+    return yield* new Usage({ message: `${location} sets ${unknown.join(", ")}, which no command reads; its keys are ${known.join(", ")}` });
+  }
+});
+
+const normalizeSection = Effect.fn("normalizeSection")(function* (
+  settings: Record<string, unknown>, section: string, keys: Readonly<Record<string, SettingKey>>,
+) {
+  if (!Object.hasOwn(settings, section)) return;
+  const location = `${SETTINGS_FILE} key ${section}`;
+  const values = yield* Schema.decodeUnknownEffect(UnknownFields)(settings[section]).pipe(
+    Effect.mapError(({ message }) => new Usage({ message: `${location} does not decode: ${message}` })),
+  );
+  yield* refuseUnknownSettings(location, values, Object.keys(keys));
+  delete settings[section];
+  for (const [key, legacyKey] of Object.entries(keys)) {
+    if (!Object.hasOwn(values, key)) continue;
+    const agentPolicy = legacyKey === "agentTests";
+    const old = settings[legacyKey];
+    const repeated = agentPolicy
+      ? old !== undefined && Object.hasOwn(yield* decodeSetting(legacyKey, AgentTests, old), "allowLocal")
+      : Object.hasOwn(settings, legacyKey);
+    if (repeated) {
+      const oldPath = agentPolicy ? "agentTests.allowLocal" : legacyKey;
+      const newPath = `${section}.${key}`;
+      return yield* new Usage({ message: `${SETTINGS_FILE} key ${oldPath} and ${SETTINGS_FILE} key ${newPath} set the same setting; keep only ${newPath}` });
+    }
+    settings[legacyKey] = agentPolicy ? { allowLocal: values[key] } : values[key];
+  }
+});
 
 export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -173,11 +265,10 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
   if (Object.hasOwn(settings, "localTests")) {
     return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use agentTests.allowLocal instead` });
   }
-  const unknown = Object.keys(settings).filter((key) => !isSettingKey(key));
-  if (unknown.length > 0) {
-    return yield* new Usage({ message: `${SETTINGS_FILE} sets ${unknown.join(", ")}, which no command reads; its keys are ${SETTING_KEYS.join(", ")}` });
-  }
-  return settings;
+  yield* refuseUnknownSettings(SETTINGS_FILE, settings, SETTING_KEYS);
+  const normalized = { ...settings };
+  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, section, keys);
+  return normalized;
 });
 
 function oldPlaceName(old: OldPlace): string {

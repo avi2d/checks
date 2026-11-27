@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { AgentTests, SETTINGS_FILE, Settings, type SettingKey } from "../src/core/settings.ts";
+import { AgentTests, LegacySettings, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -238,7 +238,7 @@ const SETTING_READERS = {
 } satisfies Record<SettingKey | "agentTests.allowLocal", string>;
 
 function isSettingKey(key: string): key is SettingKey {
-  return Object.hasOwn(Settings.fields, key);
+  return Object.hasOwn(LegacySettings.fields, key);
 }
 
 function settingRow([key, schema]: readonly [SettingKey | "agentTests.allowLocal", Schema.Top]): Effect.Effect<string, DocBlocksUnwritable> {
@@ -255,10 +255,10 @@ const SETTINGS: Block = {
   render: () =>
     Effect.map(
       Effect.all(
-        Object.keys(Settings.fields).filter(isSettingKey).flatMap((key) =>
+        Object.keys(LegacySettings.fields).filter(isSettingKey).flatMap((key) =>
           key === "agentTests"
-            ? [settingRow([key, Settings.fields[key]]), settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal])]
-            : [settingRow([key, Settings.fields[key]])]
+            ? [settingRow([key, LegacySettings.fields[key]]), settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal])]
+            : [settingRow([key, LegacySettings.fields[key]])]
         ),
       ),
       (rows) => ["| Key | Default | What it holds | Reader |", "| --- | --- | --- | --- |", ...rows] as const,

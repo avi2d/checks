@@ -37,3 +37,23 @@ test.each([
     browser: "false",
   });
 });
+
+test.each([
+  ["map only", { test: { affected: { "src/home.ts": ["tests/e2e/other.test.ts"] } } }, "true", "false"],
+  ["general settings", { test: { affected: { "src/home.ts": ["tests/e2e/other.test.ts"] }, fileTimeoutSeconds: 90 } }, "false", "true"],
+] as const)("a %s edit is not mistaken for the other kind of config change", async (_name, settings, testsOnly, browser) => {
+  const file = "checks.config.ts";
+  const repo = await open({ [file]: 'export default { reach: { "src/home.ts": ["tests/e2e/home.test.ts"] } };\n' });
+  const base = await repo.commit("test: record flat reach map");
+  await repo.write({ [file]: `export default ${JSON.stringify(settings)};\n` });
+  await repo.commit("test: change grouped settings");
+  const output = join(repo.dir, "output");
+  const result = await runCi("changes", [], {
+    PATH: process.env["PATH"] ?? "",
+    BASE_SHA: base,
+    PLAN_BROWSER: "true",
+    GITHUB_OUTPUT: output,
+  }, repo.dir);
+  expect(result.exitCode).toBe(0);
+  expect((await readFile(output, "utf8")).trim().split("\n")).toEqual(["docs-only=false", `tests-only=${testsOnly}`, `browser=${browser}`]);
+});
