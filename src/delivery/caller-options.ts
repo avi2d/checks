@@ -12,6 +12,7 @@ export type Flake = { readonly nodeVersionFile: string | undefined };
 export type CallerOptions = {
   readonly advisoriesCron: string | undefined;
   readonly flake: Flake;
+  readonly flakeCron: string | undefined;
   readonly pages: Pages | undefined;
   readonly docsBuild: boolean;
   readonly secretsPack: boolean;
@@ -29,6 +30,7 @@ export type CallerOptions = {
 export const NO_CALLER_OPTIONS: CallerOptions = {
   advisoriesCron: undefined,
   flake: { nodeVersionFile: undefined },
+  flakeCron: undefined,
   pages: undefined,
   docsBuild: false,
   secretsPack: false,
@@ -165,10 +167,11 @@ const decodeVersionInput = Schema.decodeUnknownOption(
 
 const holdsVersionInput = (release: Workflow | undefined): boolean => release !== undefined && Option.isSome(decodeVersionInput(release.document));
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean, platformPackages: PlatformPackages | undefined): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean, platformPackages: PlatformPackages | undefined, flakeCron?: string): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
+    flakeCron,
     pages: pagesOf(held("docs.yml")),
     docsBuild,
     secretsPack: readsSecretsPack(held("ci.yml")),

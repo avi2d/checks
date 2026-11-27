@@ -27,8 +27,13 @@ type DifferentLine = { readonly line: number; readonly holds: string | undefined
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
+export function scheduledFlakeOf({ kind, options: { flake, claudeVersion, flakeCron } }: CallerSet): WorkflowFile | undefined {
+  return kind === "code" && flakeCron !== undefined ? fullFlake(flake, claudeVersion, flakeCron) : undefined;
+}
+
 export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
-  const required = fullRequiredSet(set, kit);
+  const scheduledFlake = scheduledFlakeOf(set);
+  const required = [...fullRequiredSet(set, kit), ...(scheduledFlake === undefined ? [] : [scheduledFlake])];
   if (kit) return required;
   const browsers = [...new Set([...(set.kind === "site" ? ["chromium", "webkit"] : []), ...set.ci.tests.flatMap((job) => job.browsers.split(/\s+/).filter(Boolean))])].join(" ");
   const playwright = browsers === "" ? "" : `      - uses: ${PLAYWRIGHT_USES}\n        with:\n          browsers: ${browsers}\n`;
@@ -43,10 +48,10 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
 
 // An optional file may be absent, but a present one holds exactly this text.
 export function byHandSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
-  const { advisoriesCron, flake, pages } = set.options;
+  const { advisoriesCron, flake, flakeCron, pages } = set.options;
   const docs = pages === undefined ? [] : [fullDocs(pages)];
   const advisories = fullAdvisories(advisoriesCron);
-  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [MUTATION] : []), fullFlake(flake, set.options.claudeVersion), ...docs];
+  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [MUTATION] : []), ...(flakeCron === undefined ? [fullFlake(flake, set.options.claudeVersion)] : []), ...docs];
 }
 
 export function differentLines(holds: string, writes: string): readonly DifferentLine[] {

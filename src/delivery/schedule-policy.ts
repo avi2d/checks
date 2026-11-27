@@ -44,10 +44,11 @@ function advisoryFault(workflow: Workflow, owner: ScheduleOwner): string | undef
 }
 
 // A workflow that releases on a schedule is the release rule's to judge, so this rule passes over it.
-export function findScheduledRuns(workflows: readonly Workflow[], context: ScheduleContext, owner: ScheduleOwner): readonly ScheduledRun[] {
+export function findScheduledRuns(workflows: readonly Workflow[], context: ScheduleContext, owner: ScheduleOwner, scheduledFlake?: Pick<Workflow, "path" | "text">): readonly ScheduledRun[] {
   const releasing = new Set(releasesOnSchedule(workflows, context));
   return workflows.flatMap((workflow) => {
     if (!schedules(workflow.document) || releasing.has(workflow)) return [];
+    if (workflow.path === scheduledFlake?.path && workflow.text === scheduledFlake.text) return [];
     const fault = scansAdvisoriesOnly(workflow, context) ? advisoryFault(workflow, owner) : BY_HAND;
     if (fault === undefined) return [];
     return [{ location: locate(workflow.path, workflow.text.split("\n"))(["on"], "schedule", "on schedule"), fault }];

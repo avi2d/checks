@@ -217,6 +217,7 @@ const SETTING_READERS = {
   releaseAssets: "[checks-workflows](../gates/checks-workflows.md#attach-release-assets)",
   platformPackages: "[checks-workflows](../gates/checks-workflows.md#publish-platform-packages)",
   extraTestJobs: "[checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup)",
+  flakeCron: "[checks-workflows](../gates/checks-workflows.md#flake-schedule)",
   trackerKeyPrefixes: "[checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys)",
   smoke: "[checks-test](../gates/checks-test.md)",
   reach: "[checks-test](../gates/checks-test.md#the-reach-map)",

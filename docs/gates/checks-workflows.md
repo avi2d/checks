@@ -103,7 +103,7 @@ Each optional file keeps what the file it replaces does:
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `flake.yml` | `workflow_dispatch` | the `node-version-file` an `actions/setup-node` step sets up |
+| `flake.yml` | `workflow_dispatch`, plus `schedule` when `flakeCron` is set | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
 A `docs.yml` that gives no build step and path is no workflow of the set.
@@ -123,6 +123,22 @@ In a site it also fails when the site workflows miss a name, hold two values of 
 It also fails when a test job of `ci.yml` holds an input that does not parse, or holds a name a job cannot take.
 The message names the flags that fix it.
 Each difference names the file, and each changed line names what the file holds and what `checks-workflows` writes.
+
+### Flake schedule
+
+Set `flakeCron` in `checks.config.ts` to schedule the flake workflow in a code repository:
+
+```ts
+export default defineConfig({
+  flakeCron: "23 5 * * 1",
+});
+```
+
+The setting takes one five-field GitHub Actions cron expression in UTC that runs at most once a day.
+The minute must be one number from 0 to 59, and the hour must be one number from 0 to 23.
+Run `bunx checks-workflows --write` to create or update `flake.yml`.
+The schedule runs on the default branch, and `workflow_dispatch` still starts the workflow by hand.
+Without `flakeCron`, the workflow is optional and starts only by hand.
 
 ### Release a chosen version
 
@@ -379,8 +395,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 1 | `flakeCron` is set in a site, `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | `flakeCron` does not decode, `--write` meets `flakeCron` in a site, `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 

@@ -23,6 +23,7 @@ const EVERY_OPTION: CallerSet = {
   options: {
     advisoriesCron: "21 5 * * 1",
     flake: { nodeVersionFile: ".node-version" },
+    flakeCron: "23 5 * * 1",
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
     docsBuild: false,
     secretsPack: true,
@@ -267,7 +268,7 @@ test("a set written with every option reads back as the same set, so a check rig
   for (const set of [EVERY_OPTION, PACKAGED, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets, set.options.platformPackages));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets, set.options.platformPackages, undefined, undefined, set.options.flakeCron));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }

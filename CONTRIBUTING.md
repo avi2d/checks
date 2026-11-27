@@ -25,7 +25,7 @@ When `release-pr` dispatches `ci` on the release branch, `static`, `unit` and `e
 A pull request runs only the tests it reaches.
 The `release` workflow runs the whole suite with `bun run test --full` before it publishes, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
-No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
+In this repository, only the weekly advisory scan runs on a schedule.
 No workflow runs mutation testing except `.github/workflows/mutation.yml`, the full file [checks-setup](docs/gates/checks-setup.md) writes.
 It starts on no push and no pull request, so a merge to `main` starts no mutation run.
 It runs the refresh when started by hand with `gh workflow run mutation`, every 28 days.
@@ -33,7 +33,7 @@ No workflow runs the long test tiers, the whole-tree sweep or the issue filing o
 `bun run lint` runs the three range whole-tree lint gates over each pull request's range.
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
 The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
-It reports every suppression count and every repeated line still present until it is removed.
+It reports every suppression count and every file that repeats more lines than the committed repetition baseline records.
 Consumer repositories run issue filing through the workflow [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) describes.
 [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
