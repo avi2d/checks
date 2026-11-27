@@ -287,7 +287,7 @@ test("a private repository's pr-text.yml scan stays as it is: it is no extra, --
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("  .github/workflows/ci.yml: missing\n");
   expect(refused.text).not.toContain("pr-text");
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
   expect(await readFile(scanFile(repo), "utf8")).toBe(scan);
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
