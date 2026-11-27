@@ -81,6 +81,25 @@ test("a declaration for one environment is not stale in the other", () => {
   expect(report(local)).toContain("1 declaration(s) for ci not judged in this local run");
 });
 
+test("a Mac-only test passing on macOS CI does not make its Linux skip declaration stale", () => {
+  const linuxSkip = { ...declaration("tests/pricing.test.ts", 12, "needs macOS", "ci"), platform: "linux" } satisfies SkipDeclaration;
+  const passed = { ...SKIPPED, outcome: "passed" } satisfies TestResult;
+
+  const verdict = judgeSkips([passed], [linuxSkip], "ci", "darwin");
+  expect(verdict.stale).toEqual([]);
+  expect(passes(verdict)).toBe(true);
+  expect(report(verdict)).toContain("1 declaration(s) for another platform not judged in this ci run");
+});
+
+test("a passing test does not hide a stale skip declaration on its own platform in CI", () => {
+  const linuxSkip = { ...declaration("tests/pricing.test.ts", 12, "needs macOS", "ci"), platform: "linux" } satisfies SkipDeclaration;
+  const passed = { ...SKIPPED, outcome: "passed" } satisfies TestResult;
+
+  const verdict = judgeSkips([passed], [linuxSkip], "ci", "linux");
+  expect(verdict.stale).toEqual([linuxSkip]);
+  expect(passes(verdict)).toBe(false);
+});
+
 test("checks-test takes a tier and a worker count for bun test --parallel, each at most once", () => {
   expect(testOptions([])).toEqual({});
   expect(testOptions(["--tier=live"])).toEqual({ tier: "live" });

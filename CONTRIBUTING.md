@@ -51,7 +51,7 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `src/quality/effect-channel/`, `src/complexity/readability/`, `src/quality/data-shape/`, `src/quality/presets/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
+1. After editing `src/quality/effect-channel/`, `src/complexity/readability/`, `src/quality/data-shape/`, `src/testing/bun-test/`, `src/quality/presets/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
    It rewrites `dist/`, and writes `oxlintrc.json` and `dependency-cruiser.config.js` from the config builders.
 1. After editing the Effect paths in `oxlint.config.ts`, run `bun run build`, whose `checks-effect-scope` rewrites the Effect override in `tsconfig.json`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
@@ -97,7 +97,7 @@ To place a change:
    | `src/core/` | the `checks-lint` entry point, the gate registry and the modules every bin runs on |
    | `src/complexity/` | the gates that bound how large and tangled code may grow, and the `readability` oxlint plugin |
    | `src/quality/` | the gates that hold code correct and idiomatic, the `effect-channel` and `data-shape` oxlint plugins, and the opt-in frontend checks, with the browser runner under `src/quality/browser/` |
-   | `src/testing/` | the gates that judge how the suite is laid out, run and trusted |
+   | `src/testing/` | the gates that judge how the suite is laid out, run and trusted, and the `bun-test` oxlint plugin |
    | `src/docs/` | the doc gate and the rules it reads |
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |

@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.121.0",
+  "version": "0.120.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
@@ -28,6 +28,7 @@
     "!src/complexity/readability/",
     "!src/quality/data-shape/",
     "!src/quality/effect-channel/",
+    "!src/testing/bun-test/",
     "!src/quality/presets/knip.ts",
     "!src/quality/presets/postcss-value-parser.d.ts",
     "!src/testing/mutation-guard-plugin.ts",

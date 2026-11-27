@@ -8,7 +8,8 @@
   "jsPlugins": [
     "./dist/effect-channel/index.js",
     "./dist/readability/index.js",
-    "./dist/data-shape/index.js"
+    "./dist/data-shape/index.js",
+    "./dist/bun-test/index.js"
   ],
   "categories": {
     "correctness": "error",
@@ -68,7 +69,8 @@
         "**/*.test.tsx"
       ],
       "rules": {
-        "data-shape/no-shell-in-strings": "off"
+        "data-shape/no-shell-in-strings": "off",
+        "bun-test/require-assertion": "error"
       }
     },
     {

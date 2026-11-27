@@ -58,12 +58,19 @@ export function docsRepos(): () => Promise<DocsRepo> {
   return releasedAfterEach(docsRepo, (repo) => repo.dispose());
 }
 
+export function expectedDocsChange(refusal: string, held: string): Readonly<Record<"refused" | "kept", Ran>> {
+  return {
+    refused: { text: expect.stringContaining(`  ${GUIDE}:${refusal}`), exitCode: 1 },
+    kept: { text: expect.stringContaining(held), exitCode: 0 },
+  };
+}
+
 export async function plantRedThenGreen<P extends Plant>(
   { put, commit, docs }: DocsRepo,
   plants: readonly P[],
   messages: (plant: P) => readonly [planted: string, fixed: string],
-  held: string,
-): Promise<void> {
+): Promise<readonly { readonly refused: Ran; readonly kept: Ran }[]> {
+  const results = [];
   await put(GUIDE, OPENING);
   let previous = await commit("start");
   for (const plant of plants) {
@@ -71,14 +78,12 @@ export async function plantRedThenGreen<P extends Plant>(
     await put(GUIDE, `${OPENING}${plant.red}\n`);
     const planted = await commit(plantMessage);
     const refused = await docs(previous, planted);
-    expect(refused.text).toContain(`  ${GUIDE}:${plant.refusal}`);
-    expect(refused.exitCode).toBe(1);
 
     await put(GUIDE, `${OPENING}${plant.green}\n`);
     const fixed = await commit(fixMessage);
     const kept = await docs(planted, fixed);
-    expect(kept.text).toContain(held);
-    expect(kept.exitCode).toBe(0);
+    results.push({ refused, kept });
     previous = fixed;
   }
+  return results;
 }

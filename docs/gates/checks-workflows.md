@@ -319,6 +319,9 @@ The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
 A job whose step with id `test` runs a command is a test job, unless `extraTestJobs` declares its name, which makes `checks.config.ts` its record.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
+A test job's `runs-on` can be a string or a non-empty list of label strings.
+For example, a private repository can use `runs-on: [self-hosted, macOS, ARM64]` when `selfHostedRunners` lists that set of labels.
+[checks-ci-wiring](checks-ci-wiring.md#runners) still judges which runners a job may use.
 A single all-tier `test` or `unit` job using `bunx checks-test --pr` or `bun run test --pr` becomes separate tier jobs.
 The split keeps a `--parallel` argument and moves the browser setup to `e2e`.
 In a site, a test job that needs `site` reads the build.

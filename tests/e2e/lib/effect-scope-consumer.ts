@@ -68,6 +68,7 @@ const OWN_OXLINT = [
   "dist/effect-channel/index.js",
   "dist/readability/index.js",
   "dist/data-shape/index.js",
+  "dist/bun-test/index.js",
 ];
 
 export const ASYNC_PLANT = `import { Effect } from "effect";
