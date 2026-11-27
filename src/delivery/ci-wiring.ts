@@ -2,7 +2,7 @@
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { decodeMutationShardCount, loadSettings } from "../core/settings.ts";
+import { decodeMutationShardCount, loadSettings, settingLocation } from "../core/settings.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { RELEASE_TEST_RUN } from "./ci-jobs.ts";
@@ -319,7 +319,8 @@ const mutationFits = Effect.fn("mutationFits")(function* (workflows: readonly Wo
 });
 
 const checkMutation = Effect.fn("checkMutation")(function* (root: string, workflows: readonly Workflow[], calls: MutationCalls) {
-  const count = yield* decodeMutationShardCount((yield* loadSettings(root))["mutationShardCount"]);
+  const { values, locations } = yield* loadSettings(root);
+  const count = yield* decodeMutationShardCount(values["mutationShardCount"], settingLocation(locations, "mutationShardCount"));
   const expected = mutationWorkflow(count);
   const handRolled = findHandRolledMutation(workflows, calls, expected);
   if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
@@ -333,7 +334,7 @@ const writtenSetOf = Effect.fn("writtenSetOf")(function* (root: string, workflow
   if (workflows.length === 0) return undefined;
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
-    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs, inputs.flakeCron, inputs.mutationShardCount);
+    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs, inputs.flakeCron, inputs.mutationShardCount, inputs.settingLocations);
     return { set, kit: inputs.kit };
   }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(undefined))));
 });

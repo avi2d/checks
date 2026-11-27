@@ -10,7 +10,7 @@ audience: consumers
 
 Outside CI it runs the unit tier plus the smoke list.
 In CI it selects the full suite before applying pull request narrowing.
-Outside CI, `checks-test` refuses to start for agents unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
+Outside CI, `checks-test` refuses to start for agents unless `test.allowAgentRunsOutsideCI` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --pass-with-no-tests --randomize --parallel=<workers>` and reads Bun's JUnit report from that run.
@@ -67,13 +67,13 @@ The check uses the whole file's elapsed time from Bun's JUnit report, not the ti
 It judges only the files in the report after Bun finishes and does not stop a file while it runs.
 The failure names each file over the limit and its elapsed time in seconds.
 
-Set `testFileMaxSeconds` in `checks.config.ts` to use a shorter limit.
+Set `test.fileTimeoutSeconds` in `checks.config.ts` to use a shorter limit.
 The value must be a finite number greater than zero and at most 120, in seconds.
 Local runs do not enforce the limit.
 
 ## Test file exclusions
 
-Set `testFileSkips` in `checks.config.ts` to keep test files out of `checks-test` runs while you rewrite them.
+Set `test.excludeFiles` in `checks.config.ts` to keep test files out of `checks-test` runs while you rewrite them.
 The list is empty by default.
 Each entry names an existing test file by its exact path relative to the repository root.
 The run prints every entry, even when the run's tier or change already leaves that file out.
@@ -83,23 +83,23 @@ This applies in CI and locally.
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
-export default defineConfig({ testFileSkips: ["tests/e2e/checkout.test.ts"] });
+export default defineConfig({ test: { excludeFiles: ["tests/e2e/checkout.test.ts"] } });
 ```
 
 ## What it reads
 
 `checks-test` reads test source files and the JUnit report written by its own run.
 A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json`, `checks.config.ts` and `bunfig.toml`.
-It reads the reach map under `reach` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
+It reads the reach map under `test.affected` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
-It reads the file exclusions from `testFileSkips` in `checks.config.ts`, as [Test file exclusions](#test-file-exclusions) says.
-A `--shard` run also reads `testFileTimings` from `checks.config.ts` for file assignment, as [Parallel runs](#parallel-runs) says.
-It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
+It reads the file exclusions from `test.excludeFiles` in `checks.config.ts`, as [Test file exclusions](#test-file-exclusions) says.
+A `--shard` run also reads `test.fileTimingsSeconds` from `checks.config.ts` for file assignment, as [Parallel runs](#parallel-runs) says.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `test.allowAgentRunsOutsideCI` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads `CI_CORES` for the worker count unless `--parallel=<workers>` overrides it, as [Parallel runs](#parallel-runs) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
-The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
+The smoke list lives in `checks.config.ts` under `test.extraLocalFiles` as an array of test file paths.
 A `checks` object in `package.json` that still sets `smoke` or `reach` fails the run with exit 2, naming the key it moves to.
 A repository with no smoke list runs the unit tier alone outside CI.
 A local run with no unit test and no smoke list runs nothing and passes.
@@ -110,7 +110,7 @@ A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails t
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
-export default defineConfig({ smoke: ["tests/e2e/checkout.test.ts"] });
+export default defineConfig({ test: { extraLocalFiles: ["tests/e2e/checkout.test.ts"] } });
 ```
 
 The default suite takes only the arguments [Arguments](#arguments) lists.
@@ -135,7 +135,7 @@ Push the branch first, so the dispatched run tests the branch instead of the def
 A person can run a pixel test with `APPROVE_SCREENS=true` outside CI because CI cannot write approved pictures back.
 [Test the screens of one block](../how-to/test-a-blocks-screens.md#approve-new-pictures) shows that run.
 A person can use `--tier=live` outside CI because live tests need local credentials and the full suite does not include them.
-For either run, an agent outside CI needs `agentTests.allowLocal` set to `true`.
+For either run, an agent outside CI needs `test.allowAgentRunsOutsideCI` set to `true`.
 With `CI` true, every option runs as the rest of this page says.
 
 ```
@@ -194,21 +194,23 @@ Other generated workflows skip test jobs on release runs.
 
 A workflow that runs screenshot tests can use `checks-test --pr-screens` to narrow them on pull requests.
 A change confined to tests runs only the screenshot tests it reaches.
-A site source change without a `reach` entry runs all screenshot tests because the tests can open built pages without importing the source.
+A site source change without a `test.affected` entry runs all screenshot tests because the tests can open built pages without importing the source.
 
 ## The reach map
 
 A site's end-to-end and screen tests open built pages, so they import no stylesheet and no component.
-A site declares which tests each such file reaches under `reach` in `checks.config.ts`.
+A site declares which tests each such file reaches under `test.affected` in `checks.config.ts`.
 Each key is a glob of changed paths, and each value lists the test files it reaches, as paths or globs:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
 export default defineConfig({
-  reach: {
-    "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
-    "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"],
+  test: {
+    affected: {
+      "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
+      "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"],
+    },
   },
 });
 ```
@@ -229,7 +231,7 @@ Outside pull requests, the map does not narrow CI test runs.
 A value that matches no test file stops the narrowing.
 A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.
 An empty list or a malformed entry stops the narrowing the same way.
-A pull request run and a `--changed` run then run the whole suite and name `checks.config.ts` `reach` and what it gets wrong.
+A pull request run and a `--changed` run then run the whole suite and name `checks.config.ts` `test.affected` and what it gets wrong.
 So a renamed test that the map still names surfaces on the next run rather than dropping its file.
 A stylesheet that reaches a block the map does not list can leave that block untested on the pull request.
 A whole screenshot run can still test it.
@@ -291,9 +293,10 @@ Bun reports no result from that file, so its skips are not judged and its declar
 A tier run takes `--shard=<index>/<count>` to run one part of the selected files.
 The index starts at 1 and cannot exceed the count.
 A `--pr` tier run selects the reached files before assigning them to shards.
-Set `testFileTimings` in `checks.config.ts` to map test file paths to recorded seconds.
+Set `test.fileTimingsSeconds` in `checks.config.ts` to map test file paths to recorded seconds.
 Each value must be finite and greater than zero.
 Every run with a JUnit report prints a `testFileTimings` line containing only positive file times.
+Record those values under `test.fileTimingsSeconds`.
 Files with nonpositive times are omitted.
 Copy its JSON object into the setting to refresh the recorded times.
 For sharded runs, merge the objects from every shard.
@@ -302,7 +305,7 @@ A file without a time uses the mean of the recorded times of the selected files.
 When none have a time, the files are split evenly by count.
 A shard with no files passes without starting Bun.
 
-Set `testTierShards` to generate parallel CI jobs for the default unit or e2e tier job.
+Set `workflows.testShards` to generate parallel CI jobs for the default unit or e2e tier job.
 Each count is a whole number from 1 through 256.
 A configured tier without a default job running `bunx checks-test --pr --tier=<tier>` is refused.
 Run `checks-workflows --write` after changing the setting.
@@ -312,8 +315,8 @@ The `checks` job still requires every shard to pass.
 import { defineConfig } from "@avi2dg/checks/config";
 
 export default defineConfig({
-  testTierShards: { e2e: 2 },
-  testFileTimings: { "tests/e2e/checkout.test.ts": 24 },
+  workflows: { testShards: { e2e: 2 } },
+  test: { fileTimingsSeconds: { "tests/e2e/checkout.test.ts": 24 } },
 });
 ```
 
@@ -341,7 +344,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, the file timings on a `--shard` run, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, the file timings on a `--shard` run, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
 
 ## Sample output
 
@@ -359,6 +362,7 @@ checks-test: tests/e2e/checkout.test.ts took 132.48s (limit 120s)
 A run with a JUnit report prints measured file times:
 
 ```
+checks-test: record these file times in test.fileTimingsSeconds
 checks-test: testFileTimings {"tests/e2e/checkout.test.ts":24.6}
 ```
 

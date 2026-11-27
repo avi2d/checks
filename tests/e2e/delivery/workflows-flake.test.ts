@@ -10,7 +10,7 @@ const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
 const SETUP = join(CHECKOUT, "src", "delivery", "setup.ts");
 const FLAKE = ".github/workflows/flake.yml";
 const CRON = "23 5 * * MON,THU";
-const CONFIG = `export default { flakeCron: "${CRON}" };\n`;
+const CONFIG = `export default { workflows: { flakeCron: "${CRON}" } };\n`;
 const BUN_VERSION = await Bun.file(join(CHECKOUT, ".bun-version")).text();
 const open = fixtureRepos("checks-workflows-flake-");
 
@@ -44,17 +44,17 @@ test.each([
   { command: SETUP, args: [], exitCode: 2 },
 ])("rejects flakeCron that would start every five minutes through %j", async ({ command, args, exitCode }) => {
   const flake = 'name: flake\non:\n  workflow_dispatch:\n  schedule:\n    - cron: "*/5 * * * *"\n';
-  const repo = await consumer({ "checks.config.ts": 'export default { flakeCron: "*/5 * * * *" };\n', [FLAKE]: flake });
+  const repo = await consumer({ "checks.config.ts": 'export default { workflows: { flakeCron: "*/5 * * * *" } };\n', [FLAKE]: flake });
 
   const result = await ran($`bun ${command} ${args}`.cwd(repo.dir).env(withoutPullRequestEvent()));
   expect(result.exitCode).toBe(exitCode);
-  expect(result.text).toContain("checks.config.ts key flakeCron does not decode");
+  expect(result.text).toContain("checks.config.ts key workflows.flakeCron does not decode");
   expect(result.text).toContain("at most once a day");
   expect(await workflowText(repo)).toBe(flake);
 }, 30_000);
 
 test.each(["23 5 * * *", "23 5 * * 1"])("daily limit does not block writing and checking %s", async (cron) => {
-  const repo = await consumer({ "checks.config.ts": `export default { flakeCron: "${cron}" };\n` });
+  const repo = await consumer({ "checks.config.ts": `export default { workflows: { flakeCron: "${cron}" } };\n` });
 
   expect((await write(repo)).exitCode).toBe(0);
   expect(await events(repo)).toEqual({ workflow_dispatch: null, schedule: [{ cron }] });

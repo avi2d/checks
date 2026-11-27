@@ -185,12 +185,12 @@ test("a public repository keeps self-hosted labels on jobs no fork reaches", () 
   expect(findRunnerFaults(policy, target)).toHaveLength(1);
 });
 
-test("a private repository without a mutationRunner setting fails each mutation job until it declares those labels", () => {
+test("a private repository without workflows.mutationRunsOn fails each mutation job until it declares those labels", () => {
   const policy = { visibility: "private" as const, scripts: noScripts, runners: NO_RUNNERS };
   const faults = findRunnerFaults(policy, jobs(MUTATION, HOSTED));
   expect(faults).toHaveLength(1);
   expect(faults[0]?.location).toBe(".github/workflows/ci.yml job mutation");
-  expect(faults[0]?.fault).toContain("mutationRunner in checks.config.ts");
+  expect(faults[0]?.fault).toContain("workflows.mutationRunsOn in checks.config.ts");
 });
 
 test("a private repository without a selfHostedRunners setting holds every other job to the hosted default", () => {

@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { nativePlatform } from "../../../src/core/native-platforms.ts";
@@ -48,7 +48,7 @@ test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compil
   const packed = await $`bun pm pack --destination ${pack} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
   await installConsumer(app, "file:" + packed.stdout.toString().trim());
   await $`git init -q`.cwd(app).quiet();
-  await writeFile(join(app, "checks.config.ts"), 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ releaseAssets: true });\n');
+  await writeFile(join(app, "checks.config.ts"), 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ workflows: { releaseAssets: true } });\n');
 
   const root = join(app, "node_modules/@avi2dg/checks");
   const platform = `${process.platform}-${process.arch}`;
@@ -72,6 +72,7 @@ test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compil
   await $`bun run release:assets ${pack}`.cwd(CHECKOUT).quiet();
   await copyFile(join(pack, "checks-" + platform), binary);
   await chmod(binary, 0o755);
+  await rm(join(root, "src/delivery/workflows.ts"));
   await writeFile(join(root, "src/delivery/workflows.ts"), 'console.error("source launcher");\nprocess.exitCode = 1;\n');
   expect(await check()).toEqual(fallback);
 }, 180_000);

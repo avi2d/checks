@@ -123,7 +123,7 @@ const readSources = Effect.fn("readSources")(function* (root: string) {
 export const readRouteImpact = Effect.fn("readRouteImpact")(function* (root: string, changed: readonly string[]) {
   const because = fullRouteReason(changed);
   if (because !== undefined) return { kind: "full", because } satisfies Fallback;
-  const raw = (yield* loadSettings(root))["browserRoutes"];
+  const raw = (yield* loadSettings(root)).values["browserRoutes"];
   const map = raw === undefined ? undefined : yield* decodeSetting("browserRoutes", BrowserRoutes, raw);
   const sources = map === undefined || changed.every((path) => Object.hasOwn(map, path)) ? new Map<string, string>() : yield* readSources(root);
   return routeImpact(changed, map, sources);

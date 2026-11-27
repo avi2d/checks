@@ -3,7 +3,7 @@ import { workingTreeFiles } from "../core/git.ts";
 import { addReachTests, readReachChange, refuseReachMap, type ReachChange } from "../core/reach-change.ts";
 import { basenameOf, pullRequestReason, testEnvironmentReason, TEST_FILE, TEST_FIXTURES } from "../core/test-impact.ts";
 import type { TestTier } from "../core/test-script.ts";
-import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
+import { decodeSetting, loadSettings, Reach, SETTINGS_FILE, settingLocation, settingPath } from "../core/settings.ts";
 import { importedFile, importsOf, resolved, TEST_TREE } from "../core/imports.ts";
 import { decodeBunfig, preloadPaths } from "./mutation-scope-graph.ts";
 import { helperImpact, reportImpact } from "./helper-impact.ts";
@@ -32,10 +32,10 @@ export type Repository = {
   readonly self: SelfReference | undefined;
   readonly preloads: readonly string[];
   readonly reach: readonly ReachRule[];
+  readonly reachLocation?: string;
   readonly packageImports?: ReadonlyMap<string, readonly string[]>;
 };
 
-const REACH = `${SETTINGS_FILE} reach`;
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|astro|svelte|vue|sh)$/;
 const STYLESHEET = /\.(?:css|scss|sass|less|pcss|styl)$/;
 const FONT = /\.(?:woff2?|ttf|otf|eot)$/;
@@ -228,7 +228,7 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 function reachMapProblem(repository: Repository): string | undefined {
   const stale = staleReachPatterns(repository);
   if (stale.length === 0) return undefined;
-  return `${REACH} names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
+  return `${SETTINGS_FILE} ${repository.reachLocation ?? settingPath("reach")} names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
 }
 
 function fullRunReason(changed: readonly string[], repository: Repository, tier?: TestTier): string | undefined {
@@ -345,16 +345,19 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  const rawReach = (yield* loadSettings(root))["reach"];
-  const refusal = refuseReachMap(rawReach);
+  const settings = yield* loadSettings(root);
+  const rawReach = settings.values["reach"];
+  const reachLocation = settingLocation(settings.locations, "reach");
+  const refusal = refuseReachMap(rawReach, reachLocation);
   if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });
-  const decoded = rawReach === undefined ? undefined : yield* decodeSetting("reach", Reach, rawReach);
+  const decoded = rawReach === undefined ? undefined : yield* decodeSetting("reach", Reach, rawReach, reachLocation);
   const repository = {
     files,
     sources,
     bins: binsOf(manifest),
     self: manifest.name === undefined ? undefined : { name: manifest.name, exports: exportsMap(manifest.exports) },
     preloads: preloadPaths(bunfig),
+    reachLocation,
     reach: Object.entries(decoded ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
   return { ...repository, packageImports: yield* readPackageImports(root, repository) } satisfies Repository;
