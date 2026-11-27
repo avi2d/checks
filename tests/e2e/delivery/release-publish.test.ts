@@ -34,13 +34,13 @@ async function release(version: string, latest: string | null, polling: "real" |
 test("a version above npm's latest publishes and becomes latest", async () => {
   const a = await release("0.1.1", "0.1.0");
   expect(await a.publish()).toEqual({ exitCode: 0, text: "+ @acme/widget@0.1.1\nrelease-publish: published @acme/widget@0.1.1\n" });
-  expect(await a.state()).toEqual({ latest: "0.1.1", calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.1.1 dist.shasum --json", "publish"], published: [a.head] });
+  expect(await a.state()).toEqual({ initialLatest: "0.1.0", latestByPackage: { "@acme/widget": "0.1.1" }, calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.1.1 dist.shasum --json", "publish"], published: [a.head], manifests: [{ name: "@acme/widget", version: "0.1.1" }] });
 }, 30_000);
 
 test("the first version of a package npm does not hold yet publishes", async () => {
   const a = await release("0.1.0", null);
   expect((await a.publish()).exitCode).toBe(0);
-  expect((await a.state()).latest).toBe("0.1.0");
+  expect((await a.state()).latestByPackage["@acme/widget"]).toBe("0.1.0");
 }, 30_000);
 
 test("a release that runs after a newer one published ends cleanly and leaves npm's latest on the newer version", async () => {
@@ -49,7 +49,7 @@ test("a release that runs after a newer one published ends cleanly and leaves np
     exitCode: 0,
     text: "release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n",
   });
-  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json"], published: [] });
+  expect(await a.state()).toEqual({ initialLatest: "0.1.2", latestByPackage: {}, calls: ["view @acme/widget dist-tags --json"], published: [], manifests: [] });
 }, 30_000);
 
 test("a publish refusal stays green when a newer release publishes while it runs", async () => {
@@ -57,7 +57,7 @@ test("a publish refusal stays green when a newer release publishes while it runs
   const raced = await a.publish({ FAKE_NPM_PUBLISHED_FIRST: "0.1.2" });
   expect(raced.exitCode).toBe(0);
   expect(raced.text).toContain("release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n");
-  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.1.1 dist.shasum --json", "publish", "view @acme/widget dist-tags --json"], published: [] });
+  expect(await a.state()).toEqual({ initialLatest: "0.1.0", latestByPackage: { "@acme/widget": "0.1.2" }, calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.1.1 dist.shasum --json", "publish", "view @acme/widget dist-tags --json"], published: [], manifests: [] });
 }, 30_000);
 
 test("a rerun of a release npm already holds publishes nothing", async () => {
@@ -105,7 +105,7 @@ test("a publish refusal stays green when the same version becomes latest without
   expect(result.exitCode).toBe(0);
   expect(result.text).toContain("release-publish: npm already holds @acme/widget@0.23.0\n");
   expect(await a.state()).toEqual({
-    latest: "0.23.0", published: [],
+    initialLatest: "0.22.0", latestByPackage: { "@acme/widget": "0.23.0" }, published: [], manifests: [],
     calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.23.0 dist.shasum --json", "publish", "view @acme/widget dist-tags --json"],
   });
 }, 30_000);
@@ -116,7 +116,7 @@ test("a visible version with a lagging latest skips publish instead of uploading
     exitCode: 0, text: "release-publish: npm already holds @acme/widget@0.23.0\n",
   });
   expect(await a.state()).toEqual({
-    latest: "0.22.0", published: [],
+    initialLatest: "0.22.0", latestByPackage: {}, published: [], manifests: [],
     calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.23.0 dist.shasum --json"],
   });
 }, 30_000);
@@ -128,7 +128,7 @@ test.each([staged, published, codeless])("a duplicate refusal waits instead of r
   expect(result.text).toContain("release-publish: npm holds @acme/widget@0.23.0 with the same shasum\n");
 
   const state = await a.state();
-  expect(state.latest).toBe("0.22.0");
+  expect(state.latestByPackage["@acme/widget"]).toBe("0.22.0");
   expect(state.calls.filter((call) => call === "view @acme/widget@0.23.0 dist.shasum --json")).toHaveLength(3);
   expect(state.calls.filter((call) => call === "publish")).toHaveLength(1);
   expect(state.published).toEqual([]);
@@ -164,5 +164,5 @@ test("a publish npm refuses for any other reason fails the release", async () =>
   const refused = await a.publish({ FAKE_NPM_REFUSE: "code E403" });
   expect(refused.exitCode).toBe(2);
   expect(refused.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.1.1\n");
-  expect((await a.state()).latest).toBe("0.1.0");
+  expect((await a.state()).latestByPackage["@acme/widget"]).toBe("0.1.0");
 }, 30_000);

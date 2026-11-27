@@ -4,22 +4,28 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 
-const State = Schema.Struct({ latest: Schema.NullOr(Schema.String), calls: Schema.Array(Schema.String), published: Schema.Array(Schema.String) });
+const State = Schema.Struct({
+  initialLatest: Schema.NullOr(Schema.String),
+  latestByPackage: Schema.Record(Schema.String, Schema.String),
+  calls: Schema.Array(Schema.String),
+  published: Schema.Array(Schema.String),
+  manifests: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
+});
 type FakeState = typeof State.Type;
 
 const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(State));
-const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ name: Schema.String, version: Schema.String })));
+const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)));
+const decodeIdentity = Schema.decodeUnknownSync(Schema.Struct({ name: Schema.String, version: Schema.String }));
 
 export type FakeNpm = {
   readonly env: Readonly<Record<string, string>>;
   readonly state: () => Promise<FakeState>;
 };
 
-// Puts an `npm` on PATH whose registry holds one package's `latest` dist-tag, null before its first publish.
 export async function fakeNpm(home: string, latest: string | null): Promise<FakeNpm> {
   await writeFile(join(home, "npm"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "npm-state.json");
-  await writeFile(statePath, JSON.stringify({ latest, calls: [], published: [] } satisfies FakeState));
+  await writeFile(statePath, JSON.stringify({ initialLatest: latest, latestByPackage: {}, calls: [], published: [], manifests: [] } satisfies FakeState));
   return {
     env: { PATH: `${home}:${process.env["PATH"] ?? ""}`, FAKE_NPM_STATE: statePath },
     state: async () => decodeState(await readFile(statePath, "utf8")),
@@ -41,19 +47,21 @@ function view(name: string, latest: string | null): number {
 }
 
 // FAKE_NPM_PUBLISHED_FIRST names a version another release publishes just before this one.
-async function publish(state: FakeState, save: (latest: string | null, published?: readonly string[]) => Promise<void>): Promise<number> {
+async function publish(state: FakeState, save: (next: FakeState) => Promise<void>): Promise<number> {
   const shasum = process.env["FAKE_NPM_PUBLISH_SHASUM"];
   if (shasum !== undefined) process.stderr.write(`npm notice shasum: ${shasum}\n`);
-  const { name, version } = decodeManifest(await readFile("package.json", "utf8"));
-  const latest = process.env["FAKE_NPM_PUBLISHED_FIRST"] ?? state.latest;
-  await save(latest);
+  const manifest = decodeManifest(await readFile("package.json", "utf8"));
+  const { name, version } = decodeIdentity(manifest);
+  const latest = process.env["FAKE_NPM_PUBLISHED_FIRST"] ?? state.latestByPackage[name] ?? state.initialLatest;
+  const next = { ...state, latestByPackage: latest === null ? state.latestByPackage : { ...state.latestByPackage, [name]: latest } };
+  await save(next);
   if (process.env["FAKE_NPM_REFUSE"] !== undefined) return refuse(process.env["FAKE_NPM_REFUSE"]);
   if (latest === version) return refuse(`code E403\nnpm error You cannot publish over the previously published versions: ${version}.`);
   if (latest !== null && Bun.semver.order(latest, version) > 0) {
     return refuse(`Cannot implicitly apply the "latest" tag because previously published version ${latest} is higher than the new version ${version}. You must specify a tag using --tag.`);
   }
   const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  await save(version, [...state.published, head]);
+  await save({ ...next, latestByPackage: { ...next.latestByPackage, [name]: version }, published: [...state.published, head], manifests: [...state.manifests, manifest] });
   process.stdout.write(`+ ${name}@${version}\n`);
   return 0;
 }
@@ -63,10 +71,10 @@ async function main(): Promise<number> {
   const statePath = process.env["FAKE_NPM_STATE"] ?? "";
   const recorded = decodeState(await readFile(statePath, "utf8"));
   const state = { ...recorded, calls: [...recorded.calls, args.join(" ")] };
-  const save = (latest: string | null, published: readonly string[] = state.published) => writeFile(statePath, JSON.stringify({ ...state, latest, published }));
-  await save(state.latest);
+  const save = (next: FakeState) => writeFile(statePath, JSON.stringify(next));
+  await save(state);
   const [command, name = ""] = args;
-  if (command === "view" && args.slice(2).join(" ") === "dist-tags --json") return view(name, state.latest);
+  if (command === "view" && args.slice(2).join(" ") === "dist-tags --json") return view(name, state.latestByPackage[name] ?? state.initialLatest);
   if (command === "view" && args.slice(2).join(" ") === "dist.shasum --json") {
     const shasum = process.env["FAKE_NPM_SHASUM"];
     const views = state.calls.filter((call) => call === args.join(" ")).length;
