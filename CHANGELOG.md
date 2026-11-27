@@ -2,6 +2,40 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.121.0
+
+Released 2026-11-27.
+
+### Features
+
+- **delivery:** let consumers schedule the generated flake workflow [#270](https://github.com/avi2d/checks/pull/270)
+- **complexity:** baseline whole-tree repetition [#269](https://github.com/avi2d/checks/pull/269)
+- **quality:** refuse jscpd:ignore directives in the comment gate [#275](https://github.com/avi2d/checks/pull/275)
+- **delivery:** generate pr-text.yml for public repositories [#261](https://github.com/avi2d/checks/pull/261)
+- **delivery:** generate the whole-tree workflow for consumers [#255](https://github.com/avi2d/checks/pull/255)
+- **delivery:** add extraTestJobs setting for test jobs with their own env and setup [#260](https://github.com/avi2d/checks/pull/260)
+- **quality:** refuse nested oxlint configs that turn rules off unless listed [#254](https://github.com/avi2d/checks/pull/254)
+- **quality:** refuse configured tracker keys and more directives in the comment gate [#252](https://github.com/avi2d/checks/pull/252)
+
+### Fixes
+
+- revert the 0.121.0 release so the release PR can be cut again [#272](https://github.com/avi2d/checks/pull/272)
+- **testing:** support platform-scoped test skips and list-form runs-on test jobs [#273](https://github.com/avi2d/checks/pull/273)
+- **lint:** require assertions in Bun tests [#271](https://github.com/avi2d/checks/pull/271)
+- **delivery:** catch Claude login tokens in checks-secrets [#267](https://github.com/avi2d/checks/pull/267)
+- **delivery:** resume the generated mutation refresh across runs within the job timeout [#265](https://github.com/avi2d/checks/pull/265)
+- stage the repair before the no-mistakes lint drift check [#257](https://github.com/avi2d/checks/pull/257)
+- ship postcss-value-parser as a dependency of the frontend syntax gate [#251](https://github.com/avi2d/checks/pull/251)
+- **quality:** refuse oxlint and tsgo path selections that differ in the effect-scope gate [#250](https://github.com/avi2d/checks/pull/250)
+- **quality:** keep Effect scope in tsconfig.json in step with oxlint [#246](https://github.com/avi2d/checks/pull/246)
+- **effect-channel:** judge blind catch handlers by whether they read the error [#248](https://github.com/avi2d/checks/pull/248)
+- **delivery:** make checks-setup match script commands exactly and add @types/bun [#244](https://github.com/avi2d/checks/pull/244)
+- **quality:** compare actual Schema field types in data-shape/schema-twin [#247](https://github.com/avi2d/checks/pull/247)
+
+### Performance
+
+- **docs:** match doc names with one regex alternation in checks-docs [#264](https://github.com/avi2d/checks/pull/264)
+
 ## 0.120.0
 
 Released 2026-11-26.
