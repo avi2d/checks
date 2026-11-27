@@ -3,7 +3,11 @@ import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringVal
 import type { TestTier } from "../core/test-script.ts";
 import { SETTINGS_FILE } from "../core/settings.ts";
 
-export type Environment = "ci" | "local";
+const whenSchema = Schema.Literals(["ci", "local"]);
+const platformSchema = Schema.Literals(["darwin", "linux", "win32"]);
+
+export type Environment = typeof whenSchema.Type;
+type SkipPlatform = typeof platformSchema.Type;
 export type { TestTier };
 export type SkipDeclaration = {
   readonly file: string;
@@ -11,6 +15,7 @@ export type SkipDeclaration = {
   readonly name: string;
   readonly reason: string;
   readonly when?: Environment;
+  readonly platform?: SkipPlatform;
 };
 
 export class SkipDeclarationError extends Schema.TaggedError<SkipDeclarationError>()("SkipDeclarationError", {
@@ -20,9 +25,8 @@ export class SkipDeclarationError extends Schema.TaggedError<SkipDeclarationErro
 const TEST_FILES = ["tests/**/*.test.ts", "tests/**/*.test.tsx"] as const;
 const SMOKE = `${SETTINGS_FILE} smoke`;
 const SKIP_HELPER_MODULE = "test-skips.ts";
-const whenSchema = Schema.Literals(["ci", "local"]);
 
-export function skipReason(_reason: string, label: string, _when?: Environment): string {
+export function skipReason(_reason: string, label: string, _when?: Environment, _platform?: SkipPlatform): string {
   return label;
 }
 
@@ -63,19 +67,21 @@ function memberOf(node: unknown): Member | undefined {
 type SkipReasonScan =
   | { readonly kind: "none" }
   | { readonly kind: "invalid"; readonly message: string }
-  | { readonly kind: "valid"; readonly name: string; readonly reason: string; readonly when?: Environment };
+  | { readonly kind: "valid"; readonly declaration: Omit<SkipDeclaration, "file" | "line"> };
 
 function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReasonScan {
   if (!isRecord(node) || node["type"] !== "CallExpression") return { kind: "none" };
   if (!aliases.has(identifierName(node["callee"]) ?? "")) return { kind: "none" };
-  const [reasonArgument, labelArgument, whenArgument] = argumentsOf(node);
+  const [reasonArgument, labelArgument, whenArgument, platformArgument] = argumentsOf(node);
   const reason = stringValue(expressionOf(reasonArgument));
   const label = stringValue(expressionOf(labelArgument));
   if (reason === undefined || reason.trim() === "" || label === undefined || label.trim() === "") {
     return { kind: "invalid", message: "skipReason needs a non-empty literal reason and a literal test name" };
   }
-  const when = whenArgument === undefined ? undefined : stringValue(expressionOf(whenArgument));
-  if (whenArgument !== undefined && when === undefined) {
+  const whenExpression = expressionOf(whenArgument);
+  const hasWhen = whenArgument !== undefined && identifierName(whenExpression) !== "undefined";
+  const when = stringValue(whenExpression);
+  if (hasWhen && when === undefined) {
     return { kind: "invalid", message: "skipReason's when value must be \"ci\" or \"local\"" };
   }
   if (when !== undefined && !Schema.is(whenSchema)(when)) {
@@ -84,7 +90,20 @@ function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReason
       message: `skipReason's when value must be "ci" or "local", found ${JSON.stringify(when)}`,
     };
   }
-  return { kind: "valid", name: label, reason, ...(when === undefined ? {} : { when }) };
+  const platform = stringValue(expressionOf(platformArgument));
+  const isPlatform = Schema.is(platformSchema)(platform);
+  if (platformArgument !== undefined && !isPlatform) {
+    return { kind: "invalid", message: `skipReason's platform must be a literal: ${platformSchema.literals.join(", ")}` };
+  }
+  return {
+    kind: "valid",
+    declaration: {
+      name: label,
+      reason,
+      ...(when === undefined ? {} : { when }),
+      ...(isPlatform ? { platform } : {}),
+    },
+  };
 }
 
 type RegisteredSkip = { readonly onDescribe: boolean; readonly first: unknown };
@@ -135,8 +154,7 @@ function declarationsIn(source: string, file: string, module: unknown): Declarat
       };
     }
     if (metadata.kind === "invalid") return metadata;
-    const { name, reason, when } = metadata;
-    declarations.push({ file, line, name, reason, ...(when === undefined ? {} : { when }) });
+    declarations.push({ file, line, ...metadata.declaration });
   }
   return { kind: "valid", declarations };
 }
