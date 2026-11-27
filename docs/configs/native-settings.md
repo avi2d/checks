@@ -111,6 +111,7 @@ export default defineConfig({
 | `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
 | `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
 | `extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
+| `flakeCron` | None | The UTC cron expression for the generated flake workflow. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
 | `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
 | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
 | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |

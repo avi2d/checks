@@ -13,7 +13,8 @@ import { CHANGELOG, committedChangelog } from "./release-changelog.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { callerInputsOf, callerSetOf } from "./site-names.ts";
+import { callerInputsOf, callerSetOf, type CallerSet } from "./site-names.ts";
+import { scheduledFlakeOf } from "./workflow-set.ts";
 import { countOf, heldDifferences, readActionFiles } from "./held-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
@@ -303,18 +304,25 @@ const reportHandRolled = Effect.fn("reportHandRolled")(function* (workflows: rea
   return handRolled;
 });
 
-const holdsWrittenSet = Effect.fn("holdsWrittenSet")(function* (root: string, workflows: readonly Workflow[]) {
-  const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
-  if (present.length === 0) return false;
+type WrittenSet = { readonly set: CallerSet; readonly kit: boolean };
+
+const writtenSetOf = Effect.fn("writtenSetOf")(function* (root: string, workflows: readonly Workflow[]) {
+  if (workflows.length === 0) return undefined;
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
-    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs);
-    return countOf(heldDifferences(set, present, yield* readActionFiles(root), inputs.kit)) === 0;
-  }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(false))));
+    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs, inputs.flakeCron);
+    return { set, kit: inputs.kit };
+  }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(undefined))));
 });
 
-const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {
-  if (yield* holdsWrittenSet(root, workflows)) {
+const holdsWrittenSet = Effect.fn("holdsWrittenSet")(function* (root: string, workflows: readonly Workflow[], { set, kit }: WrittenSet) {
+  const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
+  const actions = yield* readActionFiles(root).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(undefined))));
+  return actions !== undefined && countOf(heldDifferences(set, present, actions, kit)) === 0;
+});
+
+const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[], written: WrittenSet | undefined) {
+  if (written !== undefined && (yield* holdsWrittenSet(root, workflows, written))) {
     yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the set runs every gate`);
     return [];
   }
@@ -336,7 +344,8 @@ const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
   const manifest = yield* readManifest(root);
-  const gaps = yield* reportGaps(root, workflows);
+  const written = yield* writtenSetOf(root, workflows);
+  const gaps = yield* reportGaps(root, workflows, written);
   const missing = findMissingWorkflows(workflows);
   if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
   const scripts = new Map(Object.entries(manifest.scripts ?? {}));
@@ -356,7 +365,9 @@ const wiring = Effect.gen(function* () {
   const owner = { visibility, publishes: manifest.private !== true };
   const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
-  const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, owner);
+  const flake = written === undefined ? undefined : scheduledFlakeOf(written.set);
+  const scheduledFlake = flake === undefined ? undefined : { path: `${WORKFLOWS}/${flake.name}`, text: flake.text };
+  const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, owner, scheduledFlake);
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));

@@ -25,7 +25,7 @@ When `release-pr` dispatches `ci` on the release branch, `static`, `unit` and `e
 A pull request runs only the tests it reaches.
 The `release` workflow runs the whole suite with `bun run test --full` before it publishes, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
-No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
+In this repository, only the weekly advisory scan runs on a schedule.
 No workflow runs mutation testing except `.github/workflows/mutation.yml`, the full file [checks-setup](docs/gates/checks-setup.md) writes.
 It starts on no push and no pull request, so a merge to `main` starts no mutation run.
 It runs the refresh when started by hand with `gh workflow run mutation`, every 28 days.

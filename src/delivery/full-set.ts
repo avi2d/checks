@@ -218,10 +218,12 @@ export const fullDocs = ({ build, path }: Pages): FullWorkflow =>
     ],
   });
 
+const dispatchAndSchedule = (cron: string | undefined): readonly string[] => cron === undefined ? BY_HAND : [...BY_HAND, "schedule:", "  - cron: " + JSON.stringify(cron)];
+
 export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
   fileOf({
     name: "advisories",
-    on: cron === undefined ? BY_HAND : [...BY_HAND, "schedule:", "  - cron: " + JSON.stringify(cron)],
+    on: dispatchAndSchedule(cron),
     jobs: [
       {
         id: "advisories",
@@ -233,10 +235,10 @@ export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
     ],
   });
 
-export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined): FullWorkflow =>
+export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined, cron?: string): FullWorkflow =>
   fileOf({
     name: "flake",
-    on: BY_HAND,
+    on: dispatchAndSchedule(cron),
     jobs: [
       {
         id: "flake",
