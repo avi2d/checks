@@ -22,12 +22,15 @@ export const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && starts
 
 export const SITE_BUILD = "site-dist";
 
+const TestRunner = Schema.Union([Schema.String, Schema.NonEmptyArray(Schema.NonEmptyString)]);
+type TestRunner = typeof TestRunner.Type;
+
 export type TestJob = {
   readonly name: string;
   readonly run: string;
   readonly browsers: string;
   readonly readsBuild: boolean;
-  readonly runsOn: string;
+  readonly runsOn: TestRunner;
 };
 
 export type CiJobs = { readonly tests: readonly TestJob[] };
@@ -88,13 +91,13 @@ const FullStep = Schema.Struct({
 
 const FullTestJob = Schema.Struct({
   needs: Schema.optionalKey(Schema.String),
-  "runs-on": Schema.String,
+  "runs-on": TestRunner,
   steps: Schema.Array(FullStep),
 });
 
 const decodeFullTestJob = Schema.decodeUnknownEffect(FullTestJob);
 
-const defaultRunner = (held: string, runsOn: string): string => held === "ubuntu-latest" || held === DEFAULT_RUNNER ? runsOn : held;
+const defaultRunner = (held: TestRunner, runsOn: string): TestRunner => held === "ubuntu-latest" || held === DEFAULT_RUNNER ? runsOn : held;
 
 const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: unknown, runsOn: string, docsBuild: boolean) {
   if (isFixed(name, docsBuild)) return yield* new CiJobsFault({ message: `${path} runs a test step in job ${name}, a name the written ci.yml gives its own job, so rename it` });
