@@ -1,7 +1,7 @@
 import { Console, Effect, FileSystem, Path } from "effect";
 import { checkoutFiles, collect, git, pathsAt } from "../../core/git.ts";
 import type { RunScope } from "../../core/pull-request-scope.ts";
-import { BrowserBuild, decodeSetting, loadSettings } from "../../core/settings.ts";
+import { readBuildCommand } from "./config-reader.ts";
 
 type PullRequest = Extract<RunScope, { readonly kind: "pull-request" }>;
 
@@ -37,9 +37,8 @@ const buildAt = Effect.fn("buildAt")(function* (root: string, revision: string, 
 export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest, hooks?: string) {
   if (!testOnly(scope.changed, hooks) || scope.ends === undefined || !/^[a-zA-Z0-9_-]+$/.test(site)) return false;
   const ends = scope.ends;
-  const raw = (yield* loadSettings(root)).values["browserBuild"];
-  if (raw === undefined) return false;
-  const command = yield* decodeSetting("browserBuild", BrowserBuild, raw);
+  const command = yield* readBuildCommand(root);
+  if (command === undefined) return false;
   const prove = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

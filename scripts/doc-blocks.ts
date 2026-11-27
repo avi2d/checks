@@ -1,11 +1,12 @@
 import { Effect, Schema } from "effect";
+import type { LegacyBrowserFields } from "../src/core/browser-settings.ts";
+import { browserConfigRows, browserStarterLines } from "./browser-doc-rows.ts";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
-import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
 import { SOURCE_LIMITS, SOURCES, TEST_LIMITS, TESTS, type SizeRule } from "../src/quality/presets/oxlint.ts";
 
@@ -35,7 +36,7 @@ const SHIPPED = {
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
-  "dist/": "the command launchers, the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schema of `checks.config.ts`",
+  "dist/": "the command launchers, the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schemas of `checks.config.ts` and `checks.browser.config.ts`",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
@@ -224,10 +225,6 @@ const SETTING_READERS = {
   mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
   mutationShardCount: "[checks-mutation](../gates/checks-mutation.md#running-it-in-ci)",
   selfHostedRunners: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
-  browser: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
-  browserRoutes: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
-  browserBuild: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
-  browserTimings: "[checks-browser](../gates/checks-browser.md#shards)",
   copy: "[checks-copy](../gates/checks-copy.md)",
   frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
   nestedOxlintConfigs: "[checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs)",
@@ -236,17 +233,17 @@ const SETTING_READERS = {
   testTierShards: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileTimings: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileSkips: "[checks-test](../gates/checks-test.md#test-file-exclusions)",
-} satisfies Record<SettingKey, string>;
+} satisfies Record<Exclude<SettingKey, keyof typeof LegacyBrowserFields>, string>;
+
+type DocumentedKey = keyof typeof SETTING_READERS;
 
 function isSettingSection(key: string): key is keyof typeof GroupedSettings {
   return Object.hasOwn(GroupedSettings, key);
 }
 
-function isSettingKey(key: string): key is SettingKey {
-  return Object.hasOwn(SETTING_READERS, key);
-}
+const isSettingKey = (key: string): key is DocumentedKey => Object.hasOwn(SETTING_READERS, key);
 
-function settingRow(path: string, key: SettingKey, schema: Schema.Top): Effect.Effect<string, DocBlocksUnwritable> {
+function settingRow(path: string, key: DocumentedKey, schema: Schema.Top): Effect.Effect<string, DocBlocksUnwritable> {
   const annotations = Schema.resolveAnnotations(schema);
   const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
   const description = annotations?.description;
@@ -266,13 +263,19 @@ const SETTINGS: Block = {
         const fields: Readonly<Record<string, Schema.Top>> = GroupedSettings[section].fields;
         return Object.entries(fields).map(([key, field]) => {
           const legacyKey = keys[key];
-          return legacyKey === undefined
+          return legacyKey === undefined || !isSettingKey(legacyKey)
             ? Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no transition for ${section}.${key}` }))
             : settingRow(`${section}.${key}`, legacyKey, field);
         });
       })),
       (rows) => ["| Key | Flat key still read | Default | What it holds | Reader |", "| --- | --- | --- | --- | --- |", ...rows] as const,
     ),
+};
+
+const BROWSER_SETTINGS: Block = {
+  name: "browser-settings-keys",
+  from: ["src/core/browser-settings.ts", "scripts/browser-doc-rows.ts"],
+  render: () => browserConfigRows.pipe(Effect.mapError((message) => new DocBlocksUnwritable({ message }))),
 };
 
 const SIZE_LIMITS: Block = {
@@ -301,26 +304,10 @@ const LINT_SAMPLE: Block = {
     ]),
 };
 
-function inline(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(inline).join(", ")}]`;
-  if (typeof value === "object" && value !== null) return `{ ${Object.entries(value).map(([key, field]) => `${JSON.stringify(key)}: ${inline(field)}`).join(", ")} }`;
-  return JSON.stringify(value);
-}
-
-function jsonField([key, value]: readonly [string, unknown]): readonly string[] {
-  if (!Array.isArray(value) || !value.some((item) => typeof item === "object")) return [`  ${JSON.stringify(key)}: ${inline(value)}`];
-  return [`  ${JSON.stringify(key)}: [`, ...value.map((item, index) => `    ${inline(item)}${index < value.length - 1 ? "," : ""}`), "  ]"];
-}
-
-function compactJson(value: Readonly<Record<string, unknown>>): readonly string[] {
-  const fields = Object.entries(value).map(jsonField);
-  return ["{", ...fields.flatMap((lines, index) => (index < fields.length - 1 ? [...lines.slice(0, -1), `${lines.at(-1) ?? ""},`] : lines)), "}"];
-}
-
 const STARTER: Block = {
   name: "starter",
-  from: [BROWSER_STARTER],
-  render: () => Effect.succeed(["```json", ...compactJson(starter), "```"]),
+  from: [BROWSER_STARTER, "scripts/browser-doc-rows.ts"],
+  render: () => Effect.succeed(browserStarterLines),
 };
 
 const SIZES: Block = {
@@ -349,7 +336,7 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
   { file: "docs/shipped-files.md", blocks: [WHERE] },
   { file: "docs/how-to/upgrade-the-kit.md", blocks: [UPGRADE_INSTALL] },
   ...Object.entries(OPT_IN_PEERS).map(([bin, names]) => ({ file: `${GATE_PAGES}/${bin}.md`, blocks: [optInInstall(names)] })),
-  { file: `${GATE_PAGES}/checks-browser.md`, blocks: [SIZES, STARTER] },
+  { file: `${GATE_PAGES}/checks-browser.md`, blocks: [BROWSER_SETTINGS, SIZES, STARTER] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
   { file: `${GATE_PAGES}/checks-lint.md`, blocks: [LINT_SAMPLE] },
   { file: "docs/configs/native-settings.md", blocks: [SETTINGS, SIZE_LIMITS] },

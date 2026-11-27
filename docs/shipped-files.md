@@ -22,7 +22,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `dependency-cruiser.config.js` | the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes |
 | `knip-base.json` | the Knip `include` setting, for a configuration that spreads it |
 | `src/` | the check implementations and the modules they import, the Effect language service severities under `src/quality/presets/`, and the starter `browser-checks.json` under `src/quality/browser/` |
-| `dist/` | the command launchers, the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schema of `checks.config.ts` |
+| `dist/` | the command launchers, the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schemas of `checks.config.ts` and `checks.browser.config.ts` |
 | `oxlintrc.json` | the oxlint `base` as a config a `.oxlintrc.json` extends by path, which the build writes |
 | `stryker.preset.js` | the Stryker mutation-testing preset, which refuses a full run outside CI |
 | `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |

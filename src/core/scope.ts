@@ -1,4 +1,5 @@
 import { KIT_GATES } from "./gates.ts";
+import { BROWSER_SETTINGS_FILE } from "./browser-settings.ts";
 import { SETTINGS_FILE } from "./settings.ts";
 
 export type Scope = {
@@ -18,6 +19,7 @@ export const FAST_TREE_GATES: readonly string[] = TREE_GATES.filter((bin) => !SL
 const CI_CONFIGS = new Set([
   "package.json",
   SETTINGS_FILE,
+  BROWSER_SETTINGS_FILE,
   "bunfig.toml",
   "commitlint.config.ts",
   "oxlint.config.ts",

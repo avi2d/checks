@@ -30,7 +30,8 @@ import { reachedRoutes } from "./route-scope.ts";
 import { compareReport, PAGE_OF, planCells } from "./schedule.ts";
 import type { Shard } from "../../core/shard.ts";
 import { planShard, runsInShard, type RouteWork, type ShardPlan } from "./shard.ts";
-import { BrowserTimings, decodeSetting, loadSettings } from "../../core/settings.ts";
+import type { BrowserTimings } from "../../core/browser-settings.ts";
+import { readTimings } from "./config-reader.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -297,8 +298,7 @@ const USAGE = `usage: ${NAME} [--pr] [--shard=<index>/<count>] [<directory>]`;
 
 const readSharding = Effect.fn("readSharding")(function* (root: string, shard: Shard | undefined) {
   if (shard === undefined) return undefined;
-  const raw = (yield* loadSettings(root)).values["browserTimings"];
-  const timings = raw === undefined ? {} : yield* decodeSetting("browserTimings", BrowserTimings, raw);
+  const timings = (yield* readTimings(root)) ?? {};
   return { shard, timings } satisfies Sharding;
 });
 

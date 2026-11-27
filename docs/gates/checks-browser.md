@@ -211,21 +211,32 @@ export const checks: readonly ProductCheck[] = [
 
 ## What it reads
 
-It reads the `browser`, `browserRoutes`, `browserBuild` and `browserTimings` keys of `checks.config.ts` in the directory it runs in.
+It reads `checks.browser.config.ts` from the directory it runs in.
+The [browser JSON Schema](../../dist/checks.browser.schema.json) describes the default export.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `test.allowAgentRunsOutsideCI` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads `CI_CORES` for the number of checks to run at once, as [Chrome and the peers](#chrome-and-the-peers) says.
-On a pull request it also reads the changed paths since the merge base:
+On a pull request it also reads the changed paths since the merge base.
+
+To opt in, export a plan from `checks.browser.config.ts`:
 
 ```ts
-import { defineConfig } from "@avi2dg/checks/config";
+import { defineBrowserConfig } from "@avi2dg/checks/browser-config";
 
-export default defineConfig({
-  browser: { site: "dist", routes: [{ path: "/", locale: "en" }], viewports: [{ preset: "anchor" }], states: [{ name: "default" }], targets: [{ name: "headline", selector: "main h1" }], checks: ["layout"] },
+export default defineBrowserConfig({
+  site: "dist",
+  routes: [{ path: "/", locale: "en" }],
+  viewports: [{ preset: "anchor" }],
+  states: [{ name: "default" }],
+  targets: [{ name: "headline", selector: "main h1" }],
+  checks: ["layout"],
 });
 ```
 
-A `browser-checks.json` left in that directory fails the run and names the key it moves to.
-A full value of the key takes this shape:
+The runner accepts deprecated flat browser keys in `checks.config.ts` and prints a deprecation note for each.
+When `checks.browser.config.ts` sets only options, the runner can read the plan from `checks.config.ts`.
+If both files set the same option or plan, the runner refuses both definitions.
+A `browser-checks.json` left in that directory fails the run and names `checks.browser.config.ts` as its replacement.
+Here is a plan with more than one route, viewport, and state:
 
 ```json
 {
@@ -260,18 +271,25 @@ A full value of the key takes this shape:
 }
 ```
 
-| Field | What it holds |
-| --- | --- |
-| `site` | the directory of the built site, which the runner serves on a local port, an `index.html` answering for its directory |
-| `routes` | each page to visit, as a `path` from the site root and the `locale` it renders, or the `every-page` preset with a `locale` |
-| `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
-| `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, `reducedMotion` as `reduce` or `no-preference`, and `checks` when it runs only some of the declared checks, or the `enlarged-text` preset |
-| `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, `focusable` when Tab must reach it, and `contrast` when `contrast` measures its text |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets`, `contrast`, `weight`, `shift` and `look` |
-| `weight` | the byte budgets each page must hold, as `nonImageBytes` outside images, `scriptBytes` in scripts and `imageBytes` in images |
-| `shift` | the largest total layout movement a cold load may report, as `max` |
-| `roles` | each role a text plays on the page, named, with the CSS selectors of the elements that play it, for `look` |
-| `hooks` | the module of product hooks, as a path from the directory the runner runs in |
+<!-- generated browser-settings-keys: bun run build writes it from src/core/browser-settings.ts, scripts/browser-doc-rows.ts and scripts/doc-blocks.ts -->
+
+| Field | Required | What it holds |
+| --- | --- | --- |
+| `site` | Yes | The directory of the built site, served on a local port. |
+| `routes` | Yes | The pages to visit, with a path and locale or the every-page preset and a locale. |
+| `viewports` | Yes | The window sizes to visit, with a name, width, and height in pixels, optional touch and device settings, or a screen-size preset. |
+| `states` | Yes | The conditions to visit, with a name and optional text size, motion preference, and checks, or the enlarged-text preset. |
+| `targets` | Yes | The named controls or texts to check, with CSS selectors and optional routes, focus, and contrast settings. |
+| `checks` | Yes | The built-in checks to run. |
+| `weight` | No | The byte budgets for each page: outside images, in scripts, and in images. |
+| `shift` | No | The largest total layout shift allowed on a cold load. |
+| `roles` | No | The named text roles and their CSS selectors for the look check. |
+| `hooks` | No | The module of product hooks, relative to the directory the runner runs in. |
+| `affectedRoutes` | No | The repository paths that can affect each browser route. |
+| `buildCommand` | No | The command that builds the site for the browser test-only proof. |
+| `timingsMs` | No | The measured milliseconds of each browser check at each route, which browser shards balance on. |
+
+<!-- end generated browser-settings-keys -->
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
@@ -356,7 +374,8 @@ They are due for a recheck against those sources once a year.
 
 ### Start from the shipped declaration
 
-The kit ships a starter declaration, which a product copies under the `browser` key of `checks.config.ts` and then edits to its own routes and targets:
+To start from the shipped plan, copy the object into `defineBrowserConfig` in `checks.browser.config.ts`.
+Then change the routes and targets to match your site:
 
 ```sh
 cat node_modules/@avi2dg/checks/src/quality/browser/browser-checks.json
@@ -364,7 +383,7 @@ cat node_modules/@avi2dg/checks/src/quality/browser/browser-checks.json
 
 A host resolves it as `@avi2dg/checks/browser-checks.json`.
 
-<!-- generated starter: bun run build writes it from src/quality/browser/browser-checks.json and scripts/doc-blocks.ts -->
+<!-- generated starter: bun run build writes it from src/quality/browser/browser-checks.json, scripts/browser-doc-rows.ts and scripts/doc-blocks.ts -->
 
 ```json
 {
@@ -406,7 +425,7 @@ Each line sums the wall time of each check across the route's visits in millisec
 The first shared check includes the shared page load.
 The route's `check sum` adds its check times, not elapsed time, and excludes gaps between checks.
 Checks can overlap, so this sum can exceed elapsed time.
-A last line prints those times in the form of the `browserTimings` value, as [Shards](#shards) says.
+The last line prints those times as a value for `timingsMs`, as [Shards](#shards) says.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
@@ -435,12 +454,13 @@ That change can include TypeScript files under `tests/unit/` and `tests/e2e/`, b
 A tests-only change skips the browser walk.
 Other helper-only changes can skip the walk through the build comparison below.
 
-The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
-For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
+The optional `affectedRoutes` setting maps exact repository paths to the routes each path can change.
+For example, `affectedRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
 A changed path with no mapping reaches the routes of each mapped file that imports it by a relative import, at any depth.
 For example, a component that a mapped page imports reaches that page's routes.
 Importers are read from script, component, Markdown, HTML and stylesheet files, so a stylesheet's `@import` counts.
-Files under `tests/` and `checks.config.ts` do not count as importers.
+Files under `tests/` and the two checks config files do not count as importers.
+A change to `checks.browser.config.ts` keeps the browser job and walks every route.
 A file that names an unmapped path any other way, such as through a tsconfig alias, a root path or a Markdown `layout`, makes every route run.
 A file names a path when its file name follows a `/`, a quote, or `(`.
 A name without its extension also counts when it follows one of those characters and ends with a quote.
@@ -448,7 +468,7 @@ For a name starting with an underscore, the name without that underscore also co
 So a doc that names a component path also makes every route run.
 A file that a relative import reaches can also render through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read.
 The scan does not see that other path, so the routes it renders can be left out.
-Map such a path in `browserRoutes` by hand.
+Map such a path in `affectedRoutes` by hand.
 When every changed path reaches declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
@@ -465,20 +485,20 @@ When no changed path reaches a route, generated CI skips the browser job.
 The `changes` job prints what routes each path reaches or why the whole walk is needed.
 The map is separate from the test selection in `test.affected`.
 
-The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
+The optional `buildCommand` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
 For a change confined to test paths outside the hooks module, the runner builds the merge base and the head in temporary source trees.
 It compares both output directories byte for byte and compares the head output with the site being checked.
 The runner skips the browser pass only when all three outputs agree and contain files without symbolic links.
 If a build or comparison fails, the runner checks the routes the change reaches.
 The output directory must be a single directory name at the repository root for this comparison.
 Each build runs without the checkout's `node_modules`, so its command must install the dependencies it needs.
-Without `browserBuild`, the browser pass runs as usual.
+Without `buildCommand`, the browser pass runs as usual.
 
 ### Shards
 
 `--shard=<index>/<count>` runs one part of the walk, so a CI workflow can split it across `<count>` jobs.
 Each job runs the same command with its own index, from 1 to `<count>`, such as `--shard=1/2` and `--shard=2/2`.
-Each job works out the same split from the declaration, the pull request's route scope and `browserTimings`.
+Each job works out the same split from the declaration, the pull request's route scope and `timingsMs`.
 Each route is checked whole in one shard, with every check, viewport and state the run would give it.
 `look` compares texts across routes, so one shard reads it at every route.
 The runner prints which routes each shard checks, and whether it reads `look`.
@@ -486,23 +506,23 @@ A shard left with no check, such as the second of two shards over one route with
 A declared route the site does not serve fails every shard, including a shard left with no check.
 
 The split balances the measured time of each shard.
-The optional `browserTimings` setting holds the milliseconds of each check at each route.
-After the timing lines, a run prints one `browser: browserTimings` line in the form of this setting.
+The optional `timingsMs` setting holds the milliseconds of each check at each route.
+After the timing lines, a run prints one `browser: timingsMs` line with the JSON value for `timingsMs`.
 The line holds only the checks that run ran.
 A shard prints only its own routes, and the shard that reads `look` prints `look` at every route.
 A `--pr` run prints every check only at the routes it reaches, and only `look` and `links` at the other routes, all measured at the anchor sizes.
 So take the setting from a run that walks the full size list, either without `--shard` or by merging the lines of every shard check by check:
 
 ```ts
-browserTimings: {
+timingsMs: {
   "/": { targets: 1200, layout: 9800, axe: 21000, look: 6400 },
   "/about/": { targets: 900, layout: 7100, axe: 15000, look: 5200 },
 }
 ```
 
-A route or a check `browserTimings` does not name costs the mean of that check at the routes it names.
+A route or a check `timingsMs` does not name costs the mean of that check at the routes it names.
 A check no route names costs the mean of every recorded time.
-Without `browserTimings`, each check costs one for each visit that runs it.
+Without `timingsMs`, each check costs one for each visit that runs it.
 The split gives the most costly route to the shard with the least time so far, and repeats until each route has a shard.
 
 ## Exit codes
@@ -511,7 +531,7 @@ The split gives the most costly route to the shard with the least time so far, a
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, `CI_CORES` is read but is not a positive whole number, or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
+| 2 | an argument is not one it takes, the browser plan is missing, the plan does not decode or contradicts itself, `timingsMs` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, `CI_CORES` is read but is not a positive whole number, or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
 
 ## Sample output
 
@@ -526,13 +546,13 @@ browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(
   layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
   axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
 browser: timing /ru/: targets 120ms, layout 340ms, keyboard 560ms, axe 780ms; check sum 1800ms
-browser: browserTimings {"/ru/":{"targets":120,"layout":340,"keyboard":560,"axe":780}}
+browser: timingsMs {"/ru/":{"targets":120,"layout":340,"keyboard":560,"axe":780}}
 ```
 
 ## When it runs
 
 A product runs it after it builds its site, in a script of its own such as `"test:browser": "astro build && checks-browser"`.
-`checks-lint` never runs it, and a repository whose `checks.config.ts` sets no `browser` key never starts a browser or needs the peers.
+`checks-lint` never runs it, and a repository without a browser plan does not need the browser peers.
 
 ## Related topics
 

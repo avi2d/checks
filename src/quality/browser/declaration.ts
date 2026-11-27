@@ -1,15 +1,11 @@
 import { Array as Arr, Effect } from "effect";
-import { STATE_PRESETS, type CheckName, type Declaration, type Listed, type Route, type State, type Target, type Viewport } from "../../core/browser-settings.ts";
+import { BROWSER_SETTINGS_FILE, STATE_PRESETS, type CheckName, type Declaration, type Listed, type Route, type State, type Target, type Viewport } from "../../core/browser-settings.ts";
 import { Usage } from "../../core/main.ts";
-import { readSetting, SETTINGS_FILE, Settings } from "../../core/settings.ts";
+import { readBrowserPlan } from "./config-reader.ts";
 import { readSite, sitePages, type Site } from "./serve.ts";
 import { ENLARGED_TEXT_PX, SCREEN_SIZES, screenSizeName, type ScreenSize, type ScreenSizeSet } from "./screen-sizes.ts";
 
 export type { CheckName, Declaration, Listed, Roles, Route, ShiftBound, State, Target, Viewport, WeightBudgets } from "../../core/browser-settings.ts";
-
-const OLD_DECLARATION = "browser-checks.json";
-
-const DECLARATION = `${SETTINGS_FILE} browser`;
 
 export type ExpandedDeclaration = Omit<Declaration, "routes"> & { readonly routes: readonly Route[] };
 
@@ -116,13 +112,14 @@ export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRout
 }
 
 export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string, largest: ScreenSizeSet = "full") {
-  const listed = yield* readSetting(root, "browser", Settings.fields.browser, { file: OLD_DECLARATION });
-  if (listed === undefined) {
-    return yield* new Usage({ message: `${SETTINGS_FILE} sets no browser key, and a product opts in to the browser checks by declaring its pages there` });
+  const plan = yield* readBrowserPlan(root);
+  if (plan === undefined) {
+    return yield* new Usage({ message: `no browser plan; declare the pages to check in ${BROWSER_SETTINGS_FILE}` });
   }
+  const { listed, location } = plan;
   const hasPreset = listed.routes.some((entry) => "preset" in entry);
   const early = inconsistencies(expanded(listed, []), hasPreset);
-  if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
+  if (early.length > 0) return yield* new Usage({ message: `${location}: ${early.join("; ")}` });
   const site = yield* readSite(root, listed.site);
   const candidate = expanded(listed, sitePages(site), largest);
   const { routes } = candidate;
@@ -131,7 +128,7 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   }
   const declaration: Declaration = { ...candidate, routes };
   const found = inconsistencies(declaration);
-  if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
+  if (found.length > 0) return yield* new Usage({ message: `${location}: ${found.join("; ")}` });
   return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
 });
 

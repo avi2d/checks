@@ -44,19 +44,18 @@ test("a test-only change with matching builds skips instead of running the brows
   expect(await proof(repo, scope, undefined)).toBe(true);
 }, 60_000);
 
-test("a helper-only pull request does not bypass the matching-build skip", async () => {
+test("a helper-only pull request does not bypass the buildCommand skip", async () => {
   const repo = await setup({
     "tests/unit/helper.ts": "export {};\n",
-    "checks.config.ts": `export default {
-      browserBuild: ["bun", "build-site.ts"],
-      browser: {
-        site: "dist",
-        routes: [{ path: "/", locale: "en" }],
-        viewports: [{ preset: "full" }],
-        states: [{ name: "default" }],
-        targets: [{ name: "main", selector: "main" }],
-        checks: ["html"],
-      },
+    "checks.config.ts": "export default {};\n",
+    "checks.browser.config.ts": `export default {
+      buildCommand: ["bun", "build-site.ts"],
+      site: "dist",
+      routes: [{ path: "/", locale: "en" }],
+      viewports: [{ preset: "full" }],
+      states: [{ name: "default" }],
+      targets: [{ name: "main", selector: "main" }],
+      checks: ["html"],
     };\n`,
   });
   await repo.write({ "tests/unit/helper.ts": "export {};\n\n" });

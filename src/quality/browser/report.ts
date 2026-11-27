@@ -42,7 +42,7 @@ export function formatTimings(timings: readonly Timing[]): string {
 export function timingsSetting(timings: readonly Timing[]): string {
   const record = Object.fromEntries([...checkTimes(timings)].map(([path, checks]) =>
     [path, Object.fromEntries([...checks].map(([check, ms]) => [check, Math.round(ms)]))]));
-  return `${NAME}: browserTimings ${JSON.stringify(record)}`;
+  return `${NAME}: timingsMs ${JSON.stringify(record)}`;
 }
 
 export function counted(names: readonly string[]): readonly string[] {

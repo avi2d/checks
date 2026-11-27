@@ -52,7 +52,7 @@ const pages = { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/othe
 test("an unmapped path no mapped file imports widens instead of narrowing to the mapped route", () => {
   const sources = new Map([["src/home.ts", ""], ["src/new.ts", ""]]);
   expect(scopeRoutes(["src/home.ts", "src/new.ts"], { "src/home.ts": ["/"] }, sources, declaration))
-    .toEqual({ kind: "full", because: "src/new.ts has no browserRoutes mapping and no mapped file imports it" });
+    .toEqual({ kind: "full", because: "src/new.ts has no affectedRoutes mapping and no mapped file imports it" });
 });
 
 test("an unmapped component narrows to the route of the page that imports it instead of walking every route", () => {
@@ -81,7 +81,7 @@ test("an unmapped page that imports the component widens instead of narrowing to
     ["src/components/Card.astro", "<div>card</div>\n"],
   ]);
   expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration))
-    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no browserRoutes mapping" });
+    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no affectedRoutes mapping" });
 });
 
 test("a component one page imports through a tsconfig alias widens instead of narrowing to the relative importer", () => {
@@ -129,7 +129,7 @@ test("a component an unmapped one reaches through an alias widens instead of nar
 
 test("an unknown route widens instead of narrowing to it", async () => {
   const root = await rootWith('{ "src/home.ts": ["/missing/"] }');
-  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes names undeclared route /missing/" });
+  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "affectedRoutes names undeclared route /missing/" });
 });
 
 test("an unconnected test beside a mapped component does not widen to every route", () => {
@@ -158,6 +158,6 @@ test("a missing map widens instead of narrowing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);
   await writeFile(join(dir, "checks.config.ts"), "export default {};\n");
-  expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes is not configured" });
+  expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "affectedRoutes is not configured" });
 });
 
