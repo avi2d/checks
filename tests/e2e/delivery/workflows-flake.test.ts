@@ -7,6 +7,7 @@ import { CHECKOUT, fixtureRepos, ran, type FixtureRepo } from "../lib/fixture-re
 
 const WORKFLOWS = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
+const SETUP = join(CHECKOUT, "src", "delivery", "setup.ts");
 const FLAKE = ".github/workflows/flake.yml";
 const CRON = "23 5 * * MON,THU";
 const CONFIG = `export default { flakeCron: "${CRON}" };\n`;
@@ -34,6 +35,31 @@ test("flakeCron writes a schedule even when flake.yml is absent, keeps dispatch,
   expect((await write(repo)).exitCode).toBe(0);
   expect(await events(repo)).toEqual({ workflow_dispatch: null, schedule: [{ cron: CRON }] });
   expect(await wiring(repo)).toEqual({ exitCode: 0, text: "ci-wiring: .github/workflows holds the set checks-workflows writes, so the set runs every gate\n" });
+}, 30_000);
+
+test.each([
+  { command: WORKFLOWS, args: [], exitCode: 2 },
+  { command: WORKFLOWS, args: ["--write"], exitCode: 2 },
+  { command: WIRING, args: [], exitCode: 1 },
+  { command: SETUP, args: [], exitCode: 2 },
+])("rejects flakeCron that would start every five minutes through %j", async ({ command, args, exitCode }) => {
+  const flake = 'name: flake\non:\n  workflow_dispatch:\n  schedule:\n    - cron: "*/5 * * * *"\n';
+  const repo = await consumer({ "checks.config.ts": 'export default { flakeCron: "*/5 * * * *" };\n', [FLAKE]: flake });
+
+  const result = await ran($`bun ${command} ${args}`.cwd(repo.dir).env(withoutPullRequestEvent()));
+  expect(result.exitCode).toBe(exitCode);
+  expect(result.text).toContain("checks.config.ts key flakeCron does not decode");
+  expect(result.text).toContain("at most once a day");
+  expect(await workflowText(repo)).toBe(flake);
+}, 30_000);
+
+test.each(["23 5 * * *", "23 5 * * 1"])("daily limit does not block writing and checking %s", async (cron) => {
+  const repo = await consumer({ "checks.config.ts": `export default { flakeCron: "${cron}" };\n` });
+
+  expect((await write(repo)).exitCode).toBe(0);
+  expect(await events(repo)).toEqual({ workflow_dispatch: null, schedule: [{ cron }] });
+  expect((await ran($`bun ${WORKFLOWS}`.cwd(repo.dir).env(withoutPullRequestEvent()))).exitCode).toBe(0);
+  expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
 test("without flakeCron ci-wiring rejects a hand-added flake schedule and --write restores dispatch-only", async () => {

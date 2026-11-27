@@ -129,6 +129,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It accepts a schedule in the flake workflow only if the file matches what [checks-workflows](checks-workflows.md#flake-schedule) writes from `flakeCron`.
+The flake schedule runs at most once a day, with one minute and one hour.
 Apart from the release and flake schedules, it accepts only a weekly advisory scan in a public repository.
 A test, mutation, browser, or whole-tree workflow starts only by hand, with `gh workflow run`.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts.

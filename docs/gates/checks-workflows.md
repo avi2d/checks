@@ -134,7 +134,8 @@ export default defineConfig({
 });
 ```
 
-The setting takes one five-field GitHub Actions cron expression in UTC.
+The setting takes one five-field GitHub Actions cron expression in UTC that runs at most once a day.
+The minute must be one number from 0 to 59, and the hour must be one number from 0 to 23.
 Run `bunx checks-workflows --write` to create or update `flake.yml`.
 The schedule runs on the default branch, and `workflow_dispatch` still starts the workflow by hand.
 Without `flakeCron`, the workflow is optional and starts only by hand.

@@ -60,8 +60,8 @@ export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 export const ReleaseAssets = Schema.Boolean;
 
 export const FlakeCron = Schema.String.check(
-  Schema.isPattern(/^[A-Za-z0-9*,/-]+(?:[ \t]+[A-Za-z0-9*,/-]+){4}$/, { message: "is not a five-field cron expression, such as 23 5 * * 1" }),
-).annotate({ description: "The UTC cron expression for the generated flake workflow." });
+  Schema.isPattern(/^[0-5]?[0-9][ \t]+(?:[01]?[0-9]|2[0-3])(?:[ \t]+[A-Za-z0-9*,/-]+){3}$/, { message: "must be a five-field cron expression that runs at most once a day, with one minute from 0 to 59 and one hour from 0 to 23, such as 23 5 * * 1" }),
+).annotate({ description: "The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour." });
 
 const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
 

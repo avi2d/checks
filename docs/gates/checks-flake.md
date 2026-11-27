@@ -4,7 +4,8 @@ audience: consumers
 ---
 # checks-flake
 
-`checks-flake` is the run someone starts by hand that finds flaky tests and records the seeds each one fails with.
+`checks-flake` finds flaky tests and records the seeds each one fails with.
+The generated workflow starts by hand or on the schedule `flakeCron` sets, as [Flake schedule](checks-workflows.md#flake-schedule) describes.
 
 ## What it checks
 
