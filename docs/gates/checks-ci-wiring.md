@@ -152,9 +152,22 @@ Each refusal names the workflow file, the job and the limit.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `workflows.mutationRunsOn` and `workflows.selfHostedRunsOn` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
-It reads `workflows.mutationShardCount` from `checks.config.ts` when it compares the held and generated mutation workflows.
-It reads `workflows.flakeCron` from `checks.config.ts` when it compares the held and generated flake workflows.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json` and the shell scripts those steps and scripts run from the working tree.
+It reads these keys from `checks.config.ts`:
+
+| Key | What it changes |
+| --- | --- |
+| `workflows.mutationRunsOn` | The required runner labels for mutation jobs in a private repository and the labels refused on jobs a fork can reach in a public repository. |
+| `workflows.selfHostedRunsOn` | The allowed self-hosted runner label sets in a private repository and the labels refused on jobs a fork can reach in a public repository. |
+| `workflows.mutationShardCount` | The generated mutation workflow the gate compares with `mutation.yml` and with the workflow set. |
+| `workflows.repositoryVisibility` | The visibility for generating the workflow set the gate compares with the held files. |
+| `workflows.releaseAssets` | The release assets job in the generated workflow set the gate compares with the held files. |
+| `workflows.platformPackages` | The platform binary jobs and steps in the generated workflow set the gate compares with the held files. |
+| `workflows.testShards` | The test tier matrix jobs in the generated workflow set the gate compares with the held files. |
+| `workflows.extraTestJobs` | The extra test jobs in the generated workflow set the gate compares with the held files. |
+| `workflows.flakeCron` | The flake schedule in the generated workflow set and the scheduled flake workflow the gate accepts. |
+
+The runner policy reads repository visibility from the GitHub event, not `workflows.repositoryVisibility`.
 It checks that `HEAD:CHANGELOG.md` is a committed file at the repository root when workflows use the release tools.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
