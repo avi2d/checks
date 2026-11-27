@@ -198,12 +198,14 @@ const FILTERED_CAUSES = `import { Cause, Effect, Filter } from "effect";
 const failed = Effect.fail("boom");
 export const byPredicate = Effect.catchCauseIf(failed, Cause.hasFails, () => Effect.succeed("fallback"));
 export const byFilter = Effect.catchCauseFilter(failed, Filter.fromPredicate(Cause.hasFails), () => Effect.succeed("fallback"));
+export const neverMatches = Effect.catchCauseIf(failed, () => false, () => Effect.succeed("fallback"));
+export const residualCause = Effect.catchCauseFilter(failed, Filter.fromPredicate(() => false), () => Effect.succeed("fallback"));
 `;
 
 test("consumer bans filtered cause recovery without claiming it catches unmatched causes", async () => {
   const result = await lint(FILTERED_CAUSES);
   expect(result.exitCode).toBe(1);
-  expect(refusals(result)).toEqual(["3: Effect.catchCauseIf", "4: Effect.catchCauseFilter"]);
+  expect(refusals(result)).toEqual(["3: Effect.catchCauseIf", "4: Effect.catchCauseFilter", "5: Effect.catchCauseIf", "6: Effect.catchCauseFilter"]);
   for (const { message } of channelDiagnostics(result)) {
     expect(message).toContain("can recover from a Cause that includes defects or interruptions");
     expect(message).toContain("A non-match still fails");
