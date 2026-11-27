@@ -111,3 +111,26 @@ test(
   },
   120_000,
 );
+
+test(
+  "a name holding regex characters is matched as its exact text, so the range removing it still fails",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("package.json", MANIFEST);
+    await put("widget.ts", "export const sum = 'w+x';\nexport const call = 'run(';\n");
+    await put(GUIDE, `${OPENING}It adds \`w+x\`.\nIt opens \`run(\`.\n`);
+    const base = await commit("a guide names a sum and a call");
+    await put("widget.ts", "export const sum = 'wwx';\nexport const call = 'run';\n");
+    const head = await commit("drop the sum and the call");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain(
+      `  ${GUIDE}:4: names \`w+x\`, which the range removed from every file outside the docs. Say what holds now, or drop the line`,
+    );
+    expect(refused.text).toContain(
+      `  ${GUIDE}:5: names \`run(\`, which the range removed from every file outside the docs. Say what holds now, or drop the line`,
+    );
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
