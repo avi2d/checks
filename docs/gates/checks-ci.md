@@ -15,7 +15,7 @@ Each command runs one step and reads its inputs from the environment the step se
 | `changes` | writes `docs-only` and `tests-only` to `GITHUB_OUTPUT`, plus `browser` when `PLAN_BROWSER` is true | `BASE_SHA`, `PLAN_BROWSER` |
 | `draft-hold` | cancels its own run when a push to a draft pull request started it, and fails the job when the job outlives the cancel | `DRAFT`, `GH_TOKEN`, `WAIT_SECONDS` |
 | `require-success` | fails unless every job the gate needs passed, or skipped where `SKIPS` allows | `RESULTS`, `SKIPS` |
-| `commit-status` | posts a job's result as a commit status. `ci.yml` uses it on a dispatched run, and `pr-title.yml` uses it on pull request opens, reopens, pushes, and title edits to post the commitlint status | `JOB_STATUS`, `CONTEXT`, `HEAD_SHA`, `PULL_REQUEST`, `DESCRIPTION`, `ATTEMPTS`, `GH_TOKEN` |
+| `commit-status` | posts a job's result as a commit status. `ci.yml` uses it on a dispatched run, `pr-title.yml` uses it on pull request opens, reopens, pushes, and title edits to post the commitlint status, and `pr-text.yml` in a public repository uses it to post the `pr-text` status on every change to a pull request's text | `JOB_STATUS`, `CONTEXT`, `HEAD_SHA`, `PULL_REQUEST`, `DESCRIPTION`, `ATTEMPTS`, `GH_TOKEN` |
 | `held-runs` | deletes the pull request runs GitHub holds for approval on a branch's tip | `BRANCH`, `GH_TOKEN` |
 | `playwright` | installs the browsers `BROWSERS` names with `install`, or their system packages with `install-deps` | `BROWSERS` |
 | `preview-address` | reads the preview address of the branch | `PROJECT`, `BRANCH`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |

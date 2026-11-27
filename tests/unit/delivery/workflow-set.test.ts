@@ -124,6 +124,16 @@ test("whole-tree jobs keep the shared action pins and visibility runner instead 
   }
 });
 
+test("a public repository's set holds pr-text.yml for both kinds and the kit, so a public repository without the scan workflow fails here", () => {
+  const visible = (set: CallerSet): CallerSet => ({ ...set, options: { ...set.options, publicRepository: true } });
+  for (const set of [CODE, SITE]) {
+    for (const kit of [false, true]) {
+      expect([set.kind, kit, requiredSet(visible(set), kit).some(({ name }) => name === "pr-text.yml")]).toEqual([set.kind, kit, true]);
+      expect([set.kind, kit, requiredSet(set, kit).some(({ name }) => name === "pr-text.yml")]).toEqual([set.kind, kit, false]);
+    }
+  }
+});
+
 test("configured tier shards keep the aggregate checks job and pull request selection", () => {
   const set: CallerSet = { ...CODE, testTierShards: { e2e: 2 } };
   const jobs = jobsOf(documentOf(set, "ci.yml"));
