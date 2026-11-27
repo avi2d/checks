@@ -61,7 +61,7 @@ It tells the owner to declare the repository owners in `package.json` `author` o
 It reads the working tree, which is the repository it sets up.
 It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its workflows hold.
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
-It reads `checks.config.ts` for the repository visibility that selects the workflow runners and for `releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
+It reads `checks.config.ts` for the repository visibility, which selects the workflow runners and whether the set takes `pr-text.yml`, and for `releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
 It also reads `platformPackages`, which adds the `binaries` job to `main.yml`.
 It reads `extraTestJobs` for the extra test jobs, their environment variables, setup commands, and test commands in `ci.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.

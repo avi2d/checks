@@ -40,6 +40,7 @@ A site takes these files under `.github/workflows/`:
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `production.yml` | `workflow_dispatch` | the production deploy |
 | `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `pr-text.yml` | in a public repository, every change to a pull request's text | the scan [checks-pr-text](checks-pr-text.md) runs, posted as the `pr-text` status |
 | `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
 
 A code repository takes these files:
@@ -51,6 +52,7 @@ A code repository takes these files:
 | `main.yml` | a push to `main` | `bunx checks-release-tag`, which tags and publishes a release commit |
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `pr-text.yml` | in a public repository, every change to a pull request's text | the scan [checks-pr-text](checks-pr-text.md) runs, posted as the `pr-text` status |
 | `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
 
 The kit requires neither `mutation.yml` nor `whole-tree-run.yml`.
@@ -72,7 +74,7 @@ The command refuses a key without that default job, including a custom command w
 For a pull request, a newer push cancels the `ci.yml` run it replaces.
 Pushes to `main` and manual dispatches each start a separate run.
 The code `main.yml` release job holds group `main` without cancellation.
-Only the fork-reachable jobs differ with repository visibility, with the test jobs of `ci.yml` and the Claude Code version.
+Only the fork-reachable jobs and `pr-text.yml` differ with repository visibility, with the test jobs of `ci.yml` and the Claude Code version.
 The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
@@ -81,9 +83,14 @@ With `releaseAssets` enabled, `checks-workflows` writes the kit's `release.yml` 
 A job in those files that calls another repository's workflow is still refused.
 Replace it with its own steps by hand.
 
-`pr-text.yml` stays as it is in both kinds.
-It runs on `pull_request_target` and comment events, so no `ci.yml` job replaces it.
-`checks-workflows` never compares it, `--write` neither writes nor deletes it, and it is no extra.
+A public repository takes `pr-text.yml` in both kinds, and the kit takes the same file.
+It runs on `pull_request_target`, `issue_comment`, `pull_request_review`, and `pull_request_review_comment`, so no `ci.yml` job replaces it.
+GitHub runs `pull_request_target` and `issue_comment` from the default branch's copy of the file, so workflow changes take effect after merge.
+The `pull_request_review` and `pull_request_review_comment` events run the pull request's copy from its merge ref.
+Those review events get secrets only for a same-repository pull request, so the job skips fork reviews.
+The kit's suite checks the file it writes before a consumer merges it.
+A private repository's pull request text reaches no public reader, so its set takes no `pr-text.yml`.
+There `checks-workflows` never compares one it holds, `--write` neither writes nor deletes it, and it is no extra.
 The refusal of a call to another repository's workflow still reads it.
 Replace a job that calls another repository's workflow with its own steps by hand.
 
@@ -329,7 +336,7 @@ A ruleset requiring only the aggregate `checks` job needs no change.
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
-A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml`, `preview-close.yml` and `whole-tree-run.yml`.
+A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml`, `pr-text.yml`, `preview-close.yml` and `whole-tree-run.yml`.
 Its other workflows keep `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its default jobs.
 The generated mutation workflow always uses hosted runners.
@@ -352,7 +359,7 @@ checks-workflows --write --pages acme --domain acme.example --production acme/ac
 ```
 
 With `--write` it writes every file of the set and its actions, and rewrites a present optional file to the file the set writes.
-It deletes every other workflow file except `pr-text.yml`.
+It deletes every other workflow file except a private repository's `pr-text.yml`.
 It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the kit writes.
 A rewrite of a site keeps the three names its workflows hold.
 A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` passes the three names in `with`, and `--write` keeps them as the site names.
