@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -150,6 +150,24 @@ test("unitTestFiles lists nothing rather than throwing in a repository without t
     process.chdir(original);
     rmSync(repository, { recursive: true, force: true });
   }
+});
+
+test("the runner receives an existing absolute file instead of resolving a package preload as a project path", () => {
+  const script = `
+    import { readFileSync } from "node:fs";
+    import { BunTestRunner } from "@hughescr/stryker-bun-runner";
+    import { parse } from "smol-toml";
+    process.argv = ["bun", "stryker", "run"];
+    const { default: preset } = await import(${JSON.stringify(presetUrl)});
+    const runner = new BunTestRunner({ debug() {}, warn() {} }, { bun: preset.bun });
+    const config = parse(readFileSync(await runner.ensureSanitizedBunfig(), "utf8"));
+    console.log(config.test.preload[0]);
+  `;
+  const result = Bun.spawnSync([process.execPath, "-e", script], { env: { ...process.env, CI: "true" }, stdout: "pipe", stderr: "pipe" });
+  expect(result.exitCode).toBe(0);
+  const preload = result.stdout.toString().trim();
+  expect(preload).toBe(fileURLToPath(new URL("../../../src/testing/local-test-preload.ts", import.meta.url)));
+  expect(existsSync(preload)).toBe(true);
 });
 
 test("the preset is exported at its own path the way every other shared artifact is exposed", async () => {

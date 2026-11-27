@@ -30,6 +30,8 @@ A repository without `tests/unit` lists no file, and the preset leaves `bun.test
 A static mutant has no per-test coverage, so it still loads every listed file, and with bail it stops at the first test that fails.
 The runner orders each mutant's test files by their dry-run duration and passes absolute paths to Bun.
 For a static mutant, it puts likely killers first when bail is enabled.
+For a `stryker run`, the preset resolves package-name preloads in `bunfig.toml` to absolute paths before the runner reads them.
+It leaves relative and absolute preload paths unchanged.
 
 The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`.
 A baseline or a scoped run leaves the variable at another value or unset, so it still tests each static mutant.
