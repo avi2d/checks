@@ -27,8 +27,10 @@ const decodeJobs = Schema.decodeUnknownSync(Schema.Struct({ jobs: Schema.Record(
 const Step = Schema.Struct({
   run: Schema.optionalKey(Schema.String),
   id: Schema.optionalKey(Schema.String),
+  name: Schema.optionalKey(Schema.String),
+  if: Schema.optionalKey(Schema.String),
   uses: Schema.optionalKey(Schema.String),
-  with: Schema.optionalKey(Schema.Struct({ path: Schema.optionalKey(Schema.String) })),
+  with: Schema.optionalKey(Schema.Struct({ path: Schema.optionalKey(Schema.String), key: Schema.optionalKey(Schema.String) })),
 });
 const decodeJob = Schema.decodeUnknownSync(Schema.Struct({ steps: Schema.Array(Step) }));
 
@@ -62,11 +64,17 @@ test("a code write that leaves a job calling another repository's workflow, or a
 test.each([
   { kind: "code", flags: [] },
   { kind: "site", flags: SITE_FLAGS },
-])("the $kind e2e job does not run tests before it provisions the pinned gitleaks", async ({ flags }) => {
+])("the $kind e2e job does not use a different gitleaks cache from static or provision it after tests", async ({ flags }) => {
   const repo = await open({ "package.json": manifest, "tests/e2e/scan.test.ts": "export {};\n" });
   await repo.commit("start");
   expect((await workflows(repo, ["--write", ...flags])).exitCode).toBe(0);
   await expectGitleaksBeforeTests(repo, "ci.yml", "e2e");
+  const { jobs } = decodeJobs(await parsed(repo, "ci.yml"));
+  const cache = (job: string) => decodeJob(jobs[job]).steps.filter((step) => step.with?.path === "~/.cache/avi2dg-checks/gitleaks");
+  const staticCache = cache("static");
+  expect(staticCache).toHaveLength(1);
+  expect(staticCache[0]?.with?.key).toBe("gitleaks-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('node_modules/@avi2dg/checks/src/delivery/gitleaks.ts') }}");
+  expect(cache("e2e")).toEqual(staticCache);
 }, 30_000);
 
 test.each<{ kind: string; files: Readonly<Record<string, string>> }>([
