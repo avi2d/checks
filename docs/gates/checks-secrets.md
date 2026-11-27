@@ -23,7 +23,7 @@ It runs gitleaks' default rules, which know the API keys and tokens of common se
 
 | Rule | What it matches | What passes |
 | --- | --- | --- |
-| `claude-login-token` | a Claude login access or refresh token beginning with `sk-ant-oat01-` or `sk-ant-ort01-` and followed by letters, digits, underscores or hyphens | the prefix alone or an ordinary string |
+| `claude-login-token` | a Claude login access or refresh token beginning with `sk-ant-oat01-` or `sk-ant-ort01-`, followed by at least 80 letters, digits, underscores, or hyphens | the prefix alone, a body shorter than 80 characters such as `xxxx`, `REDACTED`, or `YOUR_TOKEN`, or an ordinary string |
 | `wireguard-key` | a WireGuard or AmneziaWG private or pre-shared key value, 44 base64 characters, under a name that ends in `PrivateKey`, `PresharedKey` or `psk`, such as a real key after `PrivateKey =`, `"privateKey":`, `wg_private_key:` or `client_psk:` | a placeholder such as `<private-key>` or `${WG_PRIVATE_KEY}` |
 | `wireguard-key-file` | a line that holds only a WireGuard or AmneziaWG key, 44 base64 characters, in a file whose name holds `priv`, `preshared`, `pre_shared`, `pre-shared` or `psk`, such as the `privatekey` file `wg genkey \| tee privatekey` writes, whatever else the name holds | a bare key in a file with any other name, such as `publickey` or `peer.pub`, and a placeholder such as `<private-key>` |
 | `wireguard-dot-key-file` | a line that holds only a WireGuard or AmneziaWG key in a file whose name ends in `.key`, such as `wg0.key` | a file whose name ends in `pub.key` or `public.key`, such as `server-public.key`, unless `wireguard-key-file` matches its name |

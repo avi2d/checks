@@ -57,9 +57,15 @@ function cases(): readonly Case[] {
   const dotKeyFile = ["wireguard-dot-key-file"];
   const passes: readonly string[] = [];
   const lines: readonly Omit<Case, "file">[] = [
-    { line: `${["sk-ant", "oat01"].join("-")}-${alphanumeric(40)}`, rules: ["claude-login-token"] },
-    { line: `${["sk-ant", "ort01"].join("-")}-${alphanumeric(40)}`, rules: ["claude-login-token"] },
-    { line: "ordinary string", rules: passes },
+    ...["oat01", "ort01"].flatMap((kind) => {
+      const prefix = `${["sk-ant", kind].join("-")}-`;
+      return [
+        { line: `${prefix}${"aB3-_".repeat(18)}`, rules: ["claude-login-token"] },
+        { line: `${prefix}${"aB3-_".repeat(16)}`, rules: ["claude-login-token"] },
+        { line: `${prefix}${"aB3-_".repeat(15)}aB3-`, rules: passes },
+        ...["", "xxxx", "REDACTED", "YOUR_TOKEN"].map((body) => ({ line: `${prefix}${body}`, rules: passes })),
+      ];
+    }),
     { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
@@ -238,7 +244,7 @@ test(
 );
 
 test(
-  "token, link and key lines fail on exactly their named rules, while ordinary strings pass",
+  "short Claude login placeholders pass while token-length bodies, links and keys fail on exactly their named rules",
   async () => {
     const table = cases();
     const { repo, base } = await started();

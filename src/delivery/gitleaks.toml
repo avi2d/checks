@@ -6,7 +6,7 @@ useDefault = true
 [[rules]]
 id = "claude-login-token"
 description = "A Claude login access or refresh token"
-regex = '''sk-ant-(?:oat01|ort01)-[A-Za-z0-9_-]+'''
+regex = '''sk-ant-(?:oat01|ort01)-[A-Za-z0-9_-]{80,}'''
 keywords = ["sk-ant-oat01-", "sk-ant-ort01-"]
 
 [[rules]]
