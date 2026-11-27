@@ -97,9 +97,11 @@ test("a size custom property hundreds of style attributes read fails once per at
   expect(red.exitCode).toBe(1);
 }, 60_000);
 
-test("the design token rules stay off without token globs, and hold nothing in a declared token file", async () => {
+test("a long hex colour does not escape the base rule without token globs, while token rules leave declared token files alone", async () => {
   const { write, script } = await repository(WIDELY, { "src/site.css": "a { color: #ffffff; }\n" });
-  expect((await script(GATE)).exitCode).toBe(1);
+  const longHex = await script(GATE);
+  expect(longHex.text).toContain('Expected "#ffffff" to be "#fff" (color-hex-length)');
+  expect(longHex.exitCode).toBe(1);
   await write({ "src/site.css": "a {\n  color: #000;\n  font-size: 12px;\n}\n" });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
 
