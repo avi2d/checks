@@ -58,13 +58,9 @@ function cases(): readonly Case[] {
   const passes: readonly string[] = [];
   const lines: readonly Omit<Case, "file">[] = [
     ...["oat01", "ort01"].flatMap((kind) => {
-      const prefix = `${["sk-ant", kind].join("-")}-`;
-      return [
-        { line: `${prefix}${"aB3-_".repeat(18)}`, rules: ["claude-login-token"] },
-        { line: `${prefix}${"aB3-_".repeat(16)}`, rules: ["claude-login-token"] },
-        { line: `${prefix}${"aB3-_".repeat(15)}aB3-`, rules: passes },
-        ...["", "xxxx", "REDACTED", "YOUR_TOKEN"].map((body) => ({ line: `${prefix}${body}`, rules: passes })),
-      ];
+      const row = (body: string, rules: readonly string[]) => ({ line: `${["sk-ant", kind].join("-")}-${body}`, rules });
+      const token = ["claude-login-token"];
+      return [row("aB3-_".repeat(18), token), row("aB3-_".repeat(16), token), row(`${"aB3-_".repeat(15)}aB3-`, passes), ...["", "xxxx", "REDACTED", "YOUR_TOKEN"].map((body) => row(body, passes))];
     }),
     { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
