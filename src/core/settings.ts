@@ -318,6 +318,7 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string, s
   const locations: Partial<Record<SettingKey, string>> = {};
   for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
   for (const key of flatKeysPresent(settings)) {
+    if (key === "agentTests" && (settings[key] === undefined || !Object.hasOwn(yield* decodeSetting(key, AgentTests, settings[key], key), "allowLocal"))) continue;
     locations[key] ??= key;
     if (source === "current") yield* reportDeprecation(file, key);
   }

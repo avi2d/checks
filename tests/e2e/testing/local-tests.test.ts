@@ -11,7 +11,7 @@ const browser = join(CHECKOUT, "src", "quality", "browser", "browser.ts");
 const flake = join(CHECKOUT, "src", "testing", "flake.ts");
 const mutation = join(CHECKOUT, "src", "testing", "mutation.ts");
 const { CI: _ci, CHECKS_AGENT: _checksAgent, AI_AGENT: _aiAgent, ...cleanEnv } = process.env;
-const BLOCKED = "agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them";
+const BLOCKED = "checks.config.ts: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them";
 
 async function repository(settings?: string): Promise<string> {
   const dir = await scratch("checks-local-tests-");
@@ -33,6 +33,24 @@ test("the query defaults to blocked instead of allowing an undeclared setting", 
   const result = await query(dir);
   expect(result.exitCode).toBe(0);
   expect(result.text).toBe("blocked\n");
+});
+
+test.each([
+  ["omitted", "", false],
+  ["empty flat", "agentTests: {}", false],
+  ["empty flat with grouped refusal", "agentTests: {}, test: { allowAgentRunsOutsideCI: false }", false],
+  ["empty flat with grouped allowance", "agentTests: {}, test: { allowAgentRunsOutsideCI: true }", true],
+] as const)("an %s policy does not invent a flat allowLocal setting", async (_name, settings, allowed) => {
+  const dir = await repository(settings);
+  const result = await $`bun ${command}`.cwd(dir).env(cleanEnv).nothrow().quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(allowed ? "allowed\n" : "blocked\n");
+  expect(result.stderr.toString()).toBe("");
+  const guard = await $`bun --preload @avi2dg/checks/local-test-preload -e ${'console.log("started")'}`.cwd(dir).env({ ...cleanEnv, CHECKS_AGENT: "1" }).nothrow().quiet();
+  expect(guard.exitCode).toBe(allowed ? 0 : 1);
+  expect(guard.stdout.toString()).toBe(allowed ? "started\n" : "");
+  const location = settings.includes("test:") ? " key test.allowAgentRunsOutsideCI" : "";
+  expect(guard.stderr.toString()).toBe(allowed ? "" : `checks.config.ts${location}: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them\n`);
 });
 
 test("the query rejects an invalid grouped boolean without inventing an allowLocal member", async () => {

@@ -10,7 +10,7 @@ const readAgentPolicy = Effect.fn("readAgentPolicy")(function* (root: string) {
   const settings = yield* loadSettings(root);
   const value = settings.values["agentTests"];
   const { allowLocal } = value === undefined ? DEFAULT_AGENT_TESTS : yield* decodeSetting("agentTests", AgentTests, value, settingLocation(settings.locations, "agentTests"));
-  return { allowLocal: allowLocal ?? DEFAULT_AGENT_TESTS.allowLocal, location: settings.locations.agentTests === "agentTests" ? "agentTests.allowLocal" : settingLocation(settings.locations, "agentTests") };
+  return { allowLocal: allowLocal ?? DEFAULT_AGENT_TESTS.allowLocal, location: settings.locations.agentTests === "agentTests" ? "agentTests.allowLocal" : settings.locations.agentTests };
 });
 
 export const allowsLocalAgentTests = Effect.fn("allowsLocalAgentTests")(function* (root: string) {
@@ -27,7 +27,7 @@ export const refuseLocalTests = Effect.fn("refuseLocalTests")(function* (root: s
   if (ci) return;
   const policy = yield* readAgentPolicy(root);
   if (!policy.allowLocal) {
-    return yield* new Usage({ message: `${SETTINGS_FILE} key ${policy.location}: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them` });
+    return yield* new Usage({ message: `${SETTINGS_FILE}${policy.location === undefined ? "" : ` key ${policy.location}`}: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them` });
   }
 });
 
