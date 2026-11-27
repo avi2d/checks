@@ -47,8 +47,8 @@ test("a written code workflow set still refuses a missing or untracked changelog
   for (const name of ["ci.yml", "pr-title.yml", "main.yml", "release.yml"]) expect(missing.text).toContain(`  .github/workflows/${name}: missing\n`);
   expect(missing.text).toContain("  .github/actions/setup/action.yml: missing\n");
 
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
-  expect(await held(repo)).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await held(repo)).toEqual(["ci.yml", "main.yml", "mutation.yml", "pr-title.yml", "release.yml", "whole-tree-run.yml"]);
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
@@ -156,9 +156,9 @@ test("a first site write takes the three names as flags, writes them into the wo
 
   expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({
     exitCode: 0,
-    text: "workflows: wrote the 7 workflow file(s) of the site set and its 3 action file(s), and deleted pages.yml\n",
+    text: "workflows: wrote the 9 workflow file(s) of the site set and its 3 action file(s), and deleted pages.yml\n",
   });
-  expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "main.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml"]);
+  expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "main.yml", "mutation.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml", "whole-tree-run.yml"]);
   expect(await parsed(repo, "advisories.yml")).toMatchObject({
     on: { workflow_dispatch: null, schedule: [{ cron: "15 5 * * 1" }] },
     jobs: { advisories: { permissions: { contents: "read", issues: "write" } } },
@@ -176,13 +176,13 @@ test("a first site write takes the three names as flags, writes them into the wo
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the site set checks-workflows writes\n" });
 
   await repo.commit("ci: write the site set");
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set and its 3 action file(s)\n" });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 9 workflow file(s) of the site set and its 3 action file(s)\n" });
   expect((await $`git status --porcelain`.cwd(repo.dir).text()).trim()).toBe("");
 }, 30_000);
 test("a package.json site field makes no site, so a repository with one and no site workflow is judged as code", async () => {
   const repo = await open({ "package.json": manifest({ site: SITE }) });
   await repo.commit("start");
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
 }, 30_000);
 test("a site workflow that names only its Pages project is refused with the flags to pass, and --write without them writes nothing", async () => {
   const partial = "name: ci\non: pull_request\nenv:\n  SITE_PAGES: acme\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n";
@@ -193,7 +193,7 @@ test("a site workflow that names only its Pages project is refused with the flag
   expect(await workflows(repo)).toEqual({ exitCode: 1, text: `workflows: ${advice}` });
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 2, text: `workflows: ${advice}` });
   expect(await held(repo)).toEqual(["ci.yml"]);
-  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n" });
+  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 8 workflow file(s) of the site set and its 3 action file(s)\n" });
 }, 30_000);
 test("an edited line in a written file is refused with the line it holds and the line checks-workflows writes", async () => {
   const repo = await open({ "package.json": manifest() });
@@ -247,7 +247,7 @@ test("a pr-text.yml scan stays as it is: it is no extra, --write keeps it, and i
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("  .github/workflows/ci.yml: missing\n");
   expect(refused.text).not.toContain("pr-text");
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
   expect(await text(repo, "pr-text.yml")).toBe(scan);
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
@@ -279,7 +279,7 @@ test("a job that calls avi2d/workflows is refused instead of passing as the set,
     ].join("\n"),
   );
 
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the code set and its 2 action file(s)\n" });
   await expectNoRemoteCall(repo);
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
@@ -314,7 +314,7 @@ test("a site-ci.yml shared caller is refused, and --write writes the site set wi
 
   expect(await workflows(repo, ["--write"])).toEqual({
     exitCode: 0,
-    text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s), and deleted site-ci.yml\n",
+    text: "workflows: wrote the 8 workflow file(s) of the site set and its 3 action file(s), and deleted site-ci.yml\n",
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({ env: { SITE_PAGES: "acme" } });
   expect(await parsed(repo, "production.yml")).toMatchObject({
@@ -331,7 +331,7 @@ test("a ci.yml that calls test.yml keeps its run, browsers and runs-on, so --wri
 
   expect(await workflows(repo, ["--write"])).toEqual({
     exitCode: 0,
-    text: "workflows: wrote the 4 workflow file(s) of the code set and its 3 action file(s)\n",
+    text: "workflows: wrote the 6 workflow file(s) of the code set and its 3 action file(s)\n",
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: { e2e: { "runs-on": "ubuntu-latest", steps: expect.arrayContaining([{ id: "test", run: "bun run test:e2e" }]) } },
@@ -350,7 +350,7 @@ test("a shared ci.yml that passes hold, artifact and heavy keeps the site browse
 
   expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({
     exitCode: 0,
-    text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n",
+    text: "workflows: wrote the 8 workflow file(s) of the site set and its 3 action file(s)\n",
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
@@ -419,8 +419,8 @@ test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and week
   const repo = await open({ "package.json": manifest(), ...(await handRolledFiles()) });
   await repo.commit("start");
 
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the code set and its 2 action file(s)\n" });
-  expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "pr-title.yml", "release.yml"]);
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 9 workflow file(s) of the code set and its 2 action file(s)\n" });
+  expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "mutation.yml", "pr-title.yml", "release.yml", "whole-tree-run.yml"]);
   expect(await parsed(repo, "docs.yml")).toMatchObject({
     jobs: { build: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run docs:build" }), expect.objectContaining({ with: expect.objectContaining({ path: "docs/.vitepress/dist" }) })]) } },
   });

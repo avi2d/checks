@@ -242,7 +242,7 @@ const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivat
 const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set: CallerSet, kit: boolean) {
   for (const { name, text } of requiredSet(set, kit)) yield* setupFile(root, `.github/workflows/${name}`, text);
   for (const { path, text } of fullActions(set)) yield* setupFile(root, path, text);
-  const mutation = byHandSet(set).find((file) => file.name === "mutation.yml");
+  const mutation = byHandSet(set, kit).find((file) => file.name === "mutation.yml");
   if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });

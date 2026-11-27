@@ -39,6 +39,8 @@ A site takes these files under `.github/workflows/`:
 | `main.yml` | a push to `main` | the staging deploy |
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `production.yml` | `workflow_dispatch` | the production deploy |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
 
 A code repository takes these files:
 
@@ -48,6 +50,11 @@ A code repository takes these files:
 | `pr-title.yml` | every push to a pull request and every title edit | the title check, posted as the `commitlint` status |
 | `main.yml` | a push to `main` | `bunx checks-release-tag`, which tags and publishes a release commit |
 | `release.yml` | `workflow_dispatch` | the release pull request |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
+| `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
+
+The kit requires neither `mutation.yml` nor `whole-tree-run.yml`.
+It may hold `mutation.yml` as an optional file, but `whole-tree-run.yml` is outside its set.
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
@@ -82,13 +89,13 @@ Replace a job that calls another repository's workflow with its own steps by han
 
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
-A code repository may hold `advisories.yml`, `mutation.yml`, `flake.yml` and `docs.yml`.
+A code repository may hold `advisories.yml`, `flake.yml` and `docs.yml`.
+The kit may also hold `mutation.yml`, which starts on `workflow_dispatch` or `workflow_call` and keeps the full mutation refresh.
 Each optional file keeps what the file it replaces does:
 
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `mutation.yml` | `workflow_dispatch` and `workflow_call` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard and merges the reports. Only a `workflow_dispatch` run keeps the merged report as the baseline. A run started through `workflow_call` uses the report only within that run |
 | `flake.yml` | `workflow_dispatch` | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
@@ -322,7 +329,7 @@ A ruleset requiring only the aggregate `checks` job needs no change.
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
-A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml` and `preview-close.yml`.
+A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml`, `preview-close.yml` and `whole-tree-run.yml`.
 Its other workflows keep `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its default jobs.
 The generated mutation workflow always uses hosted runners.

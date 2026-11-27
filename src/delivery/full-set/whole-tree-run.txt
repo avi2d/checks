@@ -1,0 +1,76 @@
+name: whole-tree-run
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: whole-tree-run
+  cancel-in-progress: false
+jobs:
+  mutation:
+    uses: ./.github/workflows/mutation.yml
+    permissions: { contents: read, actions: write }
+  tests:
+    runs-on: __RUNNER__
+    timeout-minutes: 20
+    permissions: { contents: read }
+    steps:
+      - uses: __CHECKOUT__
+      - uses: ./.github/actions/setup
+__PLAYWRIGHT__
+      - run: bunx checks-ci whole-tree tests
+      - uses: __UPLOAD__
+        with:
+          name: whole-tree-run-tests
+          path: reports/whole-tree-run-tests/
+          retention-days: 1
+  gates:
+    runs-on: __RUNNER__
+    timeout-minutes: 20
+    permissions: { contents: read }
+    steps:
+      - uses: __CHECKOUT__
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - run: bunx checks-ci whole-tree gates
+      - uses: __UPLOAD__
+        with:
+          name: whole-tree-run-gates
+          path: reports/whole-tree-run-gates/
+          retention-days: 1
+  report:
+    needs: [mutation, gates, tests]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
+    runs-on: __RUNNER__
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: __CHECKOUT__
+      - uses: ./.github/actions/setup
+      - uses: __DOWNLOAD__
+        with:
+          pattern: mutation-baseline-full
+          path: reports/mutation
+      - if: needs.gates.result == 'success'
+        uses: __DOWNLOAD__
+        with:
+          name: whole-tree-run-gates
+          path: reports/whole-tree-run-gates
+      - uses: __DOWNLOAD__
+        with:
+          name: whole-tree-run-tests
+          path: reports/whole-tree-run-tests
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GATES_RESULT: ${{ needs.gates.result }}
+        run: bunx checks-ci whole-tree report
+      - uses: __UPLOAD__
+        with:
+          name: whole-tree-run
+          path: reports/whole-tree-run.json
+          if-no-files-found: ignore
+          retention-days: 90

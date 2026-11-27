@@ -125,131 +125,43 @@ checks-whole-tree-run: recorded 42 file score(s) in reports/whole-tree-run.json
 
 ## When it runs
 
-Only a whole-tree workflow the repository writes runs it, after that workflow's full mutation run, its long test tiers and its whole-tree lint gates.
+`checks-workflows` generates `whole-tree-run.yml` for each consumer repository.
+The workflow starts only by hand through `workflow_dispatch`.
+It runs a full mutation run, the live and pixel test tiers that have test files, and the whole-tree lint gates.
+It calls `checks-whole-tree-run` to file findings after those jobs.
+The kit's own repository runs the sweep by hand.
 
-## What each repository runs
+## The generated workflow
 
-`checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
-`checks-repetition` runs on every pull request in a repository that tracks TypeScript.
-`checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
-On `main`, the `mutation` workflow runs a full mutation refresh, which starts by hand every 28 days.
-No workflow under `.github/workflows` in checks, skills, career, dotfiles, home-vpn, orc or shopping runs the whole-tree sweep or the issue filing.
+The mutation job calls the generated `mutation.yml` as a reusable workflow.
+Its report is used only by that whole-tree run and does not refresh the mutation baseline.
+Each of the tests, gates and report jobs runs one `checks-ci whole-tree` step, as [checks-ci](checks-ci.md) says.
+The tests job keeps a JUnit report for each long tier with test files.
+In a site it installs Chromium and WebKit before running tests.
+It also installs any browsers the test jobs in `ci.yml` require.
+A failing test does not stop the upload, since the report turns it into an issue.
+A missing report for a tier with tests fails the report job.
+The gates job keeps the output of `checks-lint --whole-tree` even when a gate fails.
+The report job runs when the tests job succeeds, even if the mutation or gates job fails.
+It names the mutation report even when the mutation job failed, so the missing report becomes a finding.
+It passes the gates log only when the gates job succeeded.
+A failed gates job still fails the workflow.
 
-The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
-Nothing files issues until a repository adds a `whole-tree-run` workflow.
+The workflow queues runs instead of cancelling a run that is filing findings.
+A dispatch on a branch other than `main` lists findings without filing issues or recording scores.
+A successful run with a complete mutation report uploads the `whole-tree-run` artifact for 90 days.
+A public repository uses hosted runners for the tests, gates, and report jobs.
+A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for those jobs.
+The report job needs `actions: read` and `issues: write`.
 
 ## Running it by hand
 
-A repository runs it from a workflow named `whole-tree-run`, which someone starts with `gh workflow run whole-tree-run`.
-The workflow holds no schedule, since [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses one:
-
-```yaml
-name: whole-tree-run
-on:
-  workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: whole-tree-run
-  cancel-in-progress: false
-jobs:
-  mutation:
-    uses: ./.github/workflows/mutation.yml
-    permissions: { contents: read, actions: write }
-  tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - run: |
-          bunx checks-test --tier=live --junit=reports/whole-tree-run-tests/live.xml || true
-          bunx checks-test --tier=pixel --junit=reports/whole-tree-run-tests/pixel.xml || true
-      - uses: actions/upload-artifact@v7
-        with:
-          name: whole-tree-run-tests
-          path: reports/whole-tree-run-tests/
-          retention-days: 1
-  gates:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - run: mkdir -p reports/whole-tree-run-gates && bunx checks-lint --whole-tree > reports/whole-tree-run-gates/gates.log 2>&1 || true
-      - uses: actions/upload-artifact@v7
-        with:
-          name: whole-tree-run-gates
-          path: reports/whole-tree-run-gates/
-          retention-days: 1
-  report:
-    needs: [mutation, gates, tests]
-    if: ${{ !cancelled() && needs.tests.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: read
-      issues: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: mutation-baseline-full
-          path: reports/mutation
-      - if: needs.gates.result == 'success'
-        uses: actions/download-artifact@v8
-        with:
-          name: whole-tree-run-gates
-          path: reports/whole-tree-run-gates
-      - uses: actions/download-artifact@v8
-        with:
-          name: whole-tree-run-tests
-          path: reports/whole-tree-run-tests
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: bunx checks-whole-tree-run --mutation reports/mutation/mutation-baseline-full/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: whole-tree-run
-          path: reports/whole-tree-run.json
-          if-no-files-found: ignore
-          retention-days: 90
-```
-
-The tests job runs each long tier the repository holds, `live` and `pixel` as [checks-test](checks-test.md#test-tiers) names them, and keeps each JUnit report.
-Each `|| true` lets the job go on to the upload after a failing test, since that test becomes an issue.
-A tier that writes no report fails the report job, because `checks-whole-tree-run` cannot read it.
-The gates job runs the whole-tree lint gates and keeps the log, since a failing gate becomes an issue.
-The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
-It always passes `--mutation`, so a mutation job that failed or timed out leaves a missing report that becomes an issue.
-The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
-The mutation job calls the `mutation.yml` [checks-setup](checks-setup.md) writes, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses a mutation job of the repository's own.
-That workflow splits the full run into shards and uploads the merged report as the `mutation-baseline-full` artifact.
-A whole-tree run's mutation report is used only by that run and does not refresh the baseline.
-It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
-The concurrency group queues a run behind one already going, so two runs never file the same finding twice.
-A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
-`issues: write` on the report job is the one permission beyond reading the repository and its runs.
-A public repository keeps `runs-on: ubuntu-latest` on the tests, gates, and report jobs.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on them instead.
-A successful run with every mutation report present uploads `whole-tree-run`, so the next run compares with it, and a run that failed or missed a report uploads nothing a later run reads.
-The artifact keeps 90 days, so a gap of runs still leaves a previous run to compare with.
+Run `gh workflow run whole-tree-run` to dispatch the workflow.
+Run `checks-lint --whole-tree` to run only the whole-tree gates.
 
 ## Related topics
 
+- [checks-ci](checks-ci.md)
 - [checks-test](checks-test.md)
 - [checks-mutation](checks-mutation.md)
 - [checks-mutation-compare](checks-mutation-compare.md)
