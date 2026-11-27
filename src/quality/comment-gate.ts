@@ -3,7 +3,7 @@ import { Console, Effect, Option } from "effect";
 import { refused, syntaxOf } from "./comments.ts";
 import { changedLines, git, parentOrEmptyTree, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { decodeSetting, loadSettings, TrackerKeyPrefixes } from "../core/settings.ts";
+import { decodeSetting, loadSettings, settingLocation, TrackerKeyPrefixes } from "../core/settings.ts";
 
 export type GateResult = {
   readonly files: number;
@@ -21,8 +21,9 @@ const show = (rev: string, path: string, root: string) =>
   git(["show", `${rev}:${path}`], root).pipe(Effect.option);
 
 export const runRange = Effect.fn("runRange")(function* (root: string, base: string, head: string) {
-  const configured = (yield* loadSettings(root))["trackerKeyPrefixes"];
-  const trackerKeyPrefixes = configured === undefined ? [] : yield* decodeSetting("trackerKeyPrefixes", TrackerKeyPrefixes, configured);
+  const settings = yield* loadSettings(root);
+  const configured = settings.values["trackerKeyPrefixes"];
+  const trackerKeyPrefixes = configured === undefined ? [] : yield* decodeSetting("trackerKeyPrefixes", TrackerKeyPrefixes, configured, settingLocation(settings.locations, "trackerKeyPrefixes"));
   const added = yield* changedLines(base, head, [], root);
   const violations: string[] = [];
   let lineCount = 0;

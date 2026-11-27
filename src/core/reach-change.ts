@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
 import { Effect, FileSystem, Option, Path, Result, Schema } from "effect";
 import { checkoutFiles, git, pathsAt } from "./git.ts";
-import { loadSettings, Reach, SETTINGS_FILE } from "./settings.ts";
+import { loadSettings, Reach, SETTINGS_FILE, settingPath } from "./settings.ts";
 
-export function refuseReachMap(value: unknown): string | undefined {
-  const label = `${SETTINGS_FILE} reach`;
+export function refuseReachMap(value: unknown, location = settingPath("reach")): string | undefined {
+  const label = `${SETTINGS_FILE} ${location}`;
   if (value === undefined) return undefined;
   if (typeof value !== "object" || value === null || Array.isArray(value)) return `${label} is not a map of changed paths to test files`;
   for (const [key, entry] of Object.entries(value)) {
@@ -52,6 +52,6 @@ export const readReachChange = Effect.fn("readReachChange")(function* (root: str
     const tree = yield* checkoutFiles(mergeBase, files, yield* fs.makeTempDirectoryScoped({ prefix: "checks-reach-" }), root);
     const modules = path.join(root, "node_modules");
     if (yield* fs.exists(modules)) yield* fs.symlink(modules, path.join(tree, "node_modules"));
-    return yield* compareLoadedSettings(loadSettings(tree), loadSettings(root));
+    return yield* compareLoadedSettings(loadSettings(tree, "historical").pipe(Effect.map(({ values }) => values)), loadSettings(root).pipe(Effect.map(({ values }) => values)));
   }).pipe(Effect.scoped, Effect.catchTag(["GitFailure", "PlatformError"], () => Effect.succeed<ReachChange>({ kind: "full" })));
 });

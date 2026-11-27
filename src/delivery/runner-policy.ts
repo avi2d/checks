@@ -65,12 +65,12 @@ function mutationFault(runsOn: unknown, labels: readonly string[] | undefined, v
       return "a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; set runs-on: ubuntu-latest";
     }
     return pin === undefined
-      ? `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; declare the mutation runner labels in the mutationRunner key of ${SETTINGS_FILE}`
+      ? `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; declare the mutation runner labels in the workflows.mutationRunsOn key of ${SETTINGS_FILE}`
       : `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off ${pin}; set runs-on: ${pin}`;
   }
   if (visibility !== "private") return undefined;
   if (labels === undefined) {
-    return `a mutation job in a private repository has no mutationRunner in ${SETTINGS_FILE}; declare the mutation runner labels there`;
+    return `a mutation job in a private repository has no workflows.mutationRunsOn in ${SETTINGS_FILE}; declare the mutation runner labels there`;
   }
   return sameLabels(runsOn, labels) ? undefined : `a mutation job in a private repository runs off ${pin}; set runs-on: ${pin}`;
 }

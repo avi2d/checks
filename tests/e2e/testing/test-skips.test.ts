@@ -466,7 +466,7 @@ test("a smoke list left under package.json checks.smoke is refused naming the ch
 
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(2);
-  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the smoke key of checks.config.ts");
+  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the test.extraLocalFiles key of checks.config.ts");
 });
 
 test("a CI run with a smoke list left under package.json checks.smoke is refused instead of passing green", async () => {
@@ -475,7 +475,7 @@ test("a CI run with a smoke list left under package.json checks.smoke is refused
 
   const refused = await checksTest(true);
   expect(refused.exitCode).toBe(2);
-  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the smoke key of checks.config.ts");
+  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the test.extraLocalFiles key of checks.config.ts");
 });
 
 test("a CI run with a reach map left under package.json checks.reach is refused instead of passing green", async () => {
@@ -484,7 +484,7 @@ test("a CI run with a reach map left under package.json checks.reach is refused 
 
   const refused = await checksTest(true);
   expect(refused.exitCode).toBe(2);
-  expect(refused.text).toContain("package.json checks.reach is no longer read; move it to the reach key of checks.config.ts");
+  expect(refused.text).toContain("package.json checks.reach is no longer read; move it to the test.affected key of checks.config.ts");
 });
 
 test("--junit keeps the report of a failing run at the path it names", async () => {

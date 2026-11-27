@@ -35,14 +35,16 @@ An override `files` or `excludeFiles` pattern with no `/` matches at any depth, 
 | `down` | sets a lower severity |
 | `options` | sets the same severity with other options |
 
-The `nestedOxlintConfigs` key of `checks.config.ts` lists the rules each nested config may turn off, down or to other options, by the config's repository-relative path:
+The `lintCoverage.allowedNestedOxlintRules` key of `checks.config.ts` lists the rules each nested config may turn off, down or to other options, by the config's repository-relative path:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
 export default defineConfig({
-  nestedOxlintConfigs: {
-    "packages/app/oxlint.config.ts": ["typescript/no-explicit-any", "max-lines"],
+  lintCoverage: {
+    allowedNestedOxlintRules: {
+      "packages/app/oxlint.config.ts": ["typescript/no-explicit-any", "max-lines"],
+    },
   },
 });
 ```
@@ -61,7 +63,7 @@ It reads the program from `tsc --listFilesOnly -p tsconfig.json`, and passes ove
 It reads the resolved rules of the root config from `oxlint --print-config`, and those of each nested config from `oxlint -c <config> --print-config`.
 That output leaves out the top-level rules of a JS plugin, so the gate reads those from the config file itself.
 It does not read a plugin rule a config takes through `extends`.
-It reads the `nestedOxlintConfigs` key of `checks.config.ts`.
+It reads the `lintCoverage.allowedNestedOxlintRules` key of `checks.config.ts`.
 It runs `bun` from `PATH` on each run past the two skips, to load `checks.config.ts` and judge the nested configs.
 The gate runs oxlint and tsc from the repository's own `node_modules/.bin`, so they need no `PATH` entry.
 
@@ -73,9 +75,9 @@ It takes none.
 
 | Code | When |
 | --- | --- |
-| 0 | the repository root holds no `package.json`, the repository tracks no `.ts`, `.tsx` or `.astro` file, or oxlint walks each one, each nested oxlint config turns off or down only the rules its `nestedOxlintConfigs` entry lists, no entry is stale, and the program holds both ts-reset rules, the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json` |
-| 1 | oxlint skips a tracked file, a nested oxlint config turns off a rule its entry does not list, `nestedOxlintConfigs` lists a config or a rule it does not need, or the program drops a ts-reset rule |
-| 2 | oxlint cannot walk the tree or print a config, a config does not load, `checks.config.ts` does not load or its `nestedOxlintConfigs` key does not decode, or tsc cannot list the program after oxlint walks every tracked file, as when the repository's install lacks either tool, `bun` is not on `PATH` or a config does not parse |
+| 0 | the repository root holds no `package.json`, the repository tracks no `.ts`, `.tsx` or `.astro` file, or oxlint walks each one, each nested oxlint config turns off or down only the rules its `lintCoverage.allowedNestedOxlintRules` entry lists, no entry is stale, and the program holds both ts-reset rules, the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json` |
+| 1 | oxlint skips a tracked file, a nested oxlint config turns off a rule its entry does not list, `lintCoverage.allowedNestedOxlintRules` lists a config or a rule it does not need, or the program drops a ts-reset rule |
+| 2 | oxlint cannot walk the tree or print a config, a config does not load, `checks.config.ts` does not load or its `lintCoverage.allowedNestedOxlintRules` key does not decode, or tsc cannot list the program after oxlint walks every tracked file, as when the repository's install lacks either tool, `bun` is not on `PATH` or a config does not parse |
 
 ## Sample output
 
@@ -85,8 +87,8 @@ ignored/b.ts
 lint-coverage: packages/app/oxlint.config.ts turns off or down rules the root oxlint config sets:
   off: typescript/no-explicit-any
   down: no-debugger
-  set each back in packages/app/oxlint.config.ts, or list it for packages/app/oxlint.config.ts under nestedOxlintConfigs in checks.config.ts
-lint-coverage: checks.config.ts nestedOxlintConfigs lets packages/app/oxlint.config.ts turn off max-lines, which it does not turn off or down
+  set each back in packages/app/oxlint.config.ts, or list it for packages/app/oxlint.config.ts under lintCoverage.allowedNestedOxlintRules in checks.config.ts
+lint-coverage: checks.config.ts lintCoverage.allowedNestedOxlintRules lets packages/app/oxlint.config.ts turn off max-lines, which it does not turn off or down
 lint-coverage: the program tsconfig.json builds drops the ts-reset rules: is-array json-parse
   extend @avi2dg/checks/tsconfig.effect.json, and set files or include in tsconfig.json but not both
 ```
@@ -95,7 +97,7 @@ A passing run counts the files and names the rules:
 
 ```
 lint-coverage: 71/71 tracked .ts/.tsx/.astro files
-lint-coverage: 1 nested oxlint config(s) turn off or down only the rules checks.config.ts nestedOxlintConfigs lists
+lint-coverage: 1 nested oxlint config(s) turn off or down only the rules checks.config.ts lintCoverage.allowedNestedOxlintRules lists
 lint-coverage: the program tsconfig.json builds holds the ts-reset rules is-array and json-parse
 ```
 

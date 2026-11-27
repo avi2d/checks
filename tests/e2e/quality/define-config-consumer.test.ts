@@ -31,7 +31,7 @@ export default defineConfig({ baseline: "widely", tokens: ["src/tokens.css"] });
 
 const SETTINGS_CONFIG = `import { defineConfig } from "@avi2dg/checks/config";
 
-export default defineConfig({ frontendSyntax: { inputs: ["src/**/*.css"] } });
+export default defineConfig({ workflows: { releaseAssets: false, testShards: { unit: 2 } }, test: { extraLocalFiles: [], allowAgentRunsOutsideCI: false }, commentGate: { trackerKeyPrefixes: ["ABC"] }, lintCoverage: { allowedNestedOxlintRules: {} }, frontendSyntax: { inputs: ["src/**/*.css"] } });
 `;
 
 const TREE: Readonly<Record<string, string>> = {
@@ -74,7 +74,8 @@ const REFUSED_TYPES: Readonly<Record<string, readonly [config: string, code: str
   "stylelint-baseline-string-year.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "2024", tokens: false });\n`, "TS2322"],
   "stylelint-empty-tokens.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: [] });\n`, "TS2322"],
   "settings-unknown-key.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ budget: 3 });\n`, "TS2353"],
-  "settings-smoke-string.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ smoke: "tests/e2e/home.test.ts" });\n`, "TS2322"],
+  "settings-flat-release-assets.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ releaseAssets: true });\n`, "TS2353"],
+  "settings-smoke-string.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ test: { extraLocalFiles: "tests/e2e/home.test.ts" } });\n`, "TS2322"],
   "settings-empty-inputs.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ copy: { inputs: [] } });\n`, "TS2322"],
   "stylelint-kit-owned-extends.ts": [
     `import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: false, extends: ["stylelint-config-recommended"] });\n`,
@@ -266,7 +267,7 @@ test(
 );
 
 test(
-  "tsc refuses each incomplete config through the installed types, and the consumer's own configs compile",
+  "tsc refuses incomplete configs and runtime-only flat settings, while grouped configs compile",
   async () => {
     await put(Object.fromEntries(Object.entries(REFUSED_TYPES).map(([file, [config]]) => [`types/${file}`, config])));
     await put({ "types/tsconfig.json": JSON.stringify({ extends: "../tsconfig.json", include: ["*.ts", "../*.config.ts"] }) });

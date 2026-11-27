@@ -3,7 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcessSpawner } from "effect/process";
 import { collect, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { decodeSetting, loadSettings, NestedOxlintConfigs, SETTINGS_FILE } from "../core/settings.ts";
+import { decodeSetting, loadSettings, NestedOxlintConfigs, SETTINGS_FILE, settingLocation, settingPath } from "../core/settings.ts";
 
 const NAME = "lint-coverage";
 
@@ -152,12 +152,6 @@ const rootConfigFile = Effect.fn("rootConfigFile")(function* (root: string) {
   return LOADED_CONFIG_NAMES.find((_, index) => present[index]);
 });
 
-const readAllowed = Effect.fn("readAllowed")(function* (root: string) {
-  const value = (yield* loadSettings(root))[KEY];
-  if (value === undefined) return {};
-  return yield* decodeSetting(KEY, NestedOxlintConfigs, value);
-});
-
 function isNestedConfig(file: string): boolean {
   return file.includes("/") && LOADED_CONFIG_NAMES.includes(file.slice(file.lastIndexOf("/") + 1));
 }
@@ -176,29 +170,32 @@ function unlistedLines(config: string, weakened: ReadonlyMap<string, Weakening>,
   return [
     `${NAME}: ${config} turns off or down rules the root oxlint config sets:`,
     ...sorted.map(([rule, kind]) => `  ${kind}: ${rule}`),
-    `  set each back in ${config}, or list it for ${config} under ${KEY} in ${SETTINGS_FILE}`,
+    `  set each back in ${config}, or list it for ${config} under ${settingPath(KEY)} in ${SETTINGS_FILE}`,
   ];
 }
 
-function staleLines(weakenedByConfig: WeakenedByConfig, allowed: Allowed): readonly string[] {
+function staleLines(weakenedByConfig: WeakenedByConfig, allowed: Allowed, location: string): readonly string[] {
   return Object.entries(allowed).flatMap(([config, rules]) => {
     const weakened = weakenedByConfig.get(config);
-    if (weakened === undefined) return [`${NAME}: ${SETTINGS_FILE} ${KEY} names ${config}, which is not a tracked nested oxlint config`];
+    if (weakened === undefined) return [`${NAME}: ${SETTINGS_FILE} ${location} names ${config}, which is not a tracked nested oxlint config`];
     const stale = rules.map(canonicalRule).filter((rule) => !weakened.has(rule));
-    return stale.length === 0 ? [] : [`${NAME}: ${SETTINGS_FILE} ${KEY} lets ${config} turn off ${stale.join(", ")}, which it does not turn off or down`];
+    return stale.length === 0 ? [] : [`${NAME}: ${SETTINGS_FILE} ${location} lets ${config} turn off ${stale.join(", ")}, which it does not turn off or down`];
   });
 }
 
-function findings(weakenedByConfig: WeakenedByConfig, allowed: Allowed): readonly string[] {
+function findings(weakenedByConfig: WeakenedByConfig, allowed: Allowed, location: string): readonly string[] {
   const unlisted = [...weakenedByConfig].flatMap(([config, weakened]) => unlistedLines(config, weakened, new Set((allowed[config] ?? []).map(canonicalRule))));
-  return [...unlisted, ...staleLines(weakenedByConfig, allowed)];
+  return [...unlisted, ...staleLines(weakenedByConfig, allowed, location)];
 }
 
 const judge = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const tracked = (yield* git(["ls-files", "-z"], root)).split("\0").filter(Boolean).toSorted();
   const configs = tracked.filter(isNestedConfig);
-  const allowed = yield* readAllowed(root);
+  const settings = yield* loadSettings(root);
+  const value = settings.values[KEY];
+  const location = settingLocation(settings.locations, KEY);
+  const allowed = value === undefined ? {} : yield* decodeSetting(KEY, NestedOxlintConfigs, value, location);
   if (configs.length === 0 && Object.keys(allowed).length === 0) {
     yield* Console.log(`${NAME}: no nested oxlint config`);
     return true;
@@ -207,12 +204,12 @@ const judge = Effect.gen(function* () {
   const sources = tracked.filter((file) => LINTED_SOURCE.test(file));
   const weakened = yield* Effect.forEach(configs, (config) =>
     Effect.map(weakenedBy(root, base, config, sources.filter((file) => nearestConfig(configs, file) === config)), (rules) => [config, rules] as const));
-  const lines = findings(new Map(weakened), allowed);
+  const lines = findings(new Map(weakened), allowed, location);
   if (lines.length > 0) {
     yield* Console.log(lines.join("\n"));
     return false;
   }
-  yield* Console.log(`${NAME}: ${configs.length} nested oxlint config(s) turn off or down only the rules ${SETTINGS_FILE} ${KEY} lists`);
+  yield* Console.log(`${NAME}: ${configs.length} nested oxlint config(s) turn off or down only the rules ${SETTINGS_FILE} ${location} lists`);
   return true;
 });
 

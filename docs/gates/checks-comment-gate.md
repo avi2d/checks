@@ -13,7 +13,7 @@ It refuses a machine-read directive, a record or ticket pointer, a doc block, an
 The directives include `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `biome-ignore`, and `prettier-ignore`.
 They also include directives beginning with `eslint-disable`, `jscpd:ignore`, `oxlint-disable`, or `stylelint-disable`.
 For a `jscpd:ignore` directive, the refusal says to remove the repeat instead.
-A tracker key is a ticket pointer only when its prefix appears in `trackerKeyPrefixes` in `checks.config.ts`.
+A tracker key is a ticket pointer only when its prefix appears in `commentGate.trackerKeyPrefixes` in `checks.config.ts`.
 A stylesheet keeps its count of existing stylelint problems in `stylelint-suppressions.json` instead, as [checks-frontend-syntax](checks-frontend-syntax.md) says.
 Each refusal says what to write instead.
 Only added lines are checked, so a violation in a file the diff never touches stays silent.
@@ -21,12 +21,12 @@ A refusal counts when any line of the comment carrying it was added.
 
 ## Tracker keys
 
-Set `trackerKeyPrefixes` in `checks.config.ts` to the tracker prefixes your repository uses:
+Set `commentGate.trackerKeyPrefixes` in `checks.config.ts` to the tracker prefixes your repository uses:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
-export default defineConfig({ trackerKeyPrefixes: ["ABC"] });
+export default defineConfig({ commentGate: { trackerKeyPrefixes: ["ABC"] } });
 ```
 
 Each prefix starts with an uppercase ASCII letter and contains only uppercase ASCII letters and digits.
@@ -40,7 +40,7 @@ A comment produces one record-pointer refusal even when a configured tracker pre
 
 It reads the diff between two commits, and the added lines of each file whose extension has a comment syntax in `src/quality/comment-matchers.ts`.
 It passes over a file with any other extension.
-It reads `trackerKeyPrefixes` from the working tree's `checks.config.ts`.
+It reads `commentGate.trackerKeyPrefixes` from the working tree's `checks.config.ts`.
 A host using the synchronous `refused(path, source, within, trackerKeyPrefixes)` supplies the prefixes itself.
 The optional fourth argument defaults to `[]`.
 
