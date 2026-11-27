@@ -16,6 +16,7 @@ Released 2026-11-27.
 
 ### Fixes
 
+- **delivery:** catch Claude login tokens in checks-secrets [#267](https://github.com/avi2d/checks/pull/267)
 - **delivery:** resume the generated mutation refresh across runs within the job timeout [#265](https://github.com/avi2d/checks/pull/265)
 - stage the repair before the no-mistakes lint drift check [#257](https://github.com/avi2d/checks/pull/257)
 - ship postcss-value-parser as a dependency of the frontend syntax gate [#251](https://github.com/avi2d/checks/pull/251)

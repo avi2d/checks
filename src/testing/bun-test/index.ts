@@ -69,9 +69,11 @@ function localFunction(source: SourceCode, node: ESTree.Node | undefined): TestF
   if (node?.type !== "Identifier") return undefined;
   const variable = binding(source, node);
   if (variable?.defs.length !== 1 || variable.references.some((ref) => ref.isWrite() && !ref.init)) return undefined;
-  const definition = variable.defs[0]?.node;
-  if (isFunction(definition)) return definition;
-  if (definition?.type === "VariableDeclarator" && definition.id.type === "Identifier" && isFunction(definition.init)) return definition.init;
+  const def = variable.defs[0];
+  if (def === undefined) return undefined;
+  const definition = def.node;
+  if (def.type === "FunctionName" && isFunction(definition)) return definition;
+  if (def.type === "Variable" && definition.type === "VariableDeclarator" && definition.id.type === "Identifier" && isFunction(definition.init)) return definition.init;
   return undefined;
 }
 
@@ -97,7 +99,10 @@ function hasAssertion(
       const helper = localFunction(source, call.callee);
       if (helper !== undefined && hasAssertion(source, calls, helper, seen)) return true;
     }
-    return call.arguments.some((arg) => isFunction(arg) && hasAssertion(source, calls, arg, seen));
+    return call.arguments.some((arg) => {
+      const callback = localFunction(source, arg);
+      return callback !== undefined && hasAssertion(source, calls, callback, seen);
+    });
   });
 }
 
@@ -125,7 +130,7 @@ const requireAssertion: CreateRule = {
           const bodies = [test.arguments[1], test.arguments[2]].flatMap((node) => {
             const fn = localFunction(source, node);
             if (fn !== undefined) return [fn];
-            if (node?.type === "CallExpression" || node?.type === "NewExpression") return node.arguments.flatMap((arg) => isFunction(arg) ? [arg] : []);
+            if (node?.type === "CallExpression" || node?.type === "NewExpression") return node.arguments.flatMap((arg) => localFunction(source, arg) ?? []);
             return [];
           });
           if (bodies.some((body) => hasAssertion(source, calls, body, new Set()))) continue;

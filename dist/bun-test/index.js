@@ -70,10 +70,13 @@ function localFunction(source, node) {
   const variable = binding(source, node);
   if (variable?.defs.length !== 1 || variable.references.some((ref) => ref.isWrite() && !ref.init))
     return;
-  const definition = variable.defs[0]?.node;
-  if (isFunction(definition))
+  const def = variable.defs[0];
+  if (def === undefined)
+    return;
+  const definition = def.node;
+  if (def.type === "FunctionName" && isFunction(definition))
     return definition;
-  if (definition?.type === "VariableDeclarator" && definition.id.type === "Identifier" && isFunction(definition.init))
+  if (def.type === "Variable" && definition.type === "VariableDeclarator" && definition.id.type === "Identifier" && isFunction(definition.init))
     return definition.init;
   return;
 }
@@ -99,7 +102,10 @@ function hasAssertion(source, calls, fn, seen) {
       if (helper !== undefined && hasAssertion(source, calls, helper, seen))
         return true;
     }
-    return call.arguments.some((arg) => isFunction(arg) && hasAssertion(source, calls, arg, seen));
+    return call.arguments.some((arg) => {
+      const callback = localFunction(source, arg);
+      return callback !== undefined && hasAssertion(source, calls, callback, seen);
+    });
   });
 }
 var requireAssertion = {
@@ -133,7 +139,7 @@ var requireAssertion = {
             if (fn !== undefined)
               return [fn];
             if (node?.type === "CallExpression" || node?.type === "NewExpression")
-              return node.arguments.flatMap((arg) => isFunction(arg) ? [arg] : []);
+              return node.arguments.flatMap((arg) => localFunction(source, arg) ?? []);
             return [];
           });
           if (bodies.some((body) => hasAssertion(source, calls, body, new Set)))
