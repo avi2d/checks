@@ -95,7 +95,7 @@ jobs:
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           registry-url: https://registry.npmjs.org
       - run: ./node_modules/.bin/checks-release-publish
   github-release:

@@ -1,5 +1,7 @@
 import { Effect, Schema } from "effect";
 import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
+import { SETTINGS_FILE, type ExtraTestJob } from "../core/settings.ts";
+import { runFaults } from "./plain-steps.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type RepositoryKind = "code" | "site";
@@ -50,6 +52,21 @@ export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
   code: { tests: [UNIT, E2E] },
   site: { tests: [UNIT, E2E, BROWSER] },
 };
+
+const DEFAULT_TEST_NAMES: readonly string[] = [UNIT, E2E, BROWSER].map(({ name }) => name);
+
+// docs is refused without a docs:build script too, so adding the script later cannot collide with a declared job.
+export function extraTestJobFault(job: ExtraTestJob): string | undefined {
+  const at = `${SETTINGS_FILE} extraTestJobs job ${job.name}`;
+  if (isFixed(job.name, true)) return `${at} takes a name the written ci.yml gives its own job, so rename it`;
+  if (DEFAULT_TEST_NAMES.includes(job.name)) return `${at} takes the name of a default test job, so rename it`;
+  const commands = [...(job.setup ?? []).map((command) => ["setup command", command] as const), ["run", job.run] as const];
+  for (const [role, command] of commands) {
+    const faults = runFaults(command, undefined);
+    if (faults.length > 0) return `${at} ${role} ${JSON.stringify(command)} holds ${faults.join(", ")}, so run one plain command, or move the logic into a bin`;
+  }
+  return undefined;
+}
 
 const JOB_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
@@ -183,22 +200,23 @@ const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
 };
 
 // A written ci.yml marks each test job by the step whose id is test.
-const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, docsBuild: boolean, hasE2e: boolean) {
-  const held = workflowJobs(ci).filter(([, job]) => holdsTestStep(job));
+const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, docsBuild: boolean, hasE2e: boolean, declared: readonly string[]) {
+  const held = workflowJobs(ci).filter(([name, job]) => holdsTestStep(job) && !declared.includes(name));
   if (held.length === 0) return defaultJobs(kind, runsOn, hasE2e);
   return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, hasE2e);
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
+// The settings file records a declared job, so the held copy of it is no test job of the file.
 export const ciJobsOf = Effect.fn("ciJobsOf")(function* (
   kind: RepositoryKind,
   ci: Workflow | undefined,
-  { publicRepository, docsBuild, hasE2e }: { readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean | undefined },
+  { publicRepository, docsBuild, hasE2e, declared = [] }: { readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean | undefined; readonly declared?: readonly string[] },
 ) {
   const runsOn = runnerOf(publicRepository);
   const includeE2e = hasE2e !== false;
   if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
-  const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
+  const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" && !declared.includes(name) ? [{ name, job }] : []));
   if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, includeE2e);
-  return yield* fullCiJobsOf(kind, ci, runsOn, docsBuild, includeE2e);
+  return yield* fullCiJobsOf(kind, ci, runsOn, docsBuild, includeE2e, declared);
 });

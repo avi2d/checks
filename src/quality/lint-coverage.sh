@@ -1,8 +1,9 @@
 #!/bin/sh
-# lint-coverage: fail when oxlint silently skips a tracked TypeScript or Astro source,
-# or when tsconfig.json's program silently drops the ts-reset rules.
+# lint-coverage: fail when oxlint silently skips a tracked TypeScript or Astro source, when a nested
+# oxlint config turns off an unlisted rule, or when tsconfig.json's program drops the ts-reset rules.
 set -eu
 
+kit="$(dirname "$(realpath "$0")")"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
@@ -42,6 +43,19 @@ if [ -s "$tmp/missing" ]; then
 else
   echo "lint-coverage: ${walked_count}/${expected_count} tracked .ts/.tsx/.astro files"
 fi
+
+nested_status=0
+bun "$kit/nested-oxlint.ts" || nested_status=$?
+case "$nested_status" in
+  0) ;;
+  1) status=1 ;;
+  *)
+    if [ "$status" -eq 1 ]; then
+      exit 1
+    fi
+    exit 2
+    ;;
+esac
 
 if ! grep -qE '[.]tsx?$' "$tmp/expected"; then
   echo "lint-coverage: no tracked .ts/.tsx files, so no program to hold the ts-reset rules"

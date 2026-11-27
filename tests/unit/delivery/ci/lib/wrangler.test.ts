@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { deployArgs, deployedAlias, type PagesDeploy } from "../../../../../src/delivery/ci/lib/wrangler.ts";
 
 const MAIN: PagesDeploy = {
-  wranglerVersion: "4.156.1",
+  wranglerVersion: "4.168.0",
   directory: "dist",
   project: "example-site",
   branch: "main",
@@ -14,7 +14,7 @@ const MAIN: PagesDeploy = {
 describe("deployArgs", () => {
   test("a deploy that drops the project, branch, commit or the short commit at the end of the message fails", () => {
     expect(deployArgs(MAIN)).toEqual([
-      "wrangler@4.156.1",
+      "wrangler@4.168.0",
       "pages",
       "deploy",
       "dist",

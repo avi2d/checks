@@ -26,6 +26,7 @@ const KitManifest = Schema.Struct({
     "@stryker-mutator/core": Schema.String,
     "@hughescr/stryker-bun-runner": Schema.String,
     "@types/bun": Schema.String,
+    typescript: Schema.String,
   }),
 });
 
@@ -270,7 +271,7 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const inputs = yield* callerInputsOf(root, isPrivate ? { private: true, hasTestScript: true } : { hasTestScript: true }).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
-  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards).pipe(
+  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
   return { isPrivate, set, kit: inputs.kit };
