@@ -2,6 +2,16 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.121.1
+
+Released 2026-11-27.
+
+### Fixes
+
+- configure mutation refresh shard count [#284](https://github.com/avi2d/checks/pull/284)
+- **delivery:** count wrapped PR test tiers in CI wiring [#280](https://github.com/avi2d/checks/pull/280)
+- **testing:** give the two ReportError classes distinct tags [#281](https://github.com/avi2d/checks/pull/281)
+
 ## 0.121.0
 
 Released 2026-11-27.

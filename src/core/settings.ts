@@ -49,6 +49,13 @@ export type BrowserTimings = typeof BrowserTimings.Type;
 
 export const MutationRunner = Schema.NonEmptyArray(Schema.NonEmptyString);
 
+export const DEFAULT_MUTATION_SHARD_COUNT = 12;
+
+const MutationShardCount = ShardCount.annotate({
+  description: "The maximum number of shards in the generated mutation refresh, as an integer from 1 to 256.",
+  default: DEFAULT_MUTATION_SHARD_COUNT,
+});
+
 export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmptyString));
 
 export const Inputs = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
@@ -123,6 +130,7 @@ const LegacySettings = Schema.Struct({
   smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),
   reach: Schema.optionalKey(Reach.annotate({ description: "The tests to run when a changed path is missing from the import graph." })),
   mutationRunner: Schema.optionalKey(MutationRunner.annotate({ description: "The runner labels for mutation jobs in a private repository." })),
+  mutationShardCount: Schema.optionalKey(MutationShardCount),
   selfHostedRunners: Schema.optionalKey(SelfHostedRunners.annotate({ description: "The other sets of self-hosted runner labels that jobs in a private repository may use." })),
   browser: Schema.optionalKey(Listed.annotate({ description: "The site, routes, and checks for browser tests." })),
   browserRoutes: Schema.optionalKey(BrowserRoutes.annotate({ description: "The repository paths that can affect each browser route." })),
@@ -170,6 +178,7 @@ const MOVES = {
     platformPackages: moved("platformPackages"),
     extraTestJobs: moved("extraTestJobs"),
     mutationRunsOn: moved("mutationRunner"),
+    mutationShardCount: moved("mutationShardCount"),
     selfHostedRunsOn: moved("selfHostedRunners"),
     testShards: moved("testTierShards"),
     flakeCron: moved("flakeCron"),
@@ -351,6 +360,8 @@ export const decodeSetting = Effect.fn("decodeSetting")(function* <A>(key: Setti
     Effect.mapError(({ message }) => new Usage({ message: `${SETTINGS_FILE} key ${location} does not decode: ${message}` })),
   );
 });
+
+export const decodeMutationShardCount = (value: unknown, location?: string): Effect.Effect<number | undefined, Usage> => decodeSetting("mutationShardCount", Schema.UndefinedOr(MutationShardCount), value, location);
 
 export const readSetting = Effect.fn("readSetting")(function* <A>(root: string, key: SettingKey, schema: Schema.Decoder<A>, old: OldPlace) {
   yield* refuseOldPlace(root, key, old);

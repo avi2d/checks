@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { parseWorkflow } from "../../../src/delivery/ci-wiring.ts";
 import { runsMutation } from "../../../src/delivery/mutation-job.ts";
+import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { findHandRolledMutation } from "../../../src/delivery/mutation-workflow.ts";
 import { findRunnerFaults, formatRunnerReport, type RunnerConfig } from "../../../src/delivery/runner-policy.ts";
 
@@ -78,7 +79,7 @@ test.each([
   const scripts = new Map([["refresh", "bunx checks-ci mutation shard"]]);
   const files = new Map([["refresh.sh", "bunx checks-ci mutation shard"]]);
   const workflows = workflow(`on: workflow_dispatch\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${run}\n`);
-  expect(findHandRolledMutation(workflows, { scripts, files })).toEqual([{ location: ".github/workflows/ci.yml job sweep" }]);
+  expect(findHandRolledMutation(workflows, { scripts, files }, MUTATION_WORKFLOW)).toEqual([{ location: ".github/workflows/ci.yml job sweep" }]);
   const faults = findRunnerFaults({ visibility: "private", scripts, files, runners: RUNNERS }, workflows);
   expect(faults).toHaveLength(1);
   expect(faults[0]?.fault).toContain("a mutation job reads CI_RUNS_ON");
@@ -86,7 +87,7 @@ test.each([
 
 test.each(["score", "shards", "finished"])("the non-mutating checks-ci mutation %s command is not refused as a mutation run", (part) => {
   const workflows = workflow(`on: workflow_dispatch\njobs:\n  report:\n    runs-on: ${HOSTED}\n    steps:\n      - run: bunx checks-ci mutation ${part}\n`);
-  expect(findHandRolledMutation(workflows, { scripts: noScripts, files: new Map() })).toEqual([]);
+  expect(findHandRolledMutation(workflows, { scripts: noScripts, files: new Map() }, MUTATION_WORKFLOW)).toEqual([]);
   expect(findRunnerFaults({ visibility: "private", scripts: noScripts, runners: RUNNERS }, workflows)).toEqual([]);
 });
 

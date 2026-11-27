@@ -153,6 +153,7 @@ Each refusal names the workflow file, the job and the limit.
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `workflows.mutationRunsOn` and `workflows.selfHostedRunsOn` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
+It reads `workflows.mutationShardCount` from `checks.config.ts` when it compares the held and generated mutation workflows.
 It reads `workflows.flakeCron` from `checks.config.ts` when it compares the held and generated flake workflows.
 It checks that `HEAD:CHANGELOG.md` is a committed file at the repository root when workflows use the release tools.
 It reads each shell script that a shell script it reads runs, until none is left.
@@ -174,7 +175,7 @@ It takes no arguments.
 | --- | --- |
 | 0 | Every required command has a reachable step. |
 | 1 | A repository using the release tools lacks `CHANGELOG.md` at `HEAD`, a required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a schedule falls outside the release, advisory, and generated flake rules, or a job can run for more than 60 minutes. |
-| 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
+| 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key or `workflows.mutationShardCount` does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
 

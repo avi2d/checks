@@ -72,6 +72,7 @@ const reportedSet = (present: readonly HeldFile[], flags: SiteNameFlags, inputs:
     inputs.testTierShards,
     inputs.extraTestJobs,
     inputs.flakeCron,
+    inputs.mutationShardCount,
     inputs.settingLocations,
   );
 

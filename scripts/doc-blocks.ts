@@ -222,6 +222,7 @@ const SETTING_READERS = {
   smoke: "[checks-test](../gates/checks-test.md)",
   reach: "[checks-test](../gates/checks-test.md#the-reach-map)",
   mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  mutationShardCount: "[checks-mutation](../gates/checks-mutation.md#running-it-in-ci)",
   selfHostedRunners: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
   browser: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
   browserRoutes: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
