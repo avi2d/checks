@@ -128,9 +128,10 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 
 ### Schedules
 
-It refuses every other workflow that triggers on `schedule`, since a test, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
-The `mutation` workflow starts by hand.
-The one schedule it keeps is a weekly advisory scan in a public repository.
+It accepts a schedule in the flake workflow only if the file matches what [checks-workflows](checks-workflows.md#flake-schedule) writes from `flakeCron`.
+The flake schedule runs at most once a day, with one minute and one hour.
+Apart from the release and flake schedules, it accepts only a weekly advisory scan in a public repository.
+A test, mutation, browser, or whole-tree workflow starts only by hand, with `gh workflow run`.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts.
 Every other run step is then a `bun install`, and no job calls a reusable workflow.
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
@@ -150,6 +151,7 @@ Each refusal names the workflow file, the job and the limit.
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
+It reads `flakeCron` from `checks.config.ts` when it compares the held and generated flake workflows.
 It checks that `HEAD:CHANGELOG.md` is a committed file at the repository root when workflows use the release tools.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
@@ -169,7 +171,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A repository using the release tools lacks `CHANGELOG.md` at `HEAD`, a required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A repository using the release tools lacks `CHANGELOG.md` at `HEAD`, a required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a schedule falls outside the release, advisory, and generated flake rules, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output

@@ -95,6 +95,10 @@
       "description": "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
       "default": []
     },
+    "flakeCron": {
+      "type": "string",
+      "description": "The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour."
+    },
     "trackerKeyPrefixes": {
       "type": "array",
       "items": {

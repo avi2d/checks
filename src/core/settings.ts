@@ -59,6 +59,10 @@ export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 
 export const ReleaseAssets = Schema.Boolean;
 
+export const FlakeCron = Schema.String.check(
+  Schema.isPattern(/^[0-5]?[0-9][ \t]+(?:[01]?[0-9]|2[0-3])(?:[ \t]+[A-Za-z0-9*,/-]+){3}$/, { message: "must be a five-field cron expression that runs at most once a day, with one minute from 0 to 59 and one hour from 0 to 23, such as 23 5 * * 1" }),
+).annotate({ description: "The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour." });
+
 const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
 
 export type PlatformName = (typeof PLATFORM_NAMES)[number];
@@ -111,6 +115,7 @@ export const Settings = Schema.Struct({
     description: "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies.",
   })),
   extraTestJobs: Schema.optionalKey(ExtraTestJobs),
+  flakeCron: Schema.optionalKey(FlakeCron),
   trackerKeyPrefixes: Schema.optionalKey(TrackerKeyPrefixes.annotate({
     description: "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
     default: [],
