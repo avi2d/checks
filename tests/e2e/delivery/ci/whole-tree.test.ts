@@ -64,7 +64,7 @@ test("a gates step that fails on a failed gate or drops the lint's stdout or std
   expect(scratch.read("reports/whole-tree-run-gates/gates.log").split("\n").filter(Boolean).sort()).toEqual(["checks-docs: 2 page(s) fail", "checks-lint: 1 gate(s) failed: checks-docs"]);
 });
 
-test("a whole-tree step that takes a part it does not know fails", async () => {
+test("an unknown whole-tree part does not exit successfully", async () => {
   const ran = await step("sweep", "exit 0");
   expect(ran.exitCode).toBe(1);
   expect(ran.stdout).toContain("checks-ci whole-tree takes one of tests, gates, report, not sweep");
