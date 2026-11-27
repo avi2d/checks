@@ -5,6 +5,7 @@ export default defineConfig({
     "src/quality/effect-channel/index.ts",
     "src/complexity/readability/index.ts",
     "src/quality/data-shape/index.ts",
+    "src/testing/bun-test/index.ts",
     "src/quality/presets/*.ts",
     "src/testing/mutation-guard-plugin.ts",
     "dist/mutation/mutation-refusal.js",

@@ -324,6 +324,53 @@ test(
   180_000,
 );
 
+test.each(["json", "typescript"])(
+  "the packed %s preset rejects assertion-free Bun callbacks without rejecting constructor or wrapper assertions",
+  async (preset) => {
+    await useConsumer("tarball", { scripts: { lint: "oxlint --type-aware" } });
+    const testFile = "tests/unit/widget.test.ts";
+    await writeWidgetRepo(testFile, "../../widget.ts");
+    if (preset === "typescript") {
+      await rm(join(dir, ".oxlintrc.json"));
+      await writeFile(join(dir, "oxlint.config.ts"), `import { defineConfig } from "@avi2dg/checks/oxlint";\nexport default defineConfig({ effect: false });\n`);
+    }
+
+    const file = join(dir, testFile);
+    await writeFile(file, `import { expect, test, it as example } from "bun:test";
+test("has no assertion", () => {});
+example.each([42])("creates a matcher without calling it", (value) => { expect(value); });
+function withTempDir(run: (dir: string) => void): () => void { return () => run("temp"); }
+test("constructs without a matcher", () => new Promise<void>((resolve) => { resolve(); }));
+test("wraps without a matcher", withTempDir((dir) => { expect(dir); }));
+test("constructs a callback without a matcher", new Proxy(() => { expect(42); }, {}));
+function suite(run: () => void): void { expect(1).toBe(1); test("calls a parameter without a matcher", () => { run(); }); }
+`);
+    const red = await runScript("lint");
+    expect(red.exitCode).toBe(1);
+    expect(red.text.match(/bun-test\(require-assertion\)/g)).toHaveLength(6);
+    expect(red.text).toContain(`${testFile}:2:1`);
+    expect(red.text).toContain(`${testFile}:3:1`);
+
+    await writeFile(file, `import { expect, test, it as example } from "bun:test";
+function check(value: number): void {
+  expect(value).not.toBe(0);
+}
+test("matches directly", () => expect(42).toBe(42));
+example.each([42])("calls a helper with a matcher", (value) => check(value));
+function withTempDir(run: (dir: string) => void): () => void { return () => run("temp"); }
+test("asserts in a constructor callback", () => new Promise<void>((resolve) => {
+  withTempDir((dir) => { expect(dir).toBeString(); resolve(); })();
+}));
+test("asserts in a wrapped callback", withTempDir((dir) => { expect(dir).toBeString(); }));
+test("asserts in a constructed callback", new Proxy(() => expect(42).toBe(42), {}));
+const assertTemp = (dir: string): void => { expect(dir).toBeString(); };
+test("asserts in a named callback", withTempDir(assertTemp));
+`);
+    expect((await runScript("lint")).exitCode).toBe(0);
+  },
+  60_000,
+);
+
 const RESET_LEAKS = `export const port: number = JSON.parse("8080");\nexport const first = (value: unknown): string => (Array.isArray(value) ? value[0] : "");\n`;
 const RESET_CHECKED = `export const port = Number(JSON.parse("8080"));\nexport const first = (value: unknown): string => (Array.isArray(value) && typeof value[0] === "string" ? value[0] : "");\n`;
 

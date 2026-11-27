@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { docsRepos, GUIDE, OPENING, plantRedThenGreen, putAgentFiles, putVision, type DocsRepo, type Plant } from "../lib/docs-repo.ts";
+import { docsRepos, expectedDocsChange, GUIDE, OPENING, plantRedThenGreen, putAgentFiles, putVision, type DocsRepo, type Plant } from "../lib/docs-repo.ts";
 
 const MANIFEST = JSON.stringify({ name: "widget", scripts: { build: "bun scripts/build.ts" } });
 
@@ -46,12 +46,12 @@ async function start(): Promise<DocsRepo> {
 test(
   "each reference goes red on a line a change adds to a living doc, and green once it resolves",
   async () => {
-    await plantRedThenGreen(
-      await start(),
-      PLANTS,
-      ({ reference }) => [`plant ${reference} that resolves nowhere`, `point ${reference} at what exists`],
-      "docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name",
-    );
+    const results = await plantRedThenGreen(await start(), PLANTS, ({ reference }) => [
+      `plant ${reference} that resolves nowhere`,
+      `point ${reference} at what exists`,
+    ]);
+    const held = "docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name";
+    expect(results).toEqual(PLANTS.map(({ refusal }) => expectedDocsChange(refusal, held)));
   },
   120_000,
 );
