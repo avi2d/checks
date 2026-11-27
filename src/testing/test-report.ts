@@ -14,7 +14,7 @@ type Report = {
   readonly crashedFiles: readonly string[];
 };
 
-export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
+export class ReportError extends Schema.TaggedError<ReportError>()("TestReportError", {
   message: Schema.String,
 }) {}
 

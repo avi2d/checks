@@ -77,7 +77,7 @@ export type Options = {
   readonly advisory: boolean;
 };
 
-export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
+export class ReportError extends Schema.TaggedError<ReportError>()("MutationCompareReportError", {
   message: Schema.String,
 }) {}
 
