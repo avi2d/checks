@@ -77,9 +77,11 @@ A job in those files that calls another repository's workflow is still refused.
 Replace it with its own steps by hand.
 
 A public repository takes `pr-text.yml` in both kinds, and the kit takes the same file.
-It runs on `pull_request_target` and comment events, so no `ci.yml` job replaces it.
-GitHub runs those events from the default branch's copy of the file, so a pull request that changes `pr-text.yml` runs the old copy until it merges.
-The kit's suite checks the file it writes, so a repository needs no run of its own before the merge.
+It runs on `pull_request_target`, `issue_comment`, `pull_request_review`, and `pull_request_review_comment`, so no `ci.yml` job replaces it.
+GitHub runs `pull_request_target` and `issue_comment` from the default branch's copy of the file, so workflow changes take effect after merge.
+The `pull_request_review` and `pull_request_review_comment` events run the pull request's copy from its merge ref.
+Those review events get secrets only for a same-repository pull request, so the job skips fork reviews.
+The kit's suite checks the file it writes before a consumer merges it.
 A private repository's pull request text reaches no public reader, so its set takes no `pr-text.yml`.
 There `checks-workflows` never compares one it holds, `--write` neither writes nor deletes it, and it is no extra.
 The refusal of a call to another repository's workflow still reads it.

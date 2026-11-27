@@ -75,8 +75,11 @@ It skips the scan when the secret is unset, as [When no pack is configured](#whe
 `pull_request_target` runs the default branch's workflow with the repository's secrets, even for a fork's pull request.
 The job reads the text through the API and checks out none of the pull request's code, so a fork runs nothing there.
 A comment's run reports on no pull request, so the job posts its result as a `pr-text` status on the head commit.
-These events run the default branch's copy of the file, so a pull request that changes it runs the old copy until it merges.
-The kit's suite checks the file `checks-workflows` writes, so a repository needs no run of its own before that merge.
+Issue comments also run the default branch's copy of the file.
+Both `pull_request_target` and `issue_comment` run the old copy until a workflow change merges.
+The `pull_request_review` and `pull_request_review_comment` events run the pull request's copy from its merge ref.
+Those review events get secrets only for a same-repository pull request, so the job skips fork reviews.
+The kit's suite checks the file `checks-workflows` writes before a consumer merges it.
 
 ## When no pack is configured
 
