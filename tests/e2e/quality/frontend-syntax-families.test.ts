@@ -385,7 +385,7 @@ test("all three options fail one website menu rule on four families, and pass it
 }, 60_000);
 
 test("the design token rules stay off without token globs, and hold nothing in a declared token file", async () => {
-  const { write, script } = await repository(WIDELY, { "src/site.css": "a { color: #000; font-size: 12px; }\n" });
+  const { write, script } = await repository(WIDELY, { "src/site.css": "a { color: #ffffff; }\n" });
   expect((await script(GATE)).exitCode).toBe(1);
   await write({ "src/site.css": "a {\n  color: #000;\n  font-size: 12px;\n}\n" });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });

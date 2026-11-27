@@ -60,6 +60,7 @@ It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site 
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
 It reads `checks.config.ts` for the repository visibility that selects the workflow runners and for `releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
 It also reads `platformPackages`, which adds the `binaries` job to `main.yml`.
+It reads `extraTestJobs` for the extra test jobs, their environment variables, setup commands, and test commands in `ci.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins, its `typescript` pin, its `@types/bun` version, and each template.
 
@@ -82,7 +83,7 @@ Then the run names the `CI_RUNS_ON` value to set.
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site, in a private repository or without a `release:assets` script in `package.json`, sets `platformPackages` in the kit or with a private `package.json` and no public workspace or more than one, a file it needs cannot be read, a retained `oxlint.config.ts` does not load or lacks a default config export, a scope, ignore pattern, or rule setting cannot be mirrored, a second oxlint config may change a scoped override, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | `extraTestJobs` does not decode, lists a job name twice, takes a reserved job name, or holds a setup or test command that is not plain, an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site, in a private repository or without a `release:assets` script in `package.json`, sets `platformPackages` in the kit or with a private `package.json` and no public workspace or more than one, a file it needs cannot be read, a retained `oxlint.config.ts` does not load or lacks a default config export, a scope, ignore pattern, or rule setting cannot be mirrored, a second oxlint config may change a scoped override, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 
