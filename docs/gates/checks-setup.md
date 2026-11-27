@@ -40,7 +40,7 @@ The same stop covers two values of one name, an unparsable name, and a flag that
 The same stop covers a test job of `ci.yml` that holds an unparsable input or a name a job cannot take.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
 In consumer site and code repositories it writes `mutation.yml` and `whole-tree-run.yml` under `.github/workflows/`.
-The mutation workflow splits the tree into shards, runs each shard and keeps the merged report as the baseline.
+The mutation workflow splits the tree into shards, runs each shard and keeps the merged report as the baseline, or the merged state when a shard stopped, as [checks-mutation](checks-mutation.md#running-it-in-ci) says.
 The whole-tree workflow runs mutation, long test tiers, whole-tree gates and issue filing, as [checks-whole-tree-run](checks-whole-tree-run.md) says.
 Both start by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 In the kit it writes `mutation.yml` but no `whole-tree-run.yml`.
