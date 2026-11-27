@@ -2,7 +2,7 @@ import { Clock, Context, Effect, FileSystem, Layer, Option, Path, Schema } from 
 import { collect } from "../core/git.ts";
 import { installPinned, releaseAssetApi } from "./pinned-binary.ts";
 
-export const OSV_SCANNER_VERSION = "2.6.0";
+export const OSV_SCANNER_VERSION = "2.7.1";
 const REPOSITORY = "google/osv-scanner";
 const RELEASES = `https://github.com/${REPOSITORY}/releases/download/v${OSV_SCANNER_VERSION}`;
 const HOUR_MS = 3_600_000;
@@ -16,12 +16,11 @@ const NO_RESULTS = JSON.stringify({ results: [] });
 
 type Build = { readonly asset: string; readonly assetId: number; readonly sha256: string };
 
-// The SHA-256 of each asset as osv-scanner_SHA256SUMS of the release lists it, and its id in the release as GitHub's API lists it.
 const BUILDS: Readonly<Record<string, Build>> = {
-  "darwin-arm64": { asset: "osv-scanner_darwin_arm64", assetId: 562_414_648, sha256: "98c460dcd37de25819babd757d04542045b6243113e209edcd4d89fedb0256b4" },
-  "darwin-x64": { asset: "osv-scanner_darwin_amd64", assetId: 562_414_712, sha256: "60c5296637e977b28eeda5c7f13573e447659a632922737f94d11fa7e30ad6ca" },
-  "linux-arm64": { asset: "osv-scanner_linux_arm64", assetId: 562_414_650, sha256: "2c71403eb443d05891c4f268c3ad771cf4f16e5443463fd7851ef8f454d3c7e4" },
-  "linux-x64": { asset: "osv-scanner_linux_amd64", assetId: 562_414_718, sha256: "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108" },
+  "darwin-arm64": { asset: "osv-scanner_darwin_arm64", assetId: 726_165_290, sha256: "b22c02877a811c8f78956e8643efa554932b7378f590d13f8e97d4e9448a29f3" },
+  "darwin-x64": { asset: "osv-scanner_darwin_amd64", assetId: 726_165_293, sha256: "b8420d5485ba792626315f1bf9a5a2046e971d38eea75bf9090c38852dbc3b1b" },
+  "linux-arm64": { asset: "osv-scanner_linux_arm64", assetId: 726_165_576, sha256: "983d22fbad9724514e3fcc6acc83b5fa64c5ffa6b0d9f510028f22c1b223ff81" },
+  "linux-x64": { asset: "osv-scanner_linux_amd64", assetId: 726_165_286, sha256: "fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8" },
 };
 
 class OsvScannerError extends Schema.TaggedError<OsvScannerError>()("OsvScannerError", {

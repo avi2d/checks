@@ -1,7 +1,7 @@
 import { type ExtraTestJob } from "../../core/settings.ts";
 import { type CallerSet } from "../site-names.ts";
 import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, RELEASE_TEST_RUN, isBrowserWalk, runnerOf, testTierOf } from "../ci-jobs.ts";
-import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node26, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const CHECKED_RELEASE = "needs.changes.outputs.check-release == 'true'";
@@ -113,7 +113,7 @@ const siteJob = (set: CallerSet): Job => ({
     ]),
     { env: [["VITE_PREVIEW_ORIGIN", expression("steps.preview.outputs.origin")]], run: "bun run build:site" },
     { run: "bunx checks-lint --stage built" },
-    { if: "steps.preview.outputs.origin != ''", ...node24("Wrangler") },
+    { if: "steps.preview.outputs.origin != ''", ...node26("Wrangler") },
     ciCommand("preview-deploy", { if: "steps.preview.outputs.origin != ''", name: "deploy the preview" }, [
       ...cloudflare,
       ["WRANGLER_SEND_METRICS", '"false"'],

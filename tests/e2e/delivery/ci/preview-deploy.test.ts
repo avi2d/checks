@@ -19,7 +19,7 @@ function deploy(detail: string, overrides: Readonly<Record<string, string>> = {}
     DEPLOY_DETAIL: detail,
     CLOUDFLARE_API_TOKEN: "cf-token-value",
     CLOUDFLARE_ACCOUNT_ID: "acct",
-    WRANGLER_VERSION: "4.156.1",
+    WRANGLER_VERSION: "4.168.0",
     DIRECTORY: "dist",
     PROJECT: "site-preview",
     BRANCH: "Feature",
