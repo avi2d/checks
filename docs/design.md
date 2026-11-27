@@ -117,7 +117,7 @@ Each oxlint plugin and each config builder ships compiled under `dist/`, because
 The settings builder ships as source because only the kit's Bun bins load it.
 Stryker loads its config under Node too, so the guard plugin and run-scope helpers the Stryker preset imports ship compiled under `dist/mutation/`.
 oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
-`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/package/consumer.test.ts`, except `readability/thin-astro`, `data-shape/no-shell-in-strings` and `data-shape/no-reduce-accumulator-copy`.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability`, `data-shape`, and `bun-test` rule is proven red and green against an installed consumer in `tests/e2e/package/consumer.test.ts`, except `readability/thin-astro`, `data-shape/no-shell-in-strings` and `data-shape/no-reduce-accumulator-copy`.
 `data-shape/no-shell-in-strings` is proven against a consumer tree linked to the checkout in `tests/e2e/quality/shell-in-strings-consumer.test.ts`.
 `data-shape/no-reduce-accumulator-copy` is proven against a consumer tree linked to the checkout in `tests/e2e/quality/reduce-accumulator-copy-consumer.test.ts`.
 `readability/thin-astro` is proven against a consumer tree linked to the checkout in `tests/e2e/complexity/astro-consumer.test.ts`.

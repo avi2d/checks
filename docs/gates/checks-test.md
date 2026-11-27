@@ -43,9 +43,20 @@ A declaration for the other environment is not judged in the current run.
 Bun sees `CI` set in every `checks-test` run, so a `"ci"` skip whose condition reads `process.env.CI` also skips in a local run and fails there as undeclared.
 Gate a `"ci"` skip on what CI lacks, such as a daemon or a tool, and never on `process.env.CI`.
 
-A declaration whose test passes or does not register fails a CI run.
-A local run warns about the same declaration because a condition can depend on the machine.
-A skipped test or a todo without `skipReason` fails in every environment.
+Add `"darwin"`, `"linux"`, or `"win32"` as the fourth argument to apply a declaration on one platform.
+Use a string literal, not an expression such as `process.platform`.
+If the declaration applies in both environments on that platform, pass `undefined` as the third argument.
+
+```ts
+test.skipIf(process.platform === "linux")(
+  skipReason("the fixture is unavailable on Linux", "loads the fixture", undefined, "linux"),
+  () => loadFixture(),
+);
+```
+
+`checks-test` does not judge the declaration if its environment or platform differs from the run.
+If a matching declaration's test passes or does not register, the CI run fails and a local run warns.
+A skipped test or a todo without a matching declaration fails on every platform and in every environment.
 
 ## Test file time limit
 

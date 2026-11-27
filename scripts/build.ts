@@ -6,6 +6,7 @@ const BUNDLES: readonly Bundle[] = [
   { entries: ["src/quality/effect-channel/index.ts"], outdir: "dist/effect-channel", external: false },
   { entries: ["src/complexity/readability/index.ts"], outdir: "dist/readability", external: false },
   { entries: ["src/quality/data-shape/index.ts"], outdir: "dist/data-shape", external: false },
+  { entries: ["src/testing/bun-test/index.ts"], outdir: "dist/bun-test", external: false },
   { entries: ["src/testing/mutation-guard-plugin.ts", "src/testing/mutation-refusal.ts"], outdir: "dist/mutation", external: true },
   {
     entries: ["src/quality/presets/oxlint.ts", "src/quality/presets/knip.ts", "src/quality/presets/dependency-cruiser.ts", "src/quality/presets/stylelint.ts"],

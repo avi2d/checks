@@ -26,6 +26,10 @@ Gates requiring tracked TypeScript files begin running when the repository track
 `checks-no-mistakes-test` begins running when the repository tracks `.no-mistakes.yaml` at its root.
 All other gates run for every repository.
 
+## Assertions in Bun tests
+
+The oxlint preset checks Bun test assertions, as [Bun test rules](../configs/typescript-rules.md#bun-test-rules) describes.
+
 ## Stages
 
 Each gate belongs to one of two stages, by what it reads:
