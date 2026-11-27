@@ -249,6 +249,7 @@ export const REFUSED_DIRECTIVES = [
   "@ts-nocheck",
   "biome-ignore",
   "eslint-disable",
+  "jscpd:ignore",
   "oxlint-disable",
   "prettier-ignore",
   "stylelint-disable",
@@ -258,7 +259,7 @@ const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/
 
 const directiveSource = (name: string): string => {
   const escaped = escapeRegExp(name);
-  if (name.endsWith("-disable")) return `\\b${escaped}[\\w-]*`;
+  if (name.endsWith("-disable") || name === "jscpd:ignore") return `\\b${escaped}[\\w-]*`;
   return /^[\w]/.test(name) ? `\\b${escaped}\\b` : escaped;
 };
 
@@ -281,8 +282,9 @@ function checksFor(trackerKeyPrefixes: readonly string[]): readonly Check[] {
   return [
     {
       find: (text) => DIRECTIVE.exec(text)?.[0],
-      refusal: (match) =>
-        `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
+      refusal: (match) => match.startsWith("jscpd:ignore")
+        ? `carries the machine-read directive \`${match}\`. Remove the repeat instead`
+        : `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
     },
     {
       find: (text) => RECORD_POINTER.exec(text)?.[0] ?? trackerKey?.exec(text)?.[0],
