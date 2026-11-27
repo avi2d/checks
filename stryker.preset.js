@@ -3,7 +3,6 @@ import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { GUARD_IGNORER } from "./dist/mutation/mutation-guard-plugin.js";
 import { fullRunRefusal } from "./dist/mutation/mutation-refusal.js";
-import { ordersTests, runOrder } from "./dist/mutation/unit-test-order.js";
 
 const [, , command, ...args] = process.argv;
 const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;
@@ -26,13 +25,7 @@ const listedUnitTests = () =>
         .toSorted()
     : [];
 
-const listedAtLoad = listedUnitTests();
-const timedUnitTests =
-  listedAtLoad.length > 0 && ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE)
-    ? await runOrder(listedAtLoad)
-    : undefined;
-
-export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
+export const unitTestFiles = listedUnitTests;
 
 const testFiles = unitTestFiles();
 
