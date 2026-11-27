@@ -63,6 +63,32 @@ test("the installed bin refuses an omitted gate and accepts its restored step", 
   expect(green.text).toContain("3 gate(s) run");
 }, 30_000);
 
+const tieredTests = {
+  "package.json": JSON.stringify({
+    name: "consumer",
+    scripts: { test: "checks-test", "test:unit": "checks-test --tier=unit", "test:e2e": "checks-test --tier=e2e" },
+  }),
+  ".github/workflows/release.yml": releaseWorkflow("bun run test --full"),
+};
+
+const tierStep = (tier: "unit" | "e2e") => `      - run: bunx checks-ci test\n        env:\n          TEST_TIER: ${tier}\n`;
+const tieredPullRequest = workflow.replace("      - run: bun run test\n", tierStep("unit") + tierStep("e2e"));
+
+test("the bin does not require a full pull request run when checks-ci test runs both tiers", async () => {
+  const repo = await open({ ...tieredTests, ".github/workflows/ci.yml": tieredPullRequest });
+  const result = await wiring(repo);
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("2 gate(s) run on pull requests to main");
+}, 30_000);
+
+test.each(["unit", "e2e"] as const)("a release full run cannot cover a missing %s tier on pull requests", async (tier) => {
+  const repo = await open({ ...tieredTests, ".github/workflows/ci.yml": tieredPullRequest.replace(tierStep(tier), "") });
+  const result = await wiring(repo);
+  expect(result.exitCode).toBe(1);
+  expect(result.text).toContain("1 of 2 gate(s) do not run on pull requests to main:\n  bun run test");
+  expect(result.text).toContain(".github/workflows/release.yml does not trigger on pull_request");
+}, 30_000);
+
 test("the installed bin refuses a job that can run for hours and passes it once it stops within an hour", async () => {
   const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow.replace("    timeout-minutes: 10\n", "") });
   await repo.commit("start");
