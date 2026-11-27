@@ -11,7 +11,7 @@ import {
   parseReport,
   passes,
   type ReportFile,
-  ReportError,
+  MutationCompareReportError,
 } from "../../../src/testing/mutation-compare.ts";
 
 const FIXTURES = new URL("../../fixtures/mutation-compare/", import.meta.url);
@@ -208,6 +208,6 @@ test("only the --advisory flag turns on advisory mode", () => {
 });
 
 test("a report without a files table is refused", () => {
-  expect(() => Effect.runSync(parseReport("report", "{}"))).toThrow(ReportError);
-  expect(() => Effect.runSync(parseReport("report", "not json"))).toThrow(ReportError);
+  expect(() => Effect.runSync(parseReport("report", "{}"))).toThrow(MutationCompareReportError);
+  expect(() => Effect.runSync(parseReport("report", "not json"))).toThrow(MutationCompareReportError);
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { type KillRun, parseKillRun, ReportError } from "./mutation-compare.ts";
+import { type KillRun, parseKillRun, MutationCompareReportError } from "./mutation-compare.ts";
 
 export type KillSets = ReadonlyMap<string, ReadonlySet<string>>;
 
@@ -171,10 +171,10 @@ export function formatReport(report: Report): string {
   return lines.join("\n");
 }
 
-export const bailWarning = (source: string, run: KillRun): Effect.Effect<string | undefined, ReportError> => {
+export const bailWarning = (source: string, run: KillRun): Effect.Effect<string | undefined, MutationCompareReportError> => {
   if (run.bail === "on")
     return Effect.fail(
-      new ReportError({
+      new MutationCompareReportError({
         message: `${source} was built with bail on, since its config.disableBail is not true, so each mutant records only its first killer: rerun Stryker with \`bunx stryker run --disableBail\` and pass the report it writes`,
       }),
     );
@@ -192,7 +192,7 @@ export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): 
 
 const load = Effect.fn("load")(function* (path: string) {
   const fs = yield* FileSystem.FileSystem;
-  const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new ReportError({ message: `cannot read ${path}` })));
+  const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new MutationCompareReportError({ message: `cannot read ${path}` })));
   const run = yield* parseKillRun(path, text);
   const warning = yield* bailWarning(path, run);
   if (warning !== undefined) yield* Console.error(`subsumed-tests: warning: ${warning}`);
