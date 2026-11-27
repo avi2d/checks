@@ -24,6 +24,7 @@
           "properties": {
             "binary": {
               "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
               "description": "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>."
             },
             "platforms": {
@@ -65,27 +66,31 @@
             "properties": {
               "name": {
                 "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
                 "description": "The id of the job in ci.yml, which the checks job requires."
               },
               "env": {
                 "type": "object",
-                "propertyNames": {
-                  "type": "string"
+                "patternProperties": {
+                  "^[A-Za-z_][A-Za-z0-9_]*$": {
+                    "type": "string",
+                    "pattern": "^[^\\r\\n]*$"
+                  }
                 },
-                "additionalProperties": {
-                  "type": "string"
-                },
+                "additionalProperties": false,
                 "description": "The environment variables the job sets for its setup and test commands."
               },
               "setup": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
                 },
                 "description": "The commands the job runs, one step each, before the test command, such as one that installs a tool."
               },
               "run": {
                 "type": "string",
+                "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$",
                 "description": "The test command."
               }
             },
@@ -157,6 +162,7 @@
         },
         "flakeCron": {
           "type": "string",
+          "pattern": "^[0-5]?[0-9][ \\t]+(?:[01]?[0-9]|2[0-3])(?:[ \\t]+[A-Za-z0-9*,/-]+){3}$",
           "description": "The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour."
         }
       },
@@ -273,7 +279,8 @@
         "trackerKeyPrefixes": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9]*$"
           },
           "description": "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
           "default": []
@@ -325,7 +332,8 @@
                   "type": "object",
                   "properties": {
                     "path": {
-                      "type": "string"
+                      "type": "string",
+                      "pattern": "^\\/"
                     },
                     "locale": {
                       "type": "string",
@@ -372,7 +380,8 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^\\/"
                   },
                   "locale": {
                     "type": "string",
