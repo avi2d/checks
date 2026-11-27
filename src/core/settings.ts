@@ -53,6 +53,8 @@ export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmp
 
 export const Inputs = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
 
+export const NestedOxlintConfigs = Schema.Record(Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString));
+
 export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 
 export const ReleaseAssets = Schema.Boolean;
@@ -95,6 +97,9 @@ export const Settings = Schema.Struct({
   browserTimings: Schema.optionalKey(BrowserTimings.annotate({ description: "The measured milliseconds of each browser check at each route, which browser shards balance on." })),
   copy: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the copy gate." })),
   frontendSyntax: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the frontend syntax gate." })),
+  nestedOxlintConfigs: Schema.optionalKey(NestedOxlintConfigs.annotate({
+    description: "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets.",
+  })),
   agentTests: Schema.optionalKey(AgentTests),
   testFileMaxSeconds: Schema.optionalKey(TestFileMaxSeconds.annotate({
     description: "The time limit in seconds for each test file in CI.",

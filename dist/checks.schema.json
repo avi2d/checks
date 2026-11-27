@@ -812,6 +812,28 @@
       "additionalProperties": false,
       "description": "The input globs for the frontend syntax gate."
     },
+    "nestedOxlintConfigs": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "minLength": 1
+          }
+        ],
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets."
+    },
     "agentTests": {
       "type": "object",
       "properties": {
