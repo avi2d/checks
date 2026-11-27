@@ -210,9 +210,7 @@ A private root must have exactly one public workspace, which becomes the main pa
 The root defines `release:assets`, and its version must match the workspace version.
 Without `workflows.platformPackages`, `main.yml` holds no `binaries` job or binary download step.
 The `release` job checks out the repository, runs the shared setup, sets up Node for npm, and runs `bunx checks-release-tag`.
-When the repository publishes, has public workspaces, or has release checks, `main.yml` also holds a `suite` job.
-On a release commit, `suite` checks out the repository, runs the shared setup, caches and installs gitleaks, and runs `bun run test --full`.
-When `workflows.releaseAssets` is enabled, `main.yml` also holds the `assets` job described above.
+The `suite` job described above and the `assets` job described under Attach release assets are there only when their own conditions hold.
 
 Each platform builds on its own GitHub-hosted runner:
 
