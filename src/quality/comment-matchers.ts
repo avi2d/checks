@@ -243,26 +243,41 @@ function openingBlock(found: readonly Comment[], source: string): Comment[] {
   return block;
 }
 
-export const REFUSED_DIRECTIVES = [
-  "@ts-expect-error",
-  "@ts-ignore",
-  "@ts-nocheck",
-  "biome-ignore",
-  "eslint-disable",
-  "oxlint-disable",
-  "prettier-ignore",
-  "stylelint-disable",
-] as const satisfies readonly string[];
+type RefusedDirective = {
+  readonly name: string;
+  readonly family: boolean;
+  readonly refusal: string;
+};
+
+const FIX_OR_STOP = "Fix what the tool is reporting, or stop running the tool on this file";
+
+const DIRECTIVES = [
+  { name: "@ts-expect-error", family: false, refusal: FIX_OR_STOP },
+  { name: "@ts-ignore", family: false, refusal: FIX_OR_STOP },
+  { name: "@ts-nocheck", family: false, refusal: FIX_OR_STOP },
+  { name: "biome-ignore", family: false, refusal: FIX_OR_STOP },
+  { name: "eslint-disable", family: true, refusal: FIX_OR_STOP },
+  { name: "jscpd:ignore", family: true, refusal: "Remove the repeat instead" },
+  { name: "oxlint-disable", family: true, refusal: FIX_OR_STOP },
+  { name: "prettier-ignore", family: false, refusal: FIX_OR_STOP },
+  { name: "stylelint-disable", family: true, refusal: FIX_OR_STOP },
+] as const satisfies readonly RefusedDirective[];
+
+export const REFUSED_DIRECTIVES: readonly string[] = DIRECTIVES.map(({ name }) => name);
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const directiveSource = (name: string): string => {
+const directiveSource = ({ name, family }: RefusedDirective): string => {
   const escaped = escapeRegExp(name);
-  if (name.endsWith("-disable")) return `\\b${escaped}[\\w-]*`;
+  if (family) return `\\b${escaped}[\\w-]*`;
   return /^[\w]/.test(name) ? `\\b${escaped}\\b` : escaped;
 };
 
-const DIRECTIVE = new RegExp(REFUSED_DIRECTIVES.map(directiveSource).join("|"));
+// No name is a prefix of another, so a match starts with exactly one name.
+const directiveRefusal = (match: string): string =>
+  DIRECTIVES.find(({ name }) => match.startsWith(name))?.refusal ?? FIX_OR_STOP;
+
+const DIRECTIVE = new RegExp(DIRECTIVES.map(directiveSource).join("|"));
 
 type Check = {
   readonly find: (text: string) => string | undefined;
@@ -281,8 +296,7 @@ function checksFor(trackerKeyPrefixes: readonly string[]): readonly Check[] {
   return [
     {
       find: (text) => DIRECTIVE.exec(text)?.[0],
-      refusal: (match) =>
-        `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
+      refusal: (match) => `carries the machine-read directive \`${match}\`. ${directiveRefusal(match)}`,
     },
     {
       find: (text) => RECORD_POINTER.exec(text)?.[0] ?? trackerKey?.exec(text)?.[0],

@@ -11,7 +11,8 @@ audience: consumers
 It fails when an added line carries a banned comment.
 It refuses a machine-read directive, a record or ticket pointer, a doc block, and a file opening with a rationale block over three lines, licence headers excepted.
 The directives include `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `biome-ignore`, and `prettier-ignore`.
-They also include directives beginning with `eslint-disable`, `oxlint-disable`, or `stylelint-disable`.
+They also include directives beginning with `eslint-disable`, `jscpd:ignore`, `oxlint-disable`, or `stylelint-disable`.
+For a `jscpd:ignore` directive, the refusal says to remove the repeat instead.
 A tracker key is a ticket pointer only when its prefix appears in `trackerKeyPrefixes` in `checks.config.ts`.
 A stylesheet keeps its count of existing stylelint problems in `stylelint-suppressions.json` instead, as [checks-frontend-syntax](checks-frontend-syntax.md) says.
 Each refusal says what to write instead.
@@ -46,7 +47,8 @@ The optional fourth argument defaults to `[]`.
 `src/quality/comment-matchers.ts` holds the scanner, the comment syntaxes and a synchronous `refused()`, and imports nothing.
 A host such as a hook bundle can therefore copy it alone into a directory with no `node_modules` and import it as `@avi2dg/checks/scripts/comment-matchers.ts`.
 The kit's own dependency cruise fails when that file gains an import.
-`REFUSED_DIRECTIVES` in that file owns the refused directive names, and the checker builds its directive pattern from that list, so the two cannot disagree.
+`REFUSED_DIRECTIVES` in that file lists the refused directive names.
+The checker builds its directive pattern from the table that list comes from, so the two cannot disagree.
 A consumer reads the same contract by importing `REFUSED_DIRECTIVES` from `@avi2dg/checks/scripts/comment-matchers.ts`.
 `src/quality/comments.ts` wraps the same matchers in Effect for the gate.
 
