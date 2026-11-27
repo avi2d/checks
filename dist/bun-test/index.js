@@ -92,11 +92,13 @@ function hasAssertion(source, calls, fn, seen) {
     return false;
   seen.add(fn);
   return (calls.get(fn) ?? []).some((call) => {
-    if (isAssertion(source, call))
-      return true;
-    const helper = localFunction(source, call.callee);
-    if (helper !== undefined && hasAssertion(source, calls, helper, seen))
-      return true;
+    if (call.type === "CallExpression") {
+      if (isAssertion(source, call))
+        return true;
+      const helper = localFunction(source, call.callee);
+      if (helper !== undefined && hasAssertion(source, calls, helper, seen))
+        return true;
+    }
     return call.arguments.some((arg) => isFunction(arg) && hasAssertion(source, calls, arg, seen));
   });
 }
@@ -107,23 +109,34 @@ var requireAssertion = {
       return {};
     const calls = new Map;
     const tests = [];
+    function recordInvocation(node) {
+      const fn = enclosingFunction(node);
+      if (fn === undefined)
+        return;
+      const bodyCalls = calls.get(fn);
+      if (bodyCalls === undefined)
+        calls.set(fn, [node]);
+      else
+        bodyCalls.push(node);
+    }
     return {
       CallExpression(node) {
         if (isTestCallee(source, node.callee))
           tests.push(node);
-        const fn = enclosingFunction(node);
-        if (fn === undefined)
-          return;
-        const bodyCalls = calls.get(fn);
-        if (bodyCalls === undefined)
-          calls.set(fn, [node]);
-        else
-          bodyCalls.push(node);
+        recordInvocation(node);
       },
+      NewExpression: recordInvocation,
       "Program:exit"() {
         for (const test of tests) {
-          const body = localFunction(source, test.arguments[1]) ?? localFunction(source, test.arguments[2]);
-          if (body !== undefined && hasAssertion(source, calls, body, new Set))
+          const bodies = [test.arguments[1], test.arguments[2]].flatMap((node) => {
+            const fn = localFunction(source, node);
+            if (fn !== undefined)
+              return [fn];
+            if (node?.type === "CallExpression" || node?.type === "NewExpression")
+              return node.arguments.flatMap((arg) => isFunction(arg) ? [arg] : []);
+            return [];
+          });
+          if (bodies.some((body) => hasAssertion(source, calls, body, new Set)))
             continue;
           context.report({ node: test.callee, message: "Add a Bun expect matcher to this test or to a helper it calls in this file." });
         }
