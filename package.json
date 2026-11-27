@@ -157,7 +157,6 @@
     "oxlint-tsgolint": "7.0.2009",
     "playwright-core": "1.65.1",
     "postcss-html": "2.0.1",
-    "postcss-value-parser": "4.2.0",
     "stylelint": "17.16.0",
     "stylelint-config-standard": "40.0.0",
     "stylelint-plugin-use-baseline": "1.5.0",
@@ -174,9 +173,6 @@
       "optional": true
     },
     "postcss-html": {
-      "optional": true
-    },
-    "postcss-value-parser": {
       "optional": true
     },
     "stylelint": {
@@ -207,7 +203,6 @@
     "oxlint-tsgolint": "7.0.2009",
     "playwright-core": "1.65.1",
     "postcss-html": "2.0.1",
-    "postcss-value-parser": "4.2.0",
     "stylelint": "17.16.0",
     "stylelint-config-standard": "40.0.0",
     "stylelint-plugin-use-baseline": "1.5.0",
@@ -221,7 +216,8 @@
     "@total-typescript/ts-reset": "0.6.1",
     "commonmark": "0.31.2",
     "knip": "6.48.0",
-    "minimatch": "11.0.9"
+    "minimatch": "11.0.9",
+    "postcss-value-parser": "4.2.0"
   },
   "overrides": {
     "minimatch": "11.0.9",
