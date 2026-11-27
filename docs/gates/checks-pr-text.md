@@ -72,7 +72,7 @@ on:
 The job writes the pack from a secret, as [The private pack](checks-secrets.md#the-private-pack) shows, then runs `bunx checks-pr-text` with the pull request's number.
 An issue comment on an issue that is no pull request skips the job.
 It skips the scan when the secret is unset, as [When no pack is configured](#when-no-pack-is-configured) says.
-`pull_request_target` runs the base branch's workflow with the repository's secrets, even for a fork's pull request.
+`pull_request_target` runs the default branch's workflow with the repository's secrets, even for a fork's pull request.
 The job reads the text through the API and checks out none of the pull request's code, so a fork runs nothing there.
 A comment's run reports on no pull request, so the job posts its result as a `pr-text` status on the head commit.
 These events run the default branch's copy of the file, so a pull request that changes it runs the old copy until it merges.
