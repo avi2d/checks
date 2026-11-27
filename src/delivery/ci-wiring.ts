@@ -5,6 +5,7 @@ import { runMain } from "../core/main.ts";
 import { decodeMutationShardCount, loadSettings } from "../core/settings.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
+import { RELEASE_TEST_RUN } from "./ci-jobs.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles, runsBin } from "./mutation-job.ts";
 import { findHandRolledMutation, formatHandRolledReport, isWrittenMutation, MUTATION_PATH, type MutationCalls } from "./mutation-workflow.ts";
@@ -28,7 +29,7 @@ export type Gate = {
   readonly command: string;
   readonly words: Command;
   readonly alternatives: readonly Command[];
-  readonly partition: readonly Command[];
+  readonly partition: readonly SplitTier[];
 };
 
 export type Declaration = {
@@ -54,6 +55,7 @@ type RunStep = {
   readonly location: string;
   readonly blocker: string | undefined;
   readonly script: string;
+  readonly testTier: SplitTier | undefined;
 };
 
 type Trigger = (workflow: Workflow) => string | undefined;
@@ -65,7 +67,9 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 const WORKFLOWS = ".github/workflows";
 const SCRIPTED = ["lint", "build", "typecheck", "test"];
 const WHOLE_SUITE = "bun run test";
-const SPLIT_SUITE = ["test:unit", "test:e2e"];
+const SPLIT_TIERS = ["unit", "e2e"] as const;
+type SplitTier = (typeof SPLIT_TIERS)[number];
+const testScript = (tier: SplitTier): string => `test:${tier}`;
 const BUILT_TREE = "git diff --exit-code";
 const TITLE_LINT = "bunx checks-commit-title";
 // The gate holds until every consumer migrates, so the direct commitlint call still counts.
@@ -113,6 +117,11 @@ const pullRequestTrigger = (branch: string): Trigger => (workflow) => {
   return undefined;
 };
 
+function literalTestTier(...scopes: readonly unknown[]): SplitTier | undefined {
+  const scope = scopes.find((env) => isRecord(env) && Object.hasOwn(env, "TEST_TIER"));
+  return isRecord(scope) ? SPLIT_TIERS.find((tier) => scope["TEST_TIER"] === tier) : undefined;
+}
+
 function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly RunStep[] {
   const documents = new Map(workflows.map((workflow) => [workflow.path, workflow.document]));
   const steps: RunStep[] = [];
@@ -123,8 +132,8 @@ function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly Ru
     blocker: string | undefined,
     walked: readonly string[],
   ): void => {
-    const jobs = isRecord(document) ? document["jobs"] : undefined;
-    if (!isRecord(jobs)) return;
+    if (!isRecord(document) || !isRecord(document["jobs"])) return;
+    const jobs = document["jobs"];
     for (const [id, job] of Object.entries(jobs)) {
       if (!isRecord(job)) continue;
       const jobLocation = `${location} job ${id}`;
@@ -145,6 +154,7 @@ function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly Ru
           location: `${jobLocation} step ${index + 1}`,
           blocker: jobBlocker ?? switchedOff(step, "the step"),
           script: step["run"],
+          testTier: literalTestTier(step["env"], job["env"], document["env"]),
         });
       });
     }
@@ -161,13 +171,16 @@ function entryPointCommand(gate: Command, lintGates: readonly KitGate[]): Comman
   return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
 }
 
-type Invocation = Omit<RunStep, "script">;
+type Invocation = Pick<RunStep, "location" | "blocker">;
 
-function invocations(commands: readonly { command: string; words: Command }[], steps: readonly RunStep[]): readonly Invocation[] {
-  return steps.flatMap(({ location, blocker, script }) => {
+type GateCall = { readonly command: string; readonly words: Command; readonly testTier?: SplitTier };
+
+function invocations(commands: readonly GateCall[], steps: readonly RunStep[]): readonly Invocation[] {
+  return steps.flatMap(({ location, blocker, script, testTier }) => {
+    const candidates = commands.filter((call) => call.testTier === undefined || call.testTier === testTier);
     const plain = plainCommand(script);
-    if (commands.some(({ words }) => invokes(plain, words))) return [{ location, blocker }];
-    const mentioned = commands.find(({ words }) => mentions(script, words));
+    if (candidates.some(({ words }) => invokes(plain, words))) return [{ location, blocker }];
+    const mentioned = candidates.find(({ words }) => mentions(script, words));
     if (mentioned === undefined) return [];
     const alone = `the step runs more than ${mentioned.command}; give it its own step with nothing else in it`;
     return [{ location, blocker: blocker ?? alone }];
@@ -175,6 +188,14 @@ function invocations(commands: readonly { command: string; words: Command }[], s
 }
 
 const runsUnblocked = (invoking: readonly Invocation[]): boolean => invoking.some((step) => step.blocker === undefined);
+
+function tierCalls(tier: SplitTier): readonly GateCall[] {
+  const script = `bun run ${testScript(tier)}`;
+  return [
+    { command: script, words: script.split(" ") },
+    { command: RELEASE_TEST_RUN, words: RELEASE_TEST_RUN.split(" "), testTier: tier },
+  ];
+}
 
 function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates: readonly KitGate[]): readonly Gap[] {
   return gates.flatMap((gate) => {
@@ -185,7 +206,7 @@ function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates:
       ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
     ];
     const invoking = invocations(commands, steps);
-    const parts = gate.partition.map((words) => invocations([{ command: words.join(" "), words }], steps));
+    const parts = gate.partition.map((tier) => invocations(tierCalls(tier), steps));
     if (runsUnblocked(invoking) || (parts.length > 0 && parts.every(runsUnblocked))) return [];
     const blocked = [...invoking, ...parts.flat()].flatMap(({ location, blocker }) =>
       blocker === undefined ? [] : [{ location, blocker }],
@@ -226,7 +247,7 @@ export function requiredCommands(scripts: readonly string[]): readonly string[] 
 }
 
 export function declarationFor(scripts: readonly string[], branch: string): Declaration {
-  const tiers = SPLIT_SUITE.every((name) => scripts.includes(name)) ? SPLIT_SUITE.map((name) => ["bun", "run", name]) : [];
+  const tiers = SPLIT_TIERS.every((tier) => scripts.includes(testScript(tier))) ? SPLIT_TIERS : [];
   return {
     gates: requiredCommands(scripts).map((command) => ({
       command,
