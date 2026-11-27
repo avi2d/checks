@@ -192,7 +192,7 @@ async function writtenScan(): Promise<{ readonly repo: FixtureRepo; readonly job
   return { repo, job: scanJobOf(Bun.YAML.parse(await readFile(scanFile(repo), "utf8"))) };
 }
 
-test("a public repository's written pr-text.yml leaves no step that runs pull request code and skips a fork's review instead of failing it", async () => {
+test("a public repository's written pr-text.yml leaves no step that runs pull request code, skips a fork's review instead of failing it, and does not skip a comment on a pull request", async () => {
   const { repo, job } = await writtenScan();
   expect(Bun.YAML.parse(await readFile(scanFile(repo), "utf8"))).toMatchObject({
     on: {
@@ -210,6 +210,7 @@ test("a public repository's written pr-text.yml leaves no step that runs pull re
   expect(runs(job.if, { github: pullRequestEvent("pull_request_target", "fork/acme") }, false)).toBe(true);
   expect(runs(job.if, { github: pullRequestEvent("pull_request_review", REPOSITORY) }, false)).toBe(true);
   expect(runs(job.if, { github: pullRequestEvent("pull_request_review", "fork/acme") }, false)).toBe(false);
+  expect(runs(job.if, { github: { event_name: "issue_comment", event: { issue: { number: NUMBER, pull_request: { url: "https://api.github.com/repos/acme/acme/pulls/7" } } } } }, false)).toBe(true);
   expect(runs(job.if, { github: { event_name: "issue_comment", event: { issue: { number: NUMBER } } } }, false)).toBe(false);
 }, 30_000);
 
