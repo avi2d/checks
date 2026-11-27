@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -34,4 +35,26 @@ test("rejects a preset hard-wired to ignoreStatic false or to full cores everywh
   const loaded = loadPresetInSubprocess({ CHECKS_MUTATION_MODE: "refresh", RUNNER_ENVIRONMENT: "self-hosted" });
   expect(loaded.ignoreStatic).toBe(true);
   expect(loaded.concurrency).toBe(Math.max(1, Math.floor(availableParallelism() / 2)));
+});
+
+test("the runner receives an existing absolute file instead of resolving a package preload as a project path", () => {
+  const script = `
+    import { existsSync, readFileSync } from "node:fs";
+    import { BunTestRunner } from "@hughescr/stryker-bun-runner";
+    import { parse } from "smol-toml";
+    process.argv = ["bun", "stryker", "run"];
+    const { default: preset } = await import(${JSON.stringify(presetPath)});
+    const quiet = () => {};
+    const runner = new BunTestRunner({ debug: quiet, info: quiet, warn: quiet, error: quiet }, { bun: preset.bun });
+    const sanitized = await runner.ensureSanitizedBunfig();
+    const config = parse(readFileSync(sanitized, "utf8"));
+    await runner.dispose();
+    console.log(JSON.stringify({ preload: config.test.preload[0], leftover: existsSync(sanitized) }));
+  `;
+  const result = spawnSync(process.execPath, ["-e", script], { env: { ...process.env, CI: "true" }, encoding: "utf8" });
+  expect(result.status).toBe(0);
+  const printed: unknown = JSON.parse(result.stdout);
+  const preload = fileURLToPath(new URL("../../../src/testing/local-test-preload.ts", import.meta.url));
+  expect(printed).toEqual({ preload, leftover: false });
+  expect(existsSync(preload)).toBe(true);
 });

@@ -39,7 +39,7 @@ const resolvedBunfig = () => {
   const original = stringify(config);
   const resolvePreload = (preload) => {
     if (typeof preload !== "string" || preload.startsWith(".") || isAbsolute(preload)) return preload;
-    return typeof Bun === "undefined" ? resolve(preload) : Bun.resolveSync(preload, process.cwd());
+    return resolve(preload);
   };
   const resolvePreloads = (value) => Array.isArray(value) ? value.map(resolvePreload) : resolvePreload(value);
   if (Object.hasOwn(config, "preload")) config.preload = resolvePreloads(config.preload);

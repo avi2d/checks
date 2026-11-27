@@ -60,6 +60,7 @@ export default {
 
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI.
 When Stryker loads the preset, the preset reads `CHECKS_MUTATION_MODE` and `RUNNER_ENVIRONMENT` from the environment.
+For a `stryker run`, the preset reads `bunfig.toml` and resolves its package-name preloads.
 It forwards every argument to `stryker run` through `bun x stryker run`.
 
 ## Arguments
