@@ -208,7 +208,9 @@ export default defineConfig({
 `platforms` lists the platforms to build and publish, each once.
 A private root must have exactly one public workspace, which becomes the main package.
 The root defines `release:assets`, and its version must match the workspace version.
-Without the setting, `main.yml` holds no `binaries` job and stays as it was.
+Without `workflows.platformPackages`, `main.yml` holds no `binaries` job or binary download step.
+The `release` job checks out the repository, runs the shared setup, sets up Node for npm, and runs `bunx checks-release-tag`.
+The `suite` job described above and the `assets` job described under Attach release assets are there only when their own conditions hold.
 
 Each platform builds on its own GitHub-hosted runner:
 
