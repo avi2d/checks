@@ -1,4 +1,3 @@
-import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
 import { runsMutation } from "./mutation-job.ts";
 import { jobRuns } from "./runner-policy.ts";
 import { WORKFLOWS } from "./site-names.ts";
@@ -15,7 +14,7 @@ export type MutationCalls = {
 
 export const isWrittenMutation = (workflow: Workflow, expected: string): boolean => workflow.path === MUTATION_PATH && workflow.text === expected;
 
-export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls, expected = MUTATION_WORKFLOW): readonly HandRolledJob[] {
+export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls, expected: string): readonly HandRolledJob[] {
   return workflows
     .filter((workflow) => !isWrittenMutation(workflow, expected))
     .flatMap((workflow) =>
