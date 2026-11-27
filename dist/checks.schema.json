@@ -55,6 +55,44 @@
       "additionalProperties": false,
       "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
     },
+    "extraTestJobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The id of the job in ci.yml, which the checks job requires."
+          },
+          "env": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The environment variables the job sets for its setup and test commands."
+          },
+          "setup": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The commands the job runs, one step each, before the test command, such as one that installs a tool."
+          },
+          "run": {
+            "type": "string",
+            "description": "The test command."
+          }
+        },
+        "required": [
+          "name",
+          "run"
+        ],
+        "additionalProperties": false
+      }
+    },
     "trackerKeyPrefixes": {
       "type": "array",
       "items": {

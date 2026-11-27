@@ -220,6 +220,41 @@ npm installs only the optional dependency whose `os`, `cpu` and `libc` match the
 `checks-workflows` refuses the setting when the root has no `release:assets` script, in a site, in the kit, and when `repositoryVisibility` is `private`.
 It also refuses a private root without exactly one public workspace.
 
+### Add a test job with its own setup
+
+Set `extraTestJobs` in `checks.config.ts` to add a test job that needs its own environment or a tool installed first:
+
+```ts
+export default defineConfig({
+  extraTestJobs: [
+    {
+      name: "sandbox",
+      env: { SANDBOX_TESTS: "1" },
+      setup: ["npm install --global acme-sandbox@1.2.3"],
+      run: "bunx checks-test --tier=live",
+    },
+  ],
+});
+```
+
+`name` is the id of the job in `ci.yml`.
+`env` sets environment variables on the job, so the setup and test commands both read them.
+`setup` lists commands that each run in a step of their own, in order, before the test command.
+`run` is the test command, and it runs in the step whose id is `test`.
+`env` and `setup` are optional.
+
+`ci.yml` holds each declared job after the other test jobs, in the order the setting lists them.
+The job runs after `changes`, skips where the default test jobs skip, and `checks` requires it.
+It checks out the pull request head, sets up Bun, uploads `artifacts/` and holds the draft pull request cancel step, as the default test jobs do.
+
+The check accepts exactly the declared jobs.
+A job with a setup step or an `env` that the setting does not declare fails the check.
+A hand edit to a declared job fails it too.
+Each setup command and the test command go through the [checks-plain-steps](checks-plain-steps.md) policy, so each is one plain command.
+`checks-workflows` refuses a command list such as `a && b`, a pipe, and a command named only at run time, such as `${{ matrix.install }}`.
+It also refuses a name listed twice and a name `ci.yml` already gives a job.
+Those names are `changes`, `static`, `site`, `docs`, `checks`, `unit`, `e2e` and `browser`.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:
@@ -293,6 +328,7 @@ The generated mutation workflow always uses hosted runners.
 The default test runner follows the setting even when a previous `ci.yml` holds the other default.
 
 To add a test job, copy the `unit` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
+A test job that needs its own environment or setup steps goes in [`extraTestJobs`](#add-a-test-job-with-its-own-setup) instead.
 
 ## What it reads
 

@@ -1,3 +1,4 @@
+import { type ExtraTestJob } from "../../core/settings.ts";
 import { type CallerSet } from "../site-names.ts";
 import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, RELEASE_TEST_RUN, isBrowserWalk, runnerOf, testTierOf } from "../ci-jobs.ts";
 import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
@@ -190,10 +191,34 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
   };
 }
 
+function extraTestJob(set: CallerSet, job: ExtraTestJob): Job {
+  const hold = holds(set);
+  return {
+    id: job.name,
+    needs: "changes",
+    if: notReleased(set) + " && " + NOT_DOCS_ONLY,
+    runsOn: runnerOf(set.options.publicRepository),
+    timeout: 30,
+    permissions: holdPermissions(hold),
+    env: Object.entries(job.env ?? {}).map(([key, value]) => [key, scalar(value)] as const),
+    steps: [
+      checkout({ ref: HEAD, history: true }),
+      SETUP,
+      ...holdSteps(hold),
+      ...claudeInstall(set.options.claudeVersion),
+      ...(job.setup ?? []).map((command): Step => ({ run: scalar(command) })),
+      { id: TEST_STEP, run: scalar(job.run) },
+      keepArtifacts("artifacts-" + expression("job.check_run_id"), "artifacts/"),
+    ],
+  };
+}
+
+const testNamesOf = (set: CallerSet): readonly string[] => [...set.ci.tests, ...(set.extraTestJobs ?? [])].map(({ name }) => name);
+
 const quotedWords = (words: readonly string[]): string => "'" + words.join(" ") + "'";
 
 function skipsOf(set: CallerSet): string {
-  const tests = set.ci.tests.map(({ name }) => name);
+  const tests = testNamesOf(set);
   const afterSite = set.ci.tests.filter(({ readsBuild }) => readsBuild).map(({ name }) => name);
   const site = set.kind === "site" ? ["site"] : [];
   const choices: readonly (readonly [string, readonly string[]])[] = [
@@ -212,7 +237,7 @@ const dispatchedStatus = (name: string, outcome: string, context: string): Step 
   ciCommand("commit-status", { if: DISPATCHED, name }, [TOKEN, ["JOB_STATUS", expression(outcome)], ["CONTEXT", context], ["ATTEMPTS", '"5"']]);
 
 function gateJob(set: CallerSet): Job {
-  const needed = ["changes", "static", ...(set.kind === "site" ? ["site"] : []), ...(set.options.docsBuild ? ["docs"] : []), ...set.ci.tests.map(({ name }) => name)];
+  const needed = ["changes", "static", ...(set.kind === "site" ? ["site"] : []), ...(set.options.docsBuild ? ["docs"] : []), ...testNamesOf(set)];
   return {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
@@ -241,7 +266,7 @@ const CI_EVENTS = ["pull_request:", "  types: [opened, synchronize, reopened, re
 export const BY_HAND = ["workflow_dispatch:"];
 
 export function ciWorkflow(set: CallerSet, kit: boolean): Workflow {
-  const tests = set.ci.tests.map((test) => testJob(set, test, set.options.claudeVersion, kit));
+  const tests = [...set.ci.tests.map((test) => testJob(set, test, set.options.claudeVersion, kit)), ...(set.extraTestJobs ?? []).map((job) => extraTestJob(set, job))];
   return {
     name: "ci",
     on: CI_EVENTS,
