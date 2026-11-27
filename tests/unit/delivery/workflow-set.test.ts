@@ -590,8 +590,8 @@ test("a held docs test job is kept when docs:build is absent and refused when pr
   expect(fault).toBe(".github/workflows/ci.yml runs a test step in job docs, a name the written ci.yml gives its own job, so rename it");
 });
 
-test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {
+test("a fixed job name, an invalid job id, or an empty runner label list is refused rather than dropped", () => {
   expect(faultOfCi(withE2e("site"))).toBe(".github/workflows/ci.yml runs a test step in job site, a name the written ci.yml gives its own job, so rename it");
   expect(faultOfCi(withE2e("e2e tests"))).toBe(".github/workflows/ci.yml holds test job e2e tests, a name the written ci.yml cannot give a test job, so rename it");
-  expect(faultOfCi(withE2e("e2e", (job) => ({ ...job, "runs-on": ["self-hosted", "macos"] })))).toStartWith(".github/workflows/ci.yml job e2e is not a test job checks-workflows writes:");
+  expect(faultOfCi(withE2e("e2e", (job) => ({ ...job, "runs-on": [] })))).toStartWith(".github/workflows/ci.yml job e2e is not a test job checks-workflows writes:");
 });

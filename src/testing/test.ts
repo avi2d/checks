@@ -29,6 +29,7 @@ export type Verdict = {
   readonly undeclared: readonly TestResult[];
   readonly stale: readonly SkipDeclaration[];
   readonly unjudged: number;
+  readonly unjudgedByPlatform?: number;
 };
 
 export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGateError", {
@@ -98,15 +99,19 @@ export function judgeSkips(
   results: readonly TestResult[],
   declarations: readonly SkipDeclaration[],
   environment: Environment,
+  platform = process.platform,
 ): Verdict {
   const skipped = results.filter(skippedOutcome);
-  const applying = declarations.filter((declaration) => (declaration.when ?? environment) === environment);
+  const inEnvironment = declarations.filter((declaration) => (declaration.when ?? environment) === environment);
+  const applying = inEnvironment.filter((declaration) => (declaration.platform ?? platform) === platform);
+  const unjudgedByPlatform = inEnvironment.length - applying.length;
   return {
     environment,
     skipped: skipped.length,
     undeclared: skipped.filter((result) => !applying.some((declaration) => matches(declaration, result))).sort(byPlace),
     stale: applying.filter((declaration) => !skipped.some((result) => matches(declaration, result))),
     unjudged: declarations.length - applying.length,
+    ...(unjudgedByPlatform === 0 ? {} : { unjudgedByPlatform }),
   };
 }
 
@@ -127,7 +132,12 @@ function verdictLines(verdict: Verdict): readonly string[] {
   const run = `this ${environment} run`;
   if (passes(verdict)) {
     const other = environment === "ci" ? "local" : "ci";
-    const aside = unjudged === 0 ? "" : `; ${unjudged} declaration(s) for ${other} not judged in ${run}`;
+    const platformCount = verdict.unjudgedByPlatform ?? 0;
+    const environmentCount = unjudged - platformCount;
+    const aside = [
+      environmentCount === 0 ? "" : `; ${environmentCount} declaration(s) for ${other} not judged in ${run}`,
+      platformCount === 0 ? "" : `; ${platformCount} declaration(s) for another platform not judged in ${run}`,
+    ].join("");
     return [skipped === 0 ? `${NAME}: no test skipped${aside}` : `${NAME}: ${skipped} skipped test(s), each declared at its test site${aside}`];
   }
   const stale = refusedStale(verdict);
