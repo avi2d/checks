@@ -57,6 +57,7 @@ A code repository takes these files:
 
 The kit requires neither `mutation.yml` nor `whole-tree-run.yml`.
 It may hold `mutation.yml` as an optional file, but `whole-tree-run.yml` is outside its set.
+The set takes `mutationShardCount` from `checks.config.ts` to set the maximum shard count in `mutation.yml`, as [checks-mutation](checks-mutation.md#running-it-in-ci) describes.
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
@@ -398,7 +399,7 @@ It names the fix.
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | `flakeCron` is set in a site, `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | `flakeCron` does not decode, `--write` meets `flakeCron` in a site, `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 2 | `mutationShardCount` is not an integer from 1 to 256, `flakeCron` does not decode, `--write` meets `flakeCron` in a site, `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 

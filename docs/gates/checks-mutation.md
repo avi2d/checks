@@ -100,8 +100,11 @@ Run scoped checks locally during development.
 ## Running it in CI
 
 The `mutation.yml` [checks-setup](checks-setup.md) writes holds only the refresh, and [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses every other mutation job.
-A refresh restores the previous full report and its incremental state with `--full`, and splits the tree into 12 shards weighed by the mutants the state holds no result for.
-It runs each shard with static mutants ignored, 4 shards at a time.
+A refresh restores the previous full report and its incremental state with `--full`, and splits the tree into up to 12 shards weighed by the mutants the state holds no result for.
+To change that limit, set `mutationShardCount` in `checks.config.ts` to an integer from 1 to 256, such as `mutationShardCount: 4`.
+Run `checks-workflows --write` to apply the setting to `mutation.yml`.
+It runs each shard with static mutants ignored, at most 4 shards at a time.
+A failing shard does not cancel the other shards, but the merge job does not run.
 A shard stops itself after 30 minutes and hands on the incremental state it has, so no shard reaches the 35-minute job timeout.
 When a shard stopped, the merge uploads the merged state as a `mutation-refresh-state` artifact and publishes no report.
 The next start of the workflow restores that state in place of the older full state and runs only the mutants it lacks.

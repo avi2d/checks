@@ -2,7 +2,7 @@ import { PLAYWRIGHT_USES, runnerOf } from "./ci-jobs.ts";
 import wholeTreeRun from "./full-set/whole-tree-run.txt";
 import { CHECKOUT, DOWNLOAD, UPLOAD } from "./full-set/steps.ts";
 import { fullAdvisories, fullDocs, fullFlake, fullRequiredSet } from "./full-set.ts";
-import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
+import { mutationWorkflow } from "./full-set/mutation.ts";
 import type { CallerSet } from "./site-names.ts";
 
 // npm trusted publishing names the kit's release.yml, so a kit release file the set does not write stays as the kit holds it.
@@ -25,7 +25,7 @@ export type Difference =
 
 type DifferentLine = { readonly line: number; readonly holds: string | undefined; readonly writes: string | undefined };
 
-const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
+const mutationFile = (set: Pick<CallerSet, "mutationShardCount">): WorkflowFile => ({ name: "mutation.yml", text: mutationWorkflow(set.mutationShardCount) });
 
 export function scheduledFlakeOf({ kind, options: { flake, claudeVersion, flakeCron } }: CallerSet): WorkflowFile | undefined {
   return kind === "code" && flakeCron !== undefined ? fullFlake(flake, claudeVersion, flakeCron) : undefined;
@@ -43,7 +43,7 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
     .replaceAll("__UPLOAD__", UPLOAD)
     .replaceAll("__DOWNLOAD__", DOWNLOAD)
     .replace("__PLAYWRIGHT__\n", playwright);
-  return [...required, MUTATION, { name: "whole-tree-run.yml", text }];
+  return [...required, mutationFile(set), { name: "whole-tree-run.yml", text }];
 }
 
 // An optional file may be absent, but a present one holds exactly this text.
@@ -51,7 +51,7 @@ export function byHandSet(set: CallerSet, kit: boolean): readonly WorkflowFile[]
   const { advisoriesCron, flake, flakeCron, pages } = set.options;
   const docs = pages === undefined ? [] : [fullDocs(pages)];
   const advisories = fullAdvisories(advisoriesCron);
-  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [MUTATION] : []), ...(flakeCron === undefined ? [fullFlake(flake, set.options.claudeVersion)] : []), ...docs];
+  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [mutationFile(set)] : []), ...(flakeCron === undefined ? [fullFlake(flake, set.options.claudeVersion)] : []), ...docs];
 }
 
 export function differentLines(holds: string, writes: string): readonly DifferentLine[] {
