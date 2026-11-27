@@ -176,7 +176,7 @@ The repository installs the optional peers the gate loads, at the versions the k
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
 ```sh
-bun add -d postcss-html@2.0.1 postcss-value-parser@4.2.0 stylelint@18.1.0 stylelint-config-standard@41.1.0 stylelint-plugin-use-baseline@1.5.0
+bun add -d postcss-html@2.0.1 stylelint@18.1.0 stylelint-config-standard@41.1.0 stylelint-plugin-use-baseline@1.5.0
 ```
 
 <!-- end generated install -->
