@@ -28,13 +28,10 @@ The preset also exports `unitTestFiles`, which lists every `.test.ts` and `.test
 The preset sets `bun.testFiles` to its result, so a covered, non-static mutant loads only the test files that cover it.
 A repository without `tests/unit` lists no file, and the preset leaves `bun.testFiles` unset, so the runner finds every test itself.
 A static mutant has no per-test coverage, so it still loads every listed file, and with bail it stops at the first test that fails.
-When a `stryker run` that tests static mutants loads the preset, the preset runs the listed files once with `bun test` and times each file.
-With no file listed it skips that run.
-`unitTestFiles` then lists each file with a leading `./`, fastest first, and Bun runs such paths in the order given.
-It then lists each path again without the `./`, the spelling the runner matches a covering test against.
-Bun loads a file once however often the list names it.
-When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps Bun's default directory order.
-A run with `--ignoreStatic` on the command line or in a refresh tests no static mutant, so it skips the timing run.
+The runner orders each mutant's test files by their dry-run duration and passes absolute paths to Bun.
+For a static mutant, it puts likely killers first when bail is enabled.
+For a `stryker run`, the preset resolves package-name preloads in `bunfig.toml` to absolute paths before the runner reads them.
+It leaves relative and absolute preload paths unchanged.
 
 The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`.
 A baseline or a scoped run leaves the variable at another value or unset, so it still tests each static mutant.
@@ -63,6 +60,7 @@ export default {
 
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI.
 When Stryker loads the preset, the preset reads `CHECKS_MUTATION_MODE` and `RUNNER_ENVIRONMENT` from the environment.
+For a `stryker run`, the preset reads `bunfig.toml` and resolves its package-name preloads.
 It forwards every argument to `stryker run` through `bun x stryker run`.
 
 ## Arguments

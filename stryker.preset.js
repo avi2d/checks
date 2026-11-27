@@ -1,9 +1,11 @@
-import { existsSync, readdirSync } from "node:fs";
-import { availableParallelism } from "node:os";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { availableParallelism, tmpdir } from "node:os";
+import { isAbsolute, join } from "node:path";
+import { parse, stringify } from "smol-toml";
 import { fileURLToPath } from "node:url";
 import { GUARD_IGNORER } from "./dist/mutation/mutation-guard-plugin.js";
 import { fullRunRefusal } from "./dist/mutation/mutation-refusal.js";
-import { ordersTests, runOrder } from "./dist/mutation/unit-test-order.js";
 
 const [, , command, ...args] = process.argv;
 const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;
@@ -26,15 +28,30 @@ const listedUnitTests = () =>
         .toSorted()
     : [];
 
-const listedAtLoad = listedUnitTests();
-const timedUnitTests =
-  listedAtLoad.length > 0 && ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE)
-    ? await runOrder(listedAtLoad)
-    : undefined;
-
-export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
+export const unitTestFiles = listedUnitTests;
 
 const testFiles = unitTestFiles();
+
+const resolvedBunfig = () => {
+  if (command !== "run" || !existsSync("bunfig.toml")) return undefined;
+  const config = parse(readFileSync("bunfig.toml", "utf8"));
+  const resolve = createRequire(join(process.cwd(), "package.json")).resolve;
+  const original = stringify(config);
+  const resolvePreload = (preload) => {
+    if (typeof preload !== "string" || preload.startsWith(".") || isAbsolute(preload)) return preload;
+    return resolve(preload);
+  };
+  const resolvePreloads = (value) => Array.isArray(value) ? value.map(resolvePreload) : resolvePreload(value);
+  if (Object.hasOwn(config, "preload")) config.preload = resolvePreloads(config.preload);
+  if (typeof config.test === "object" && Object.hasOwn(config.test, "preload")) config.test.preload = resolvePreloads(config.test.preload);
+  if (stringify(config) === original) return undefined;
+  const directory = mkdtempSync(join(tmpdir(), "checks-mutation-bunfig-"));
+  const path = join(directory, "bunfig.toml");
+  writeFileSync(path, stringify(config));
+  process.once("exit", () => rmSync(directory, { recursive: true, force: true }));
+  return path;
+};
+const bunfig = resolvedBunfig();
 
 const timeoutMS = 60000;
 const timeoutFactor = 1.5;
@@ -54,7 +71,7 @@ export default {
   ignorers: [GUARD_IGNORER],
   testRunner: "bun",
   // The runner warns on an empty list before it finds every test itself, as it does for an absent one.
-  bun: { timeout: runnerChildTimeout, ...(testFiles.length > 0 ? { testFiles } : {}) },
+  bun: { timeout: runnerChildTimeout, ...(testFiles.length > 0 ? { testFiles } : {}), ...(bunfig ? { bunArgs: [`--config=${bunfig}`] } : {}) },
   inPlace: true,
   tempDirName: "../.stryker-tmp",
   coverageAnalysis: "perTest",
