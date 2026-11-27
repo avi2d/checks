@@ -213,12 +213,12 @@ export type SmokeScope =
 
 export function smokeFiles(scanned: readonly string[], smoke: readonly string[], location = settingPath("smoke")): SmokeScope {
   const missing = smoke.filter((file) => !scanned.includes(file));
-  if (missing.length > 0) return { kind: "invalid", message: `${SETTINGS_FILE} ${location}` + " names no test file at " + missing.join(", ") };
+  if (missing.length > 0) return { kind: "invalid", message: `${SETTINGS_FILE} ${location} names no test file at ${missing.join(", ")}` };
   const ignored = smoke.filter((file) => !selectedTierFile(file, undefined));
   if (ignored.length > 0) {
     return {
       kind: "invalid",
-      message: `${SETTINGS_FILE} ${location}` + " cannot name a quarantined, live or pixel test at " + ignored.join(", "),
+      message: `${SETTINGS_FILE} ${location} cannot name a quarantined, live or pixel test at ${ignored.join(", ")}`,
     };
   }
   return { kind: "valid", files: unitTierPlus(scanned, smoke) };
@@ -232,7 +232,7 @@ export function unitTierPlus(scanned: readonly string[], extra: readonly string[
 export const readSmokeFiles = Effect.fn("readSmokeFiles")(function* (
   root: string,
   smoke: readonly string[],
-  location = settingPath("smoke"),
+  location: string = settingPath("smoke"),
 ) {
   const scoped = smokeFiles(yield* scanTestFiles(root), smoke, location);
   if (scoped.kind === "invalid") return yield* new SkipDeclarationError({ message: scoped.message });

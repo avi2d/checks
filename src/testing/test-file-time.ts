@@ -3,7 +3,7 @@ import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { decodeSetting, DEFAULT_TEST_FILE_MAX_SECONDS, settingPath, TestFileMaxSeconds } from "../core/settings.ts";
 import { fileSeconds } from "./test-report.ts";
 
-export const resolveTestFileMaxSeconds = Effect.fn("resolveTestFileMaxSeconds")(function* (configured: unknown, location = settingPath("testFileMaxSeconds")) {
+export const resolveTestFileMaxSeconds = Effect.fn("resolveTestFileMaxSeconds")(function* (configured: unknown, location: string = settingPath("testFileMaxSeconds")) {
   if (configured === undefined) return DEFAULT_TEST_FILE_MAX_SECONDS;
   return yield* decodeSetting("testFileMaxSeconds", TestFileMaxSeconds, configured, location);
 });

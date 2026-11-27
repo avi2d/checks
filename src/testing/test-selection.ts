@@ -16,7 +16,7 @@ export type SuiteSelection =
 
 const SKIP_KEY = "testFileSkips";
 
-export const readTestFileSkips = Effect.fn("readTestFileSkips")(function* (root: string, configured: unknown, location = settingPath(SKIP_KEY)) {
+export const readTestFileSkips = Effect.fn("readTestFileSkips")(function* (root: string, configured: unknown, location: string = settingPath(SKIP_KEY)) {
   const entries = configured === undefined ? [] : yield* decodeSetting(SKIP_KEY, TestFileSkips, configured, location);
   const excluded = new Set(entries);
   if (excluded.size === 0) return excluded;
@@ -61,7 +61,7 @@ export const readSuiteScope = Effect.fn("readSuiteScope")(function* (
   smoke: readonly string[],
   excluded: ReadonlySet<string>,
   sharding?: { readonly shard: Shard; readonly timings: Readonly<Record<string, number>> },
-  smokeLocation = settingPath("smoke"),
+  smokeLocation: string = settingPath("smoke"),
 ) {
   const selected = yield* suiteFiles(root, selection, smoke, smokeLocation);
   const included = selected.filter((file) => !excluded.has(file));

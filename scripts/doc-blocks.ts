@@ -262,7 +262,8 @@ const SETTINGS: Block = {
       Effect.all(Object.entries(Settings.fields).flatMap(([section, schema]) => {
         if (!isSettingSection(section)) return isSettingKey(section) ? [settingRow(section, section, schema)] : [];
         const keys: Readonly<Record<string, SettingKey>> = TRANSITION_KEYS[section];
-        return Object.entries(GroupedSettings[section].fields).map(([key, field]) => {
+        const fields: Readonly<Record<string, Schema.Top>> = GroupedSettings[section].fields;
+        return Object.entries(fields).map(([key, field]) => {
           const legacyKey = keys[key];
           return legacyKey === undefined
             ? Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no transition for ${section}.${key}` }))

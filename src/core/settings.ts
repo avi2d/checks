@@ -1,4 +1,4 @@
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Path, Schema, Struct } from "effect";
 import { Listed } from "./browser-settings.ts";
 import { Usage } from "./main.ts";
 
@@ -105,7 +105,7 @@ export const ExtraTestJobs = Schema.Array(ExtraTestJob).annotate(EXTRA_TEST_JOBS
   Schema.makeFilter((jobs) => new Set(jobs.map(({ name }) => name)).size === jobs.length || "names a job twice", EXTRA_TEST_JOBS_ANNOTATIONS),
 );
 
-export const LegacySettings = Schema.Struct({
+const LegacySettings = Schema.Struct({
   repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   releaseAssets: Schema.optionalKey(ReleaseAssets.annotate({
     description: "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
@@ -150,42 +150,58 @@ const legacy = LegacySettings.fields;
 
 export type SettingKey = keyof typeof legacy;
 
-export const TRANSITION_KEYS = {
-  workflows: {
-    repositoryVisibility: "repositoryVisibility",
-    releaseAssets: "releaseAssets",
-    platformPackages: "platformPackages",
-    extraTestJobs: "extraTestJobs",
-    mutationRunsOn: "mutationRunner",
-    selfHostedRunsOn: "selfHostedRunners",
-    testShards: "testTierShards",
-    flakeCron: "flakeCron",
-  },
-  test: {
-    extraLocalFiles: "smoke",
-    affected: "reach",
-    allowAgentRunsOutsideCI: "agentTests",
-    fileTimeoutSeconds: "testFileMaxSeconds",
-    fileTimingsSeconds: "testFileTimings",
-    excludeFiles: "testFileSkips",
-  },
-  commentGate: { trackerKeyPrefixes: "trackerKeyPrefixes" },
-  lintCoverage: { allowedNestedOxlintRules: "nestedOxlintConfigs" },
-} satisfies Readonly<Record<string, Readonly<Record<string, SettingKey>>>>;
-
 const groupedSources = { ...legacy, agentTests: Schema.optionalKey(AllowAgentRunsOutsideCI) };
 
-function groupedFields<const Keys extends Readonly<Record<string, SettingKey>>>(keys: Keys) {
-  return Object.fromEntries(Object.entries(keys).map(([key, legacyKey]) => [key, groupedSources[legacyKey]])) as {
-    [Key in keyof Keys]: (typeof groupedSources)[Keys[Key]];
-  };
+function moved<const Key extends SettingKey>(legacyKey: Key) {
+  return { legacyKey, schema: groupedSources[legacyKey] };
 }
 
+interface MovedSchema extends Struct.Lambda {
+  <Field extends { readonly schema: unknown }>(field: Field): Field["schema"];
+  readonly "~lambda.out": this["~lambda.in"] extends { readonly schema: infer Schema } ? Schema : never;
+}
+
+const schemaOf = Struct.lambda<MovedSchema>((field) => field.schema);
+
+const MOVES = {
+  workflows: {
+    repositoryVisibility: moved("repositoryVisibility"),
+    releaseAssets: moved("releaseAssets"),
+    platformPackages: moved("platformPackages"),
+    extraTestJobs: moved("extraTestJobs"),
+    mutationRunsOn: moved("mutationRunner"),
+    selfHostedRunsOn: moved("selfHostedRunners"),
+    testShards: moved("testTierShards"),
+    flakeCron: moved("flakeCron"),
+  },
+  test: {
+    extraLocalFiles: moved("smoke"),
+    affected: moved("reach"),
+    allowAgentRunsOutsideCI: moved("agentTests"),
+    fileTimeoutSeconds: moved("testFileMaxSeconds"),
+    fileTimingsSeconds: moved("testFileTimings"),
+    excludeFiles: moved("testFileSkips"),
+  },
+  commentGate: { trackerKeyPrefixes: moved("trackerKeyPrefixes") },
+  lintCoverage: { allowedNestedOxlintRules: moved("nestedOxlintConfigs") },
+};
+
+function legacyKeys(section: Readonly<Record<string, { readonly legacyKey: SettingKey }>>) {
+  return Object.fromEntries(Object.entries(section).map(([key, field]) => [key, field.legacyKey] as const));
+}
+
+export const TRANSITION_KEYS = {
+  workflows: legacyKeys(MOVES.workflows),
+  test: legacyKeys(MOVES.test),
+  commentGate: legacyKeys(MOVES.commentGate),
+  lintCoverage: legacyKeys(MOVES.lintCoverage),
+};
+
 export const GroupedSettings = {
-  workflows: Schema.Struct(groupedFields(TRANSITION_KEYS.workflows)),
-  test: Schema.Struct(groupedFields(TRANSITION_KEYS.test)),
-  commentGate: Schema.Struct(groupedFields(TRANSITION_KEYS.commentGate)),
-  lintCoverage: Schema.Struct(groupedFields(TRANSITION_KEYS.lintCoverage)),
+  workflows: Schema.Struct(Struct.map(schemaOf)(MOVES.workflows)),
+  test: Schema.Struct(Struct.map(schemaOf)(MOVES.test)),
+  commentGate: Schema.Struct(Struct.map(schemaOf)(MOVES.commentGate)),
+  lintCoverage: Schema.Struct(Struct.map(schemaOf)(MOVES.lintCoverage)),
 };
 
 export const Settings = Schema.Struct({
