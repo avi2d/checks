@@ -74,13 +74,15 @@ const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"
 
 export type PlatformName = (typeof PLATFORM_NAMES)[number];
 
+const PLATFORM_DESCRIPTIONS = { description: "The platforms to build on and publish a package for." };
+
 export const PlatformPackages = Schema.Struct({
-  binary: Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9._-]*$/, { message: "is not a lowercase file name, such as acme" })).annotate({
+  binary: Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9._-]*$/u, { message: "is not a lowercase file name, such as acme" })).annotate({
     description: "The name release:assets gives each compiled file, which it writes as <binary>-<os>-<cpu>.",
   }),
   platforms: Schema.NonEmptyArray(Schema.Literals(PLATFORM_NAMES))
-    .check(Schema.makeFilter((platforms) => new Set(platforms).size === platforms.length || "names a platform twice"))
-    .annotate({ description: "The platforms to build on and publish a package for." }),
+    .annotate(PLATFORM_DESCRIPTIONS)
+    .check(Schema.makeFilter((platforms) => new Set(platforms).size === platforms.length || "names a platform twice", PLATFORM_DESCRIPTIONS)),
 });
 
 export type PlatformPackages = typeof PlatformPackages.Type;
