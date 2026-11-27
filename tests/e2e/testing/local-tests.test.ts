@@ -11,7 +11,7 @@ const browser = join(CHECKOUT, "src", "quality", "browser", "browser.ts");
 const flake = join(CHECKOUT, "src", "testing", "flake.ts");
 const mutation = join(CHECKOUT, "src", "testing", "mutation.ts");
 const { CI: _ci, CHECKS_AGENT: _checksAgent, AI_AGENT: _aiAgent, ...cleanEnv } = process.env;
-const BLOCKED = "agent tests are blocked outside CI; set agentTests.allowLocal to true to allow them";
+const BLOCKED = "checks.config.ts: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them";
 
 async function repository(settings?: string): Promise<string> {
   const dir = await scratch("checks-local-tests-");
@@ -35,36 +35,62 @@ test("the query defaults to blocked instead of allowing an undeclared setting", 
   expect(result.text).toBe("blocked\n");
 });
 
-test("the query rejects an invalid setting instead of treating it as allowed", async () => {
-  const dir = await repository('agentTests: { allowLocal: "true" }');
+test.each([
+  ["omitted", "", false],
+  ["empty flat", "agentTests: {}", false],
+  ["empty flat with grouped refusal", "agentTests: {}, test: { allowAgentRunsOutsideCI: false }", false],
+  ["empty flat with grouped allowance", "agentTests: {}, test: { allowAgentRunsOutsideCI: true }", true],
+] as const)("an %s policy does not invent a flat allowLocal setting", async (_name, settings, allowed) => {
+  const dir = await repository(settings);
+  const result = await $`bun ${command}`.cwd(dir).env(cleanEnv).nothrow().quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(allowed ? "allowed\n" : "blocked\n");
+  expect(result.stderr.toString()).toBe("");
+  const guard = await $`bun --preload @avi2dg/checks/local-test-preload -e ${'console.log("started")'}`.cwd(dir).env({ ...cleanEnv, CHECKS_AGENT: "1" }).nothrow().quiet();
+  expect(guard.exitCode).toBe(allowed ? 0 : 1);
+  expect(guard.stdout.toString()).toBe(allowed ? "started\n" : "");
+  const location = settings.includes("test:") ? " key test.allowAgentRunsOutsideCI" : "";
+  expect(guard.stderr.toString()).toBe(allowed ? "" : `checks.config.ts${location}: agent tests are blocked outside CI; set test.allowAgentRunsOutsideCI to true to allow them\n`);
+});
+
+test("the query rejects an invalid grouped boolean without inventing an allowLocal member", async () => {
+  const dir = await repository('test: { allowAgentRunsOutsideCI: "true" }');
   const result = await query(dir);
   expect(result.exitCode).toBe(2);
-  expect(result.text).toContain("key agentTests does not decode");
-  expect(result.text).toContain('at ["allowLocal"]');
+  expect(result.text).toContain("key test.allowAgentRunsOutsideCI does not decode");
+  expect(result.text).not.toContain('["allowLocal"]');
 });
 
 test("the query names the replacement key instead of honoring the old opt-in", async () => {
   const dir = await repository('localTests: "allowed"');
   const result = await query(dir);
   expect(result.exitCode).toBe(2);
-  expect(result.text).toBe("checks-local-tests: checks.config.ts key localTests is no longer read; use agentTests.allowLocal instead\n");
+  expect(result.text).toBe("checks-local-tests: checks.config.ts key localTests is no longer read; use test.allowAgentRunsOutsideCI instead\n");
 });
 
 test("an explicit false does not opt an agent in just because agentTests is present", async () => {
-  const dir = await repository("agentTests: { allowLocal: false }");
+  const dir = await repository("test: { allowAgentRunsOutsideCI: false }");
   const result = await query(dir);
   expect(result.exitCode).toBe(0);
   expect(result.text).toBe("blocked\n");
 });
 
 test("the setting allows an agent instead of blocking all agents", async () => {
-  const dir = await repository("agentTests: { allowLocal: true }");
+  const dir = await repository("test: { allowAgentRunsOutsideCI: true }");
   const result = await query(dir);
   expect(result.exitCode).toBe(0);
   expect(result.text).toBe("allowed\n");
   const guard = await ran($`bun --preload @avi2dg/checks/local-test-preload -e ${'console.log("started")'}`.cwd(dir).env({ ...cleanEnv, CHECKS_AGENT: "1" }));
   expect(guard.exitCode).toBe(0);
   expect(guard.text).toBe("started\n");
+});
+
+test("a flat opt-in does not put its deprecation note on stdout", async () => {
+  const dir = await repository("agentTests: { allowLocal: true }");
+  const result = await $`bun ${command}`.cwd(dir).env(cleanEnv).nothrow().quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe("allowed\n");
+  expect(result.stderr.toString()).toContain("checks.config.ts key agentTests.allowLocal is deprecated; move it to test.allowAgentRunsOutsideCI");
 });
 
 test("the guarded entry points refuse before starting a local agent test", async () => {

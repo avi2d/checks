@@ -1,7 +1,7 @@
 import { Config, Effect, FileSystem, Path, Schema } from "effect";
 import { MANIFEST } from "../core/release-names.ts";
 import { assetNameOf, packagedBinaryOf, platformPackageOf, type PlatformTarget } from "../core/native-platforms.ts";
-import { decodeSetting, loadSettings, PlatformPackages, SETTINGS_FILE, type PlatformName } from "../core/settings.ts";
+import { decodeSetting, loadSettings, PlatformPackages, SETTINGS_FILE, settingLocation, type PlatformName } from "../core/settings.ts";
 import { publishPackage } from "./release-publish.ts";
 
 export const PLATFORM_BINARIES_ENV = "CHECKS_PLATFORM_BINARIES";
@@ -101,23 +101,21 @@ export const withOptionalDependencies = (manifest: Readonly<Record<string, unkno
   return { ...manifest, optionalDependencies: { ...kept, ...added } };
 };
 
-const configuredPackages = Effect.fn("configuredPackages")(function* (root: string) {
-  const configured = (yield* loadSettings(root))["platformPackages"];
-  return configured === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configured);
-});
-
 export type ConfiguredRelease = { readonly release: PlatformRelease; readonly record: Readonly<Record<string, unknown>>; readonly manifestFile: string };
 
 export const configuredPlatformRelease = Effect.fn("configuredPlatformRelease")(function* (root: string, head: string, workspacePaths?: readonly string[]) {
-  const packages = yield* configuredPackages(root);
+  const settings = yield* loadSettings(root);
+  const configured = settings.values["platformPackages"];
+  const location = settingLocation(settings.locations, "platformPackages");
+  const packages = configured === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configured, location);
   if (packages === undefined) return undefined;
   if (workspacePaths !== undefined && workspacePaths.length !== 1) {
-    return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets platformPackages, but the private root must publish exactly one workspace` });
+    return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets ${location}, but the private root must publish exactly one workspace` });
   }
   const manifestPath = workspacePaths?.[0] ?? MANIFEST;
   const directory = yield* Config.String(PLATFORM_BINARIES_ENV).pipe(Config.withDefault(""));
   if (directory === "") {
-    return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets platformPackages, but ${PLATFORM_BINARIES_ENV} names no directory of built binaries, so run checks-workflows --write` });
+    return yield* new PlatformPackageFault({ message: `${SETTINGS_FILE} sets ${location}, but ${PLATFORM_BINARIES_ENV} names no directory of built binaries, so run checks-workflows --write` });
   }
   const file = (yield* Path.Path).join(root, manifestPath);
   const record = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(Effect.flatMap(decodeManifestRecord));

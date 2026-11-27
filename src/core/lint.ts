@@ -239,7 +239,7 @@ const tracks = (pathspecs: readonly string[], root: string) =>
 const applies = Effect.fn("applies")(function* (appliesTo: KitGate["appliesTo"], root: string) {
   if (appliesTo === EVERY_REPOSITORY) return true;
   if ("pathspecs" in appliesTo) return yield* tracks(appliesTo.pathspecs, root);
-  if (Object.hasOwn(yield* loadSettings(root), appliesTo.setting)) return true;
+  if (Object.hasOwn((yield* loadSettings(root)).values, appliesTo.setting)) return true;
   return yield* tracks([appliesTo.oldFile], root);
 });
 

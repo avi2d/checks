@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 It visits each declared route at each declared viewport in each declared state.
-Outside CI, `checks-browser` refuses to start for agents unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
+Outside CI, `checks-browser` refuses to start for agents unless `test.allowAgentRunsOutsideCI` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
 A visit is one route, one viewport and one state.
 Target discovery, `nesting`, and `axe` share one loaded page per visit.
@@ -212,7 +212,7 @@ export const checks: readonly ProductCheck[] = [
 ## What it reads
 
 It reads the `browser`, `browserRoutes`, `browserBuild` and `browserTimings` keys of `checks.config.ts` in the directory it runs in.
-It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `test.allowAgentRunsOutsideCI` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads `CI_CORES` for the number of checks to run at once, as [Chrome and the peers](#chrome-and-the-peers) says.
 On a pull request it also reads the changed paths since the merge base:
 
@@ -463,7 +463,7 @@ On a change confined to TypeScript files under `tests/unit/` and `tests/e2e/`, g
 That skip includes helpers under those directories, with or without a route map.
 When no changed path reaches a route, generated CI skips the browser job.
 The `changes` job prints what routes each path reaches or why the whole walk is needed.
-The map is separate from the test selection in `reach`.
+The map is separate from the test selection in `test.affected`.
 
 The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
 For a change confined to test paths outside the hooks module, the runner builds the merge base and the head in temporary source trees.
@@ -511,7 +511,7 @@ The split gives the most costly route to the shard with the least time so far, a
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, `CI_CORES` is read but is not a positive whole number, or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, `CI_CORES` is read but is not a positive whole number, or an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false` |
 
 ## Sample output
 

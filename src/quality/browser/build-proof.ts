@@ -37,7 +37,7 @@ const buildAt = Effect.fn("buildAt")(function* (root: string, revision: string, 
 export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest, hooks?: string) {
   if (!testOnly(scope.changed, hooks) || scope.ends === undefined || !/^[a-zA-Z0-9_-]+$/.test(site)) return false;
   const ends = scope.ends;
-  const raw = (yield* loadSettings(root))["browserBuild"];
+  const raw = (yield* loadSettings(root)).values["browserBuild"];
   if (raw === undefined) return false;
   const command = yield* decodeSetting("browserBuild", BrowserBuild, raw);
   const prove = Effect.gen(function* () {

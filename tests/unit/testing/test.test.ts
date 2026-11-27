@@ -174,7 +174,7 @@ test("the smoke scope is the unit tier plus the declared files", () => {
 test("a smoke entry that names no test file is refused", () => {
   expect(smokeFiles(["tests/unit/a.test.ts"], ["tests/e2e/nope.test.ts"])).toEqual({
     kind: "invalid",
-    message: "checks.config.ts smoke names no test file at tests/e2e/nope.test.ts",
+    message: "checks.config.ts test.extraLocalFiles names no test file at tests/e2e/nope.test.ts",
   });
 });
 
@@ -182,7 +182,7 @@ test("a smoke entry never names a test Bun's ignored paths drop", () => {
   for (const file of ["tests/quarantine/unit/q.test.ts", "tests/live/l.test.ts", "tests/pixel/p.test.ts"]) {
     expect(smokeFiles([file], [file])).toEqual({
       kind: "invalid",
-      message: `checks.config.ts smoke cannot name a quarantined, live or pixel test at ${file}`,
+      message: `checks.config.ts test.extraLocalFiles cannot name a quarantined, live or pixel test at ${file}`,
     });
   }
 });

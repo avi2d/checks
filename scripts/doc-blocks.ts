@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { AgentTests, SETTINGS_FILE, Settings, type SettingKey } from "../src/core/settings.ts";
+import { GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -232,23 +232,27 @@ const SETTING_READERS = {
   frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
   nestedOxlintConfigs: "[checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs)",
   agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
-  "agentTests.allowLocal": "[checks-local-tests](../gates/checks-local-tests.md)",
   testFileMaxSeconds: "[checks-test](../gates/checks-test.md#test-file-time-limit)",
   testTierShards: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileTimings: "[checks-test](../gates/checks-test.md#parallel-runs)",
   testFileSkips: "[checks-test](../gates/checks-test.md#test-file-exclusions)",
-} satisfies Record<SettingKey | "agentTests.allowLocal", string>;
+} satisfies Record<SettingKey, string>;
 
-function isSettingKey(key: string): key is SettingKey {
-  return Object.hasOwn(Settings.fields, key);
+function isSettingSection(key: string): key is keyof typeof GroupedSettings {
+  return Object.hasOwn(GroupedSettings, key);
 }
 
-function settingRow([key, schema]: readonly [SettingKey | "agentTests.allowLocal", Schema.Top]): Effect.Effect<string, DocBlocksUnwritable> {
+function isSettingKey(key: string): key is SettingKey {
+  return Object.hasOwn(SETTING_READERS, key);
+}
+
+function settingRow(path: string, key: SettingKey, schema: Schema.Top): Effect.Effect<string, DocBlocksUnwritable> {
   const annotations = Schema.resolveAnnotations(schema);
   const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
   const description = annotations?.description;
-  if (description === undefined) return Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no description for ${key}` }));
-  return Effect.succeed(`| ${code(key)} | ${fallback} | ${description} | ${SETTING_READERS[key]} |`);
+  if (description === undefined) return Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no description for ${path}` }));
+  const old = path === key ? "None" : code(key === "agentTests" ? "agentTests.allowLocal" : key);
+  return Effect.succeed(`| ${code(path)} | ${old} | ${fallback} | ${description} | ${SETTING_READERS[key]} |`);
 }
 
 const SETTINGS: Block = {
@@ -256,14 +260,18 @@ const SETTINGS: Block = {
   from: ["src/core/settings.ts"],
   render: () =>
     Effect.map(
-      Effect.all(
-        Object.keys(Settings.fields).filter(isSettingKey).flatMap((key) =>
-          key === "agentTests"
-            ? [settingRow([key, Settings.fields[key]]), settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal])]
-            : [settingRow([key, Settings.fields[key]])]
-        ),
-      ),
-      (rows) => ["| Key | Default | What it holds | Reader |", "| --- | --- | --- | --- |", ...rows] as const,
+      Effect.all(Object.entries(Settings.fields).flatMap(([section, schema]) => {
+        if (!isSettingSection(section)) return isSettingKey(section) ? [settingRow(section, section, schema)] : [];
+        const keys: Readonly<Record<string, SettingKey>> = TRANSITION_KEYS[section];
+        const fields: Readonly<Record<string, Schema.Top>> = GroupedSettings[section].fields;
+        return Object.entries(fields).map(([key, field]) => {
+          const legacyKey = keys[key];
+          return legacyKey === undefined
+            ? Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no transition for ${section}.${key}` }))
+            : settingRow(`${section}.${key}`, legacyKey, field);
+        });
+      })),
+      (rows) => ["| Key | Flat key still read | Default | What it holds | Reader |", "| --- | --- | --- | --- | --- |", ...rows] as const,
     ),
 };
 

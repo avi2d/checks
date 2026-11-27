@@ -83,7 +83,7 @@ To approve the pictures of a block that changed on purpose:
 1. Restore with git each changed picture that looks wrong and delete each new one that does.
 
 Approve mode runs outside CI because CI cannot write approved pictures back.
-If an agent approves pictures, set `agentTests.allowLocal` to `true`, as [checks-local-tests](../gates/checks-local-tests.md) says.
+If an agent approves pictures, set `test.allowAgentRunsOutsideCI` to `true`, as [checks-local-tests](../gates/checks-local-tests.md) says.
 Approve mode passes every size, so the review of the changed pictures is the only check on them.
 
 ## Build a suite from the parts
