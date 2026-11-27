@@ -214,7 +214,7 @@ test(
     expect(release?.body).toContain("price a bill");
     expect(main.changelog).toContain(release?.body ?? "no body");
     expect((await main.state()).dispatches).toEqual([]);
-    expect((await main.npm()).latest).toBe("0.2.0");
+    expect((await main.npm()).latestByPackage["widget"]).toBe("0.2.0");
 
     const again = await main.run(SCRIPT, []);
     expect(again.exitCode).toBe(0);
@@ -269,7 +269,7 @@ test(
     expect(released.text).toContain(`release-tag: tagged ${behind.slice(0, 12)} as v0.2.0`);
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(behind);
     expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
-    expect((await main.npm()).latest).toBe("0.2.0");
+    expect((await main.npm()).latestByPackage["widget"]).toBe("0.2.0");
     expect((await main.npm()).published).toEqual([behind]);
   },
   60_000,
@@ -324,7 +324,7 @@ test(
     expect(released.text).toContain("release-tag: created the GitHub release v0.2.0 with the CHANGELOG.md section for 0.2.0\n");
     expect(released.text).toContain("release-publish: published widget@0.2.0\n");
     expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
-    expect((await main.npm()).latest).toBe("0.2.0");
+    expect((await main.npm()).latestByPackage["widget"]).toBe("0.2.0");
   },
   60_000,
 );
@@ -376,7 +376,7 @@ test(
 );
 
 test(
-  "with platformPackages under a private root the public workspace names and carries the platform packages, instead of the private root npm never receives",
+  "with platformPackages under a private root npm receives both the platform package and the public workspace manifest, not the private root",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)", { private: true, workspace: true, platformPackages: true });
     const binaries = join(main.dir, "binaries");
@@ -389,8 +389,13 @@ test(
     expect(JSON.parse(await readFile(join(binaries, "npm", "@acme", "public-linux-x64", "package.json"), "utf8"))).toMatchObject({ name: "@acme/public-linux-x64", version: "0.2.0", os: ["linux"], cpu: ["x64"] });
     expect(JSON.parse(await readFile(join(main.dir, "packages", "public", "package.json"), "utf8"))).toEqual({ name: "@acme/public", version: "0.2.0", optionalDependencies: { "@acme/public-linux-x64": "0.2.0" } });
     expect(JSON.parse(await readFile(join(main.dir, "package.json"), "utf8"))).not.toHaveProperty("optionalDependencies");
-    const looked = (await main.npm()).calls.filter((call) => call.endsWith("dist-tags --json"));
+    const registry = await main.npm();
+    const looked = registry.calls.filter((call) => call.endsWith("dist-tags --json"));
     expect(looked).toEqual(["view @acme/public-linux-x64 dist-tags --json", "view @acme/public dist-tags --json"]);
+    expect(registry.latestByPackage).toEqual({ "@acme/public-linux-x64": "0.2.0", "@acme/public": "0.2.0" });
+    expect(registry.manifests).toHaveLength(2);
+    expect(registry.manifests[0]).toMatchObject({ name: "@acme/public-linux-x64", version: "0.2.0", os: ["linux"], cpu: ["x64"] });
+    expect(registry.manifests[1]).toEqual({ name: "@acme/public", version: "0.2.0", optionalDependencies: { "@acme/public-linux-x64": "0.2.0" } });
   },
   60_000,
 );
