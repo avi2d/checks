@@ -103,7 +103,7 @@ const coveringFiles = async (testFiles: ReadonlyArray<string>, testId: string): 
     error: quiet,
     fatal: quiet,
   };
-  // The runner reads only bun and mutate from the options, and StrykerOptions declares every other Stryker setting as required.
+  // StrykerOptions declares every Stryker setting as required, and the constructor accepts each one it reads as undefined.
   const runner: BunTestRunner = Reflect.construct(BunTestRunner, [logger, { bun: { testFiles } }]);
   runner["effectiveTestFiles"] = await runner["getOrDiscoverTestFiles"]();
   return runner["resolveCoveringTestFiles"]([testId]);
