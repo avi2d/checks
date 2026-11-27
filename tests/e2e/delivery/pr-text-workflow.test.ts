@@ -16,7 +16,7 @@ const SCAN_MS = 120_000;
 const NUMBER = "7";
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const REPOSITORY = "acme/acme";
-const PRIVATE = { "checks.config.ts": 'export default { repositoryVisibility: "private" };\n' };
+const PRIVATE = { "checks.config.ts": 'export default { workflows: { repositoryVisibility: "private" } };\n' };
 const SKIPPED_SCAN = "scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)";
 
 const manifest = JSON.stringify({ name: "acme", scripts: { lint: "oxlint", build: "tsc", typecheck: "tsc --noEmit", test: "bun test" } });

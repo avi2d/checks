@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { nativePlatform } from "../../../src/core/native-platforms.ts";
@@ -72,6 +72,7 @@ test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compil
   await $`bun run release:assets ${pack}`.cwd(CHECKOUT).quiet();
   await copyFile(join(pack, "checks-" + platform), binary);
   await chmod(binary, 0o755);
+  await rm(join(root, "src/delivery/workflows.ts"));
   await writeFile(join(root, "src/delivery/workflows.ts"), 'console.error("source launcher");\nprocess.exitCode = 1;\n');
   expect(await check()).toEqual(fallback);
 }, 180_000);
