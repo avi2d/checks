@@ -57,6 +57,7 @@ A code repository takes these files:
 
 The kit requires neither `mutation.yml` nor `whole-tree-run.yml`.
 It may hold `mutation.yml` as an optional file, but `whole-tree-run.yml` is outside its set.
+The set takes `mutationShardCount` from `checks.config.ts` to set the maximum shard count in `mutation.yml`, as [checks-mutation](checks-mutation.md#running-it-in-ci) describes.
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.

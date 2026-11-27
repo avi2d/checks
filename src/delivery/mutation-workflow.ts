@@ -13,11 +13,11 @@ export type MutationCalls = {
   readonly files: ReadonlyMap<string, string>;
 };
 
-export const isWrittenMutation = (workflow: Workflow): boolean => workflow.path === MUTATION_PATH && workflow.text === MUTATION_WORKFLOW;
+export const isWrittenMutation = (workflow: Workflow, expected: string): boolean => workflow.path === MUTATION_PATH && workflow.text === expected;
 
-export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls): readonly HandRolledJob[] {
+export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls, expected = MUTATION_WORKFLOW): readonly HandRolledJob[] {
   return workflows
-    .filter((workflow) => !isWrittenMutation(workflow))
+    .filter((workflow) => !isWrittenMutation(workflow, expected))
     .flatMap((workflow) =>
       workflowJobs(workflow).flatMap(([id, job]) =>
         jobRuns(workflow, job).some((run) => runsMutation(run, calls.scripts, (file) => calls.files.get(file))) ? [{ location: `${workflow.path} job ${id}` }] : [],
