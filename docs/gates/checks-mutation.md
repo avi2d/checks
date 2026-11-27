@@ -100,9 +100,13 @@ Run scoped checks locally during development.
 ## Running it in CI
 
 The `mutation.yml` [checks-setup](checks-setup.md) writes holds only the refresh, and [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses every other mutation job.
-A refresh restores the previous full report with `--full` for shard balancing, splits the tree into 4 shards and runs each shard with static mutants ignored.
-It merges the shard reports, posts the score in its summary, and uploads the slimmed report as a fresh `mutation-baseline-full` artifact.
-It starts by hand every 28 days.
+A refresh restores the previous full report and its incremental state with `--full`, and splits the tree into 12 shards weighed by the mutants the state holds no result for.
+It runs each shard with static mutants ignored, 4 shards at a time.
+A shard stops itself after 30 minutes and hands on the incremental state it has, so no shard reaches the 35-minute job timeout.
+When a shard stopped, the merge uploads the merged state as a `mutation-refresh-state` artifact and publishes no report.
+The next start of the workflow restores that state in place of the older full state and runs only the mutants it lacks.
+When every shard finished, the merge posts the score in its summary and uploads the slimmed report as a fresh `mutation-baseline-full` artifact.
+It starts by hand every 28 days, and again after each run that stopped a shard.
 [checks-mutation-scope](checks-mutation-scope.md) reads the full report to bring in the sources a changed unit test covers or kills.
 The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
 

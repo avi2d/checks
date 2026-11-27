@@ -8,7 +8,7 @@ import { decodeBunfig, preloadPaths, readersOf } from "./mutation-scope-graph.ts
 import { balancedShards, MAX_SHARDS, mutantWeights, runnableMutants, type Shard } from "./mutation-shards.ts";
 
 const NAME = "mutation-scope";
-const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report] | mutation-scope.ts --shards <count> [last-report]";
+const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report] | mutation-scope.ts --shards <count> [last-report [resume-state]]";
 const SHARD_COUNT = /^[1-9]\d*$/;
 const UNIT_TESTS = "tests/unit/";
 const TEST_FILE = /\.test\.tsx?$/;
@@ -142,16 +142,17 @@ export function shardsLine(shards: readonly Shard[]): string {
 
 export type Options =
   | { readonly kind: "scope"; readonly base: string; readonly baseline: string | undefined }
-  | { readonly kind: "shards"; readonly count: number; readonly report: string | undefined };
+  | { readonly kind: "shards"; readonly count: number; readonly report: string | undefined; readonly state: string | undefined };
 
 const isOperand = (arg: string | undefined): arg is string => arg !== undefined && !arg.startsWith("-");
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
-  const [first, second, third, ...extra] = argv;
+  const [first, second, third, fourth, ...extra] = argv;
   if (first === "--shards") {
     const count = Number(second);
-    if (!SHARD_COUNT.test(second ?? "") || count > MAX_SHARDS || (third !== undefined && !isOperand(third)) || extra.length > 0) return yield* new Usage({ message: USAGE });
-    return { kind: "shards", count, report: third };
+    const operandsFit = (third === undefined || isOperand(third)) && (fourth === undefined || (third !== undefined && isOperand(fourth))) && extra.length === 0;
+    if (!SHARD_COUNT.test(second ?? "") || count > MAX_SHARDS || !operandsFit) return yield* new Usage({ message: USAGE });
+    return { kind: "shards", count, report: third, state: fourth };
   }
   if (!isOperand(first) || (second !== undefined && !isOperand(second)) || third !== undefined) return yield* new Usage({ message: USAGE });
   return { kind: "scope", base: first, baseline: second };
@@ -327,10 +328,15 @@ const reportedCounts = Effect.fn("reportedCounts")(function* (report: string | u
   return new Map(Object.entries(files).map(([file, { mutants }]) => [file, runnableMutants(mutants)]));
 });
 
-const pickShards = Effect.fn("pickShards")(function* (count: number, report: string | undefined) {
+const reusedCounts = Effect.fn("reusedCounts")(function* (state: string | undefined) {
+  if (state === undefined) return new Map<string, number>();
+  return yield* reportedCounts(state);
+});
+
+const pickShards = Effect.fn("pickShards")(function* (count: number, report: string | undefined, state: string | undefined) {
   const mutated = mutatedBy(yield* mutatePatterns, (yield* Path.Path).resolve("."));
   const files = (yield* pathsAt("HEAD", [])).filter(mutated);
-  const shards = balancedShards(mutantWeights(files, yield* reportedCounts(report)), count);
+  const shards = balancedShards(mutantWeights(files, yield* reportedCounts(report), yield* reusedCounts(state)), count);
   for (const [index, { files: held, mutants }] of shards.entries()) yield* Console.error(`${NAME}: shard ${index + 1} holds ${held.length} file(s) and about ${mutants} mutant(s)`);
   yield* Console.log(shardsLine(shards));
   return true;
@@ -338,7 +344,7 @@ const pickShards = Effect.fn("pickShards")(function* (count: number, report: str
 
 const selectScope = Effect.gen(function* () {
   const options = yield* parseArgs(process.argv.slice(2));
-  if (options.kind === "shards") return yield* pickShards(options.count, options.report);
+  if (options.kind === "shards") return yield* pickShards(options.count, options.report, options.state);
   const { base, baseline } = options;
   const range = yield* rangeEnds(base, "HEAD");
   const mutated = mutatedBy(yield* mutatePatterns, (yield* Path.Path).resolve("."));

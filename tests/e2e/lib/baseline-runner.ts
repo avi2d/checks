@@ -38,6 +38,10 @@ export function fullBaseline(id: number, tag: string): FakeRun["artifacts"][numb
   };
 }
 
+export function refreshState(id: number, tag: string): FakeRun["artifacts"][number] {
+  return { id, name: "mutation-refresh-state", expired: false, files: { "stryker-incremental.json": `{"state":"${tag}"}` } };
+}
+
 export function run(databaseId: number, event: string, createdAt: string, artifacts: FakeRun["artifacts"], headSha?: string): FakeRun {
   return { databaseId, event, createdAt, ...(headSha === undefined ? {} : { headSha }), artifacts };
 }

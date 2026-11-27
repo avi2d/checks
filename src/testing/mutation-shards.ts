@@ -10,10 +10,10 @@ export function runnableMutants(mutants: readonly ReportedMutant[]): number {
 }
 
 // A file the report lacks may be new since it ran, so it weighs what the average reported file does.
-export function mutantWeights(files: readonly string[], reported: ReadonlyMap<string, number>): ReadonlyMap<string, number> {
+export function mutantWeights(files: readonly string[], reported: ReadonlyMap<string, number>, reused: ReadonlyMap<string, number> = new Map()): ReadonlyMap<string, number> {
   const known = files.flatMap((file) => reported.get(file) ?? []);
   const unknown = known.length === 0 ? 1 : Math.max(1, Math.ceil(known.reduce((sum, count) => sum + count, 0) / known.length));
-  return new Map(files.map((file) => [file, reported.get(file) ?? unknown]));
+  return new Map(files.map((file) => [file, Math.max(0, (reported.get(file) ?? unknown) - (reused.get(file) ?? 0))]));
 }
 
 // Each file in turn, heaviest first, joins the lightest shard so far, the lowest numbered on a tie.

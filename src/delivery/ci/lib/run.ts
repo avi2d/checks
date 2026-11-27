@@ -28,10 +28,19 @@ const spawnForwarded = (program: string, args: readonly string[], env: Readonly<
     return yield* spawner.spawn(ChildProcess.make(program, args, { env, extendEnv: true, stdin: "inherit" }));
   });
 
-const passedWhenDone = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+const exitedWhenDone = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Effect.all([handle.exitCode, forwardTo(process.stdout)(handle.stdout), forwardTo(process.stderr)(handle.stderr)], {
     concurrency: "unbounded",
-  }).pipe(Effect.map(([exitCode]) => exitCode === ChildProcessSpawner.ExitCode(0)));
+  }).pipe(Effect.map(([exitCode]) => Number(exitCode)));
+
+const passedWhenDone = (handle: ChildProcessSpawner.ChildProcessHandle) => exitedWhenDone(handle).pipe(Effect.map((exitCode) => exitCode === 0));
+
+export const commandExit = Effect.fn("commandExit")(
+  function* (program: string, args: readonly string[], env: Readonly<Record<string, string>> = {}) {
+    return yield* exitedWhenDone(yield* spawnForwarded(program, args, env));
+  },
+  Effect.scoped,
+);
 
 export const commandPasses = Effect.fn("commandPasses")(
   function* (program: string, args: readonly string[], env: Readonly<Record<string, string>> = {}) {

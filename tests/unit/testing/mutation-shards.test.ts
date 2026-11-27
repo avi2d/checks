@@ -34,6 +34,20 @@ test("a file the report lacks weighs the reported average rounded up, and a repo
   expect(mutantWeights(["src/a.ts", "src/b.ts", "src/new.ts"], reported)).toEqual(weights({ "src/a.ts": 10, "src/b.ts": 5, "src/new.ts": 8 }));
 });
 
+test("a file the resumed state fully covers weighs zero and a half covered file weighs the rest, rather than every file weighing its whole count", () => {
+  const reported = weights({ "src/a.ts": 10, "src/b.ts": 6, "src/c.ts": 4 });
+  const reused = weights({ "src/a.ts": 10, "src/b.ts": 2 });
+
+  expect(mutantWeights(["src/a.ts", "src/b.ts", "src/c.ts"], reported, reused)).toEqual(weights({ "src/a.ts": 0, "src/b.ts": 4, "src/c.ts": 4 }));
+});
+
+test("a file the report lacks weighs the average of the whole reported counts, not of what is left, and a state holding more than the report weighs zero rather than negative", () => {
+  const reported = weights({ "src/a.ts": 10, "src/b.ts": 2 });
+  const reused = weights({ "src/a.ts": 10, "src/b.ts": 5, "src/new.ts": 1 });
+
+  expect(mutantWeights(["src/a.ts", "src/b.ts", "src/new.ts"], reported, reused)).toEqual(weights({ "src/a.ts": 0, "src/b.ts": 0, "src/new.ts": 5 }));
+});
+
 test("static, Ignored and NoCoverage mutants carry no weight rather than counting every mutant the report lists", () => {
   expect(runnableMutants([{ status: "Killed" }, { status: "Survived", static: true }, { status: "Ignored" }, { status: "NoCoverage" }, {}])).toBe(2);
 });

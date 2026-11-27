@@ -177,9 +177,9 @@ function fileRunsBin(
   );
 }
 
-function mutationBin([program = "", subcommand]: Command): boolean {
+function mutationBin([program = "", subcommand, part]: Command): boolean {
   const bin = program.slice(program.lastIndexOf("/") + 1);
-  return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run");
+  return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run") || (bin === "checks-ci" && subcommand === "mutation" && part === "shard");
 }
 
 type FilesWanted = (runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>) => readonly string[];

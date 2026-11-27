@@ -50,6 +50,7 @@ So a helper, fixture or preload changed on `main` since that baseline can hide a
 `checks-mutation-scope --shards <count>` takes every file git tracks at `HEAD` that the `mutate` globs match, with each negated glob applied in order.
 It splits those files into at most `<count>` shards, so a refresh run spreads across that many jobs while a baseline stays a single incremental run.
 Each file weighs the mutants the last report holds for it that a refresh runs, leaving out each mutant with `static` true or status `Ignored` or `NoCoverage`, since a refresh skips the first two and runs no test for the third.
+With a resume state, it also leaves out the mutants of that file the state holds a result for, so a file the state fully covers weighs nothing.
 A file the last report lacks may be newer than that report.
 So it weighs the average count of the reported files the globs still match, rounded up and at least one.
 With no last report operand, each file weighs one mutant, so the shards split by file count.
@@ -69,6 +70,7 @@ A shard with no file is left out, so fewer files than `<count>` print fewer shar
 - Each changed unit test at the merge base, to match it against the source the report recorded.
 - The full baseline report that `checks-mutation-baseline --full` restores, for each mutant's `coveredBy` and `killedBy` and the `testFiles` that own those tests.
 - With `--shards`, the last report, for the number of mutants in each file that a refresh runs.
+- With `--shards` and a resume state, that state, for the number of those mutants it already holds a result for.
 
 Stryker leaves `coveredBy` empty on a static mutant, so only `killedBy` names its tests.
 A reused result needs its affected tests, sources, and configuration invalidated before reuse, so each mutant's tests are the ones the run recorded.
@@ -81,7 +83,7 @@ So whichever killer the report names is a changed test, and a deleted test count
 
 ```sh
 checks-mutation-scope <base> [<full-baseline-report>]
-checks-mutation-scope --shards <count> [<last-report>]
+checks-mutation-scope --shards <count> [<last-report> [<resume-state>]]
 ```
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
@@ -90,6 +92,7 @@ A path with no file adds no covered source for a changed unit test, and the scop
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
 `<last-report>` is the path of the last whole-tree report.
 With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
+`<resume-state>` follows `<last-report>` and names the incremental state restored from a stopped refresh or the last full run.
 
 ## Output
 
