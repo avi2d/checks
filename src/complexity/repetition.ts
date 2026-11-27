@@ -30,11 +30,14 @@ class JscpdUnreadable extends Schema.TaggedError<JscpdUnreadable>()("JscpdUnread
 }) {}
 
 const NAME = "repetition";
-const USAGE = "usage: repetition.ts <ref> | <base-ref> <head-ref> | --whole-tree <head-ref>";
+const WRITE_BASELINE = "--write-baseline";
+const USAGE = `usage: repetition.ts <ref> | <base-ref> <head-ref> | ${WHOLE_TREE} <head-ref> | ${WRITE_BASELINE} <head-ref>`;
 const MIN_TOKENS = 50;
 const MIN_LINES = 5;
 const MEASURE = `at ${MIN_TOKENS} tokens and ${MIN_LINES} lines`;
 const CONFIG = ".jscpd.json";
+const BASELINE = ".jscpd-baseline.json";
+const NATIVE_BASELINE_SETTINGS = new Set(["baseline", "baselineFromRef", "failOnNewClones"]);
 const KIT_DEFAULT = JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts"] });
 const JSCPD_FINISHED = 0;
 const REPORT = "jscpd-report.json";
@@ -44,7 +47,7 @@ const Location = Schema.Struct({ name: Schema.String, start: Schema.Int, end: Sc
 const decodeReport = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({
-      duplicates: Schema.Array(Schema.Struct({ firstFile: Location, secondFile: Location })),
+      duplicates: Schema.Array(Schema.Struct({ firstFile: Location, secondFile: Location, isNew: Schema.Boolean })),
       statistics: Schema.Struct({ total: Schema.Struct({ sources: Schema.Int }) }),
     }),
   ),
@@ -54,7 +57,14 @@ const decodeConfigPaths = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ path: Schema.optional(Schema.Array(Schema.String)) })),
 );
 
+const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)));
+
 type Scan = { readonly sources: number; readonly clones: readonly Clone[] };
+type WholeTreeScan =
+  | { readonly kind: "unbaselined" }
+  | { readonly kind: "read"; readonly content: string }
+  | { readonly kind: "write"; readonly destination: string };
+type ScanMode = { readonly kind: "range" } | WholeTreeScan;
 
 function fragmentOf(file: (name: string) => string, { name, start, end }: typeof Location.Type): Fragment {
   return { file: file(name), start, end };
@@ -79,11 +89,22 @@ const jscpdBinary = Effect.fn("jscpdBinary")(function* () {
   return yield* path.fromFileUrl(main);
 });
 
+const baselineFlags = Effect.fn("baselineFlags")(function* (scratch: string, baseline: ScanMode) {
+  if (baseline.kind === "range" || baseline.kind === "unbaselined") return [];
+  if (baseline.kind === "write") return ["--baseline", baseline.destination, "--update-baseline"];
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+  const file = path.join(scratch, BASELINE);
+  yield* fs.writeFileString(file, baseline.content);
+  return ["--baseline", file];
+});
+
 // jscpd needs files on disk, not a Git revision.
 // jscpd refuses a missing configured path.
 const scan = Effect.fn("scan")(
-  function* (root: string, rev: string, config: string, emptied: readonly string[]) {
-    const files = yield* pathsAt(rev, [], root);
+  function* (root: string, rev: string, config: string, emptied: readonly string[], mode: ScanMode = { kind: "range" }) {
+    const tracked = yield* pathsAt(rev, [], root);
+    const files = mode.kind === "range" ? tracked : tracked.filter((file) => file !== BASELINE);
     if (files.length === 0) return { sources: 0, clones: [] } satisfies Scan;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -95,9 +116,10 @@ const scan = Effect.fn("scan")(
     }
     const output = path.join(scratch, "report");
     const flags = ["--silent", "--no-tips", "--no-gitignore", "--absolute", "--reporters", "json", "--output", output];
+    const baselineArgs = yield* baselineFlags(scratch, mode);
     const thresholds = ["--min-tokens", `${MIN_TOKENS}`, "--min-lines", `${MIN_LINES}`];
 
-    const run = yield* collect(process.execPath, [yield* jscpdBinary(), ...flags, ...thresholds], tree).pipe(
+    const run = yield* collect(process.execPath, [yield* jscpdBinary(), ...flags, ...thresholds, ...baselineArgs], tree).pipe(
       Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot run jscpd: ${cause.message}` })),
     );
     const reportPath = path.join(output, REPORT);
@@ -111,7 +133,9 @@ const scan = Effect.fn("scan")(
     );
     const scanned = yield* fs.realPath(tree);
     const file = (name: string): string => path.relative(scanned, name);
-    const clones = duplicates.map(({ firstFile, secondFile }): Clone => [fragmentOf(file, firstFile), fragmentOf(file, secondFile)]);
+    const clones = duplicates
+      .filter(({ isNew }) => mode.kind !== "read" || isNew)
+      .map(({ firstFile, secondFile }): Clone => [fragmentOf(file, firstFile), fragmentOf(file, secondFile)]);
     return { sources: statistics.total.sources, clones } satisfies Scan;
   },
   Effect.scoped,
@@ -170,13 +194,42 @@ const runHold = Effect.fn("runHold")(function* (root: string, config: string, ba
   return heldOf(sources, rises, after) satisfies Held;
 });
 
+const wholeTreeScan = Effect.fn("wholeTreeScan")(function* (root: string, config: string, head: string, mode: WholeTreeScan) {
+  const settings = yield* decodeConfig(config).pipe(
+    Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot read ${CONFIG}: ${cause.message}` })),
+  );
+  const scanConfig = JSON.stringify(Object.fromEntries(Object.entries(settings).filter(([key]) => !NATIVE_BASELINE_SETTINGS.has(key))));
+  return yield* scan(root, head, scanConfig, yield* configPathsOf(scanConfig), mode);
+});
+
+const fileAt = Effect.fn("fileAt")(function* (head: string, root: string, file: string) {
+  if ((yield* pathsAt(head, [`:(literal)${file}`], root)).length === 0) return undefined;
+  return yield* git(["show", `${head}:${file}`], root);
+});
+
 const runWholeTree = Effect.fn("runWholeTree")(function* (root: string, config: string, head: string) {
-  const configPaths = yield* configPathsOf(config);
-  const { sources, clones } = yield* scan(root, head, config, configPaths);
+  const content = yield* fileAt(head, root, BASELINE);
+  const mode = content === undefined ? { kind: "unbaselined" } as const : { kind: "read", content } as const;
+  const { sources, clones } = yield* wholeTreeScan(root, config, head, mode);
   const after = repeatedLines(clones);
   const rises = risesOf([...after.keys()], new Map(), after, new Map(), clones);
-  return heldOf(sources, rises, after) satisfies Held;
+  yield* Console.log(reportWholeTree(heldOf(sources, rises, after), mode.kind === "read"));
+  return rises.length === 0;
 });
+
+const writeBaseline = Effect.fn("writeBaseline")(
+  function* (root: string, config: string, head: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const staging = yield* fs.makeTempDirectoryScoped({ directory: root, prefix: "checks-repetition-" });
+    const destination = path.join(staging, BASELINE);
+    yield* wholeTreeScan(root, config, head, { kind: "write", destination });
+    yield* fs.rename(destination, path.join(root, BASELINE));
+    yield* Console.log(`${NAME}: wrote ${BASELINE} from ${head}`);
+    return true;
+  },
+  Effect.scoped,
+);
 
 function cloneLines(clones: readonly Clone[]): readonly string[] {
   return clones.map(([own, other]) => `    ${own.file}:${own.start}-${own.end} repeats ${other.file}:${other.start}-${other.end}`);
@@ -206,18 +259,18 @@ export function report({ measured, rises, advisory }: Held): string {
   return [...verdict, ...noticeOf(advisory)].join("\n");
 }
 
-export function reportWholeTree({ measured, rises }: Held): string {
+export function reportWholeTree({ measured, rises }: Held, compared = false): string {
+  const scope = compared ? `outside ${BASELINE} at the head` : "at the head";
   const verdict =
     rises.length === 0
-      ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no lines at the head, ${MEASURE}`]
-      : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat lines at the head, ${MEASURE}:`, ...rises.flatMap(wholeTreeRise)];
+      ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no lines ${scope}, ${MEASURE}`]
+      : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat lines ${scope}, ${MEASURE}:`, ...rises.flatMap(wholeTreeRise)];
   return verdict.join("\n");
 }
 
 const configAt = Effect.fn("configAt")(function* (head: string, root: string) {
-  if ((yield* pathsAt(head, [`:(literal)${CONFIG}`], root)).length > 0) {
-    return { kind: "configured", config: yield* git(["show", `${head}:${CONFIG}`], root) } as const;
-  }
+  const config = yield* fileAt(head, root, CONFIG);
+  if (config !== undefined) return { kind: "configured", config } as const;
   if ((yield* pathsAt(head, TYPESCRIPT_SOURCE.pathspecs, root)).length > 0) {
     yield* Console.log(`${NAME}: the head tracks TypeScript and holds no ${CONFIG}, so add one such as the kit's default ${KIT_DEFAULT}`);
     return { kind: "refused" } as const;
@@ -229,15 +282,13 @@ const configAt = Effect.fn("configAt")(function* (head: string, root: string) {
 const hold = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const args = process.argv.slice(2);
-  if (args[0] === WHOLE_TREE) {
-    const headArg = args[1];
+  if (args[0] === WHOLE_TREE || args[0] === WRITE_BASELINE) {
+    const [mode, headArg] = args;
     if (args.length !== 2 || headArg === undefined) return yield* new Usage({ message: USAGE });
-    const wholeHead = yield* commitOf(headArg);
-    const wholeConfig = yield* configAt(wholeHead, root);
-    if (wholeConfig.kind !== "configured") return wholeConfig.kind === "unmeasured";
-    const whole = yield* runWholeTree(root, wholeConfig.config, wholeHead);
-    yield* Console.log(reportWholeTree(whole));
-    return whole.rises.length === 0;
+    const head = yield* commitOf(headArg, root);
+    const config = yield* configAt(head, root);
+    if (config.kind !== "configured") return mode === WHOLE_TREE && config.kind === "unmeasured";
+    return yield* (mode === WRITE_BASELINE ? writeBaseline(root, config.config, head) : runWholeTree(root, config.config, head));
   }
   const { base, head } = yield* rangeFromArgs(args, USAGE, root);
   const headConfig = yield* configAt(head, root);

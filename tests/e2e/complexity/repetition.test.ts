@@ -6,6 +6,7 @@ import { CHECKOUT, fixtureRepos, lintWiring, withOwnInstall, type FixtureRepo } 
 const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
 const JSCPD = JSON.stringify({ path: ["src"], ignore: ["**/*.d.ts"] });
+const BASELINE = ".jscpd-baseline.json";
 const KIT_DEFAULT = '{"path":["src"],"format":["typescript"],"ignore":["**/*.d.ts"]}';
 const UNCONFIGURED = `repetition: the head tracks TypeScript and holds no .jscpd.json, so add one such as the kit's default ${KIT_DEFAULT}\n`;
 
@@ -181,14 +182,14 @@ test(
 );
 
 test(
-  "checks-lint --whole-tree runs the repetition hold over the whole tree, red on an added copy and green once it is gone",
+  "checks-lint --whole-tree honors the committed repetition baseline without ignoring additional copies",
   async () => {
     const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
     await withOwnInstall(repo);
     const { write, commit, script } = repo;
     await commit("feat: base");
     await write({ "src/copy.ts": block("ledger") });
-    await commit("feat: copy");
+    const repeated = await commit("feat: copy");
 
     const red = await script("core/lint.ts", "--whole-tree");
     expect(red.text).toContain("repetition: 2 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:");
@@ -197,14 +198,57 @@ test(
     expect(red.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
-    await write({ "src/copy.ts": "export const copy = 1;\n" });
-    await commit("fix: no copy");
+    const written = await script("complexity/repetition.ts", "--write-baseline", repeated);
+    expect(written.exitCode).toBe(0);
+    await commit("chore: record baseline");
     const green = await script("core/lint.ts", "--whole-tree");
-    expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no lines at the head, at 50 tokens and 5 lines");
+    expect(green.text).toContain(`repeat no lines outside ${BASELINE} at the head`);
     expect(green.text).toContain("checks-lint: 4 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
+
+    await write({ "src/third.ts": block("ledger") });
+    await commit("feat: copy the baseline block again");
+    const excess = await script("core/lint.ts", "--whole-tree");
+    expect(excess.text).toContain(`repeat lines outside ${BASELINE} at the head`);
+    expect(excess.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-repetition\n");
+    expect(excess.exitCode).toBe(1);
+
+    await write({ "src/copy.ts": "export const copy = 1;\n", "src/third.ts": "export const third = 3;\n" });
+    await commit("fix: remove the copies");
+    const removed = await script("core/lint.ts", "--whole-tree");
+    expect(removed.text).toContain("checks-lint: 4 gate(s) pass\n");
+    expect(removed.exitCode).toBe(0);
   },
   120_000,
+);
+
+test(
+  "whole-tree uses the named commit's baseline instead of forgiving equal counts of different clones or reading local edits",
+  async () => {
+    const { write, commit, script } = await repository({ "src/a.ts": block("ledger"), "src/b.ts": block("ledger") });
+    const repeated = await commit("feat: repeat a block");
+    const written = await script("complexity/repetition.ts", "--write-baseline", repeated);
+    expect(written.exitCode).toBe(0);
+    const uncommitted = await script("complexity/repetition.ts", "--whole-tree", repeated);
+    expect(uncommitted.exitCode).toBe(1);
+
+    const baseline = await commit("chore: record baseline");
+    await write({ "src/a.ts": block("invoice"), "src/b.ts": block("invoice") });
+    const replacement = await commit("feat: repeat a different block in the same positions");
+    await write({ [BASELINE]: "{}" });
+
+    const stored = await script("complexity/repetition.ts", "--whole-tree", baseline);
+    expect(stored.exitCode).toBe(0);
+    const newClone = await script("complexity/repetition.ts", "--whole-tree", replacement);
+    expect(newClone.exitCode).toBe(1);
+    expect(newClone.text).toContain("src/a.ts:1-10 repeats src/b.ts:1-10");
+
+    const broken = await commit("chore: commit an invalid baseline");
+    const unreadable = await script("complexity/repetition.ts", "--whole-tree", broken);
+    expect(unreadable.exitCode).toBe(2);
+    expect(unreadable.text).toContain(BASELINE);
+  },
+  60_000,
 );
 
 test(

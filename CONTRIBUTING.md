@@ -33,7 +33,7 @@ No workflow runs the long test tiers, the whole-tree sweep or the issue filing o
 `bun run lint` runs the three range whole-tree lint gates over each pull request's range.
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
 The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
-It reports every suppression count and every repeated line still present until it is removed.
+It reports every suppression count and every clone outside the committed repetition baseline.
 Consumer repositories run issue filing through the workflow [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) describes.
 [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.

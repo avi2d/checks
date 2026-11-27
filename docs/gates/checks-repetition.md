@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-repetition
 
-`checks-repetition` refuses an increase in repeated lines across a commit range, in the files `.jscpd.json` holds.
+`checks-repetition` refuses a rise in repeated lines across a commit range or a clone outside the baseline in a whole-tree scan.
 
 ## What it checks
 
@@ -12,7 +12,11 @@ The gate runs jscpd at 50 tokens and 5 lines against the base and head revisions
 It compares repeated lines for each file, so a decrease in another file never offsets a rise.
 It follows an edited rename back to the original file.
 A file that repeats lines without a rise is advisory.
-On the whole-tree run `checks-lint --whole-tree` scans the head alone with no base, so every file that repeats lines at the head fails until the repetition is removed, and no file is advisory.
+With `--whole-tree`, the gate scans the named head and reports only clones the head's `.jscpd-baseline.json` does not cover.
+jscpd records how many clones share each fingerprint, rather than the files or line numbers where the clones occur.
+A clone with a different fingerprint or a copy that exceeds a fingerprint's recorded count fails.
+A clone that the scan no longer finds does not fail, even if its fingerprint stays in the baseline.
+Without a baseline at the head, every clone fails.
 A block two bins need goes into a module both import, as `rangeFromArgs` and `checkoutFiles` in `src/core/git.ts` show.
 It fails when the head tracks a `.ts` or `.tsx` file and holds no `.jscpd.json`, since a scan of no files would pass without judging anything.
 
@@ -34,6 +38,8 @@ A repository that lists `"css"` in `format` measures its stylesheets the same wa
 The gate sets the 50 tokens and 5 lines itself, over any the file names.
 A `threshold` the file names never fails the gate, which reads jscpd's report once the scan finishes.
 The bin reads the named commits rather than the working tree's file contents.
+The whole-tree scan ignores jscpd's `baseline`, `baselineFromRef`, and `failOnNewClones` settings in `.jscpd.json`.
+Only the root baseline file at the named commit can exempt clones from the whole-tree check.
 
 ## Arguments
 
@@ -41,24 +47,30 @@ The bin reads the named commits rather than the working tree's file contents.
 checks-repetition <base-ref> <head-ref>
 checks-repetition <ref>
 checks-repetition --whole-tree <head-ref>
+checks-repetition --write-baseline <head-ref>
 ```
 
-With `--whole-tree` it scans the named head alone, which is the form `checks-lint --whole-tree` runs.
+`checks-lint --whole-tree` runs the `--whole-tree` form.
+`--write-baseline` scans the named commit with its `.jscpd.json` and replaces the working tree's root `.jscpd-baseline.json` with the fingerprints from that scan.
+To record the current clones, run `checks-repetition --write-baseline HEAD` and commit the resulting file.
+Range checks do not use the baseline to exempt clones.
 
 ## Exit codes
 
 | Code | Result |
 | --- | --- |
-| 0 | Across a range, no measured file repeated more lines. With `--whole-tree`, no measured file repeats lines at the head. |
-| 1 | Across a range, at least one measured file repeated more lines. With `--whole-tree`, at least one measured file repeats lines at the head. The head tracks TypeScript and holds no `.jscpd.json`. |
-| 2 | A config or ref is invalid, or jscpd cannot run. |
+| 0 | No measured file repeated more lines across the range, no clone exceeds the whole-tree baseline, or the baseline was written. |
+| 1 | At least one measured file repeated more lines across the range, or a clone falls outside the whole-tree baseline. The head lacks `.jscpd.json` and either tracks TypeScript or was named with `--write-baseline`. |
+| 2 | A config, ref, or baseline is invalid, or the scan or write cannot finish. |
 
 ## Sample output
 
 ```
-repetition: 1 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:
+repetition: 2 file(s) .jscpd.json holds repeat lines outside .jscpd-baseline.json at the head, at 50 tokens and 5 lines:
   src/copy.ts: 10 repeated line(s)
     src/copy.ts:1-10 repeats src/ledger.ts:1-10
+  src/ledger.ts: 10 repeated line(s)
+    src/ledger.ts:1-10 repeats src/copy.ts:1-10
 ```
 
 A head that tracks TypeScript and holds no `.jscpd.json` prints:
