@@ -1,4 +1,4 @@
-import { Config, Console, Data, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, Data, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { commandExit, commandOutput } from "../lib/run.ts";
 import { anyStopped, DOWNLOADED_DIRECTORY, Report, scoreSummary, SHARD_DIRECTORY, shardsOf, STATE_PREFIX, stateName, stoppedName } from "./report.ts";
 
@@ -50,10 +50,12 @@ const shard = Effect.gen(function* () {
   const index = yield* Config.String("INDEX");
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const previousModified = (yield* fs.exists(INCREMENTAL_STATE)) ? Option.getOrUndefined((yield* fs.stat(INCREMENTAL_STATE)).mtime)?.getTime() : undefined;
   const exit = yield* commandExit("timeout", ["-s", "TERM", `${STOP_MINUTES}m`, STRYKER, "run", "--incremental", "--mutate", mutate]);
   const stopped = exit === TIMED_OUT;
   if (exit !== 0 && !stopped) return yield* new MutationStepError({ message: `stryker exited ${exit}` });
-  if (!(yield* fs.exists(INCREMENTAL_STATE))) return yield* new MutationStepError({ message: `stryker left no ${INCREMENTAL_STATE}, so shard ${index} has no state to hand on` });
+  const modified = (yield* fs.exists(INCREMENTAL_STATE)) ? Option.getOrUndefined((yield* fs.stat(INCREMENTAL_STATE)).mtime)?.getTime() : undefined;
+  if (modified === undefined || modified === previousModified) return yield* new MutationStepError({ message: `stryker wrote no new ${INCREMENTAL_STATE}, so shard ${index} has no state to hand on` });
   yield* fs.makeDirectory(SHARD_DIRECTORY, { recursive: true });
   yield* fs.copyFile(INCREMENTAL_STATE, path.join(SHARD_DIRECTORY, stateName(index)));
   if (stopped) {

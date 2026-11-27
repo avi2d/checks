@@ -364,7 +364,7 @@ const restoreFull = Effect.fn("restoreFull")(function* (request: Request) {
       break;
     }
   }
-  if (Option.isNone(restored)) yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${FULL_ARTIFACT} artifact, so nothing was restored`);
+  if (Option.isNone(restored)) yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${FULL_ARTIFACT} artifact, so no report was restored`);
   const state = request.optional[0]?.to;
   if (state !== undefined) yield* resumedState(runs, newerThan(runs.map((run) => run.databaseId), restored), state, root);
   return true;

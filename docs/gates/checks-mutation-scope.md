@@ -92,7 +92,7 @@ A path with no file adds no covered source for a changed unit test, and the scop
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
 `<last-report>` is the path of the last whole-tree report.
 With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
-`<resume-state>` is the path of the incremental state a stopped refresh left, and it follows a `<last-report>`.
+`<resume-state>` follows `<last-report>` and names the incremental state restored from a stopped refresh or the last full run.
 
 ## Output
 

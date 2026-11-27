@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { parseWorkflow } from "../../../src/delivery/ci-wiring.ts";
 import { runsMutation } from "../../../src/delivery/mutation-job.ts";
+import { findHandRolledMutation } from "../../../src/delivery/mutation-workflow.ts";
 import { findRunnerFaults, formatRunnerReport, type RunnerConfig } from "../../../src/delivery/runner-policy.ts";
 
 function workflow(text: string) {
@@ -64,6 +65,29 @@ test("a package script, a kit bin or a prefixed stryker run marks the job as a m
   }
   const looping = workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: bun run loop\n`);
   expect(findRunnerFaults({ visibility: "private", scripts: mutating, runners: RUNNERS }, looping)).toEqual([]);
+});
+
+test.each([
+  "checks-ci mutation shard",
+  "bunx checks-ci mutation shard",
+  "bun x checks-ci mutation shard",
+  "bun run ./node_modules/.bin/checks-ci mutation shard",
+  "bun run refresh",
+  "./refresh.sh",
+])("a job running %s cannot escape the mutation workflow and runner rules", (run) => {
+  const scripts = new Map([["refresh", "bunx checks-ci mutation shard"]]);
+  const files = new Map([["refresh.sh", "bunx checks-ci mutation shard"]]);
+  const workflows = workflow(`on: workflow_dispatch\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${run}\n`);
+  expect(findHandRolledMutation(workflows, { scripts, files })).toEqual([{ location: ".github/workflows/ci.yml job sweep" }]);
+  const faults = findRunnerFaults({ visibility: "private", scripts, files, runners: RUNNERS }, workflows);
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toContain("a mutation job reads CI_RUNS_ON");
+});
+
+test.each(["score", "shards", "finished"])("the non-mutating checks-ci mutation %s command is not refused as a mutation run", (part) => {
+  const workflows = workflow(`on: workflow_dispatch\njobs:\n  report:\n    runs-on: ${HOSTED}\n    steps:\n      - run: bunx checks-ci mutation ${part}\n`);
+  expect(findHandRolledMutation(workflows, { scripts: noScripts, files: new Map() })).toEqual([]);
+  expect(findRunnerFaults({ visibility: "private", scripts: noScripts, runners: RUNNERS }, workflows)).toEqual([]);
 });
 
 test("quoted words and line continuations still mark a mutation job, and a shell comment does not", () => {

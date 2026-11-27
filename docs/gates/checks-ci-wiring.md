@@ -43,7 +43,8 @@ Each refusal names the file, the line and the missing workflow or job.
 ### Runners
 
 It also judges the runner of every job in every workflow.
-A mutation job is one with a run step that calls `stryker run`, `checks-mutation` or `checks-mutation-compare`, directly or through `bun`, `bun run` or `bunx`.
+A mutation job has a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare`, or `checks-ci mutation shard`.
+Calls count directly or through `bun`, `bun run`, or `bunx`.
 The call counts too through a `package.json` script or a shell script in the repository.
 A command runs a shell script by a path inside the repository, such as `tools/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
 The path resolves from the directory the command runs in: the step's `working-directory`, the job's or the workflow's `defaults.run.working-directory`, `bun --cwd` and a literal `cd`.

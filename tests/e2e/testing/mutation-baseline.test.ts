@@ -188,7 +188,7 @@ test("--full ignores a stopped run's state older than the full baseline, which t
   expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"full"}');
 }, 30_000);
 
-test("--full resumes from a stopped run's state when no full baseline exists yet, and restores no report", async () => {
+test("--full does not claim nothing was restored when a stopped first pass supplies state", async () => {
   const runner = await gitRunner({}, (sha) => [run(40, "workflow_dispatch", started(), [refreshState(400, "first pass")], sha)]);
 
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
@@ -196,6 +196,8 @@ test("--full resumes from a stopped run's state when no full baseline exists yet
   expect(restored.exitCode).toBe(0);
   expect(await runner.read("full/mutation.json")).toBeUndefined();
   expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"first pass"}');
+  expect(restored.text).toContain("no report was restored");
+  expect(restored.text).not.toContain("nothing was restored");
 }, 30_000);
 
 test("--full with an incremental destination still restores the report when the artifact holds no state", async () => {
