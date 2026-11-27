@@ -76,6 +76,16 @@ test("the code set is ci, pr-title, main and release, and the site set adds prev
   expect(requiredSet(SITE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml"]);
 });
 
+test("a public repository's set holds pr-text.yml for both kinds and the kit, so a public repository without the scan workflow fails here", () => {
+  const visible = (set: CallerSet): CallerSet => ({ ...set, options: { ...set.options, publicRepository: true } });
+  for (const set of [CODE, SITE]) {
+    for (const kit of [false, true]) {
+      expect([set.kind, kit, requiredSet(visible(set), kit).some(({ name }) => name === "pr-text.yml")]).toEqual([set.kind, kit, true]);
+      expect([set.kind, kit, requiredSet(set, kit).some(({ name }) => name === "pr-text.yml")]).toEqual([set.kind, kit, false]);
+    }
+  }
+});
+
 test("configured tier shards keep the aggregate checks job and pull request selection", () => {
   const set: CallerSet = { ...CODE, testTierShards: { e2e: 2 } };
   const jobs = jobsOf(documentOf(set, "ci.yml"));

@@ -30,6 +30,7 @@ export type Job = {
   readonly runsOn: string;
   readonly timeout: number;
   readonly concurrency?: string;
+  readonly cancelInProgress?: true;
   readonly matrix?: Pair;
   readonly failFast?: false;
   readonly permissions: readonly string[];
@@ -84,7 +85,7 @@ function jobLines(job: Job): readonly string[] {
   if (job.needs !== undefined) lines.push("    needs: " + job.needs);
   if (job.if !== undefined) lines.push("    if: " + job.if);
   lines.push("    runs-on: " + job.runsOn, "    timeout-minutes: " + String(job.timeout));
-  if (job.concurrency !== undefined) lines.push("    concurrency:", "      group: " + job.concurrency, "      cancel-in-progress: false");
+  if (job.concurrency !== undefined) lines.push("    concurrency:", "      group: " + job.concurrency, "      cancel-in-progress: " + (job.cancelInProgress === true ? "true" : "false"));
   if (job.matrix !== undefined) lines.push("    strategy:", ...(job.failFast === false ? ["      fail-fast: false"] : []), "      matrix:", "        " + job.matrix[0] + ": " + job.matrix[1]);
   lines.push("    permissions:", ...job.permissions.map((permission) => "      " + permission));
   if (job.environment !== undefined) lines.push("    environment:", "      name: " + job.environment.name, "      url: " + job.environment.url);

@@ -53,7 +53,9 @@ pr-text: the kit's rules and the private pack CHECKS_SECRETS_PACK names ran
 
 ## When it runs
 
-A public repository runs it from a workflow of its own on every change to a pull request's text:
+A public repository runs it from `.github/workflows/pr-text.yml` on every change to a pull request's text.
+[checks-workflows](checks-workflows.md) writes that file with `--write` and fails when it is missing or differs, and [checks-setup](checks-setup.md) writes it in a new repository.
+The file starts on these events:
 
 ```yaml
 on:
@@ -68,15 +70,17 @@ on:
 ```
 
 The job writes the pack from a secret, as [The private pack](checks-secrets.md#the-private-pack) shows, then runs `bunx checks-pr-text` with the pull request's number.
+An issue comment on an issue that is no pull request skips the job.
 It skips the scan when the secret is unset, as [When no pack is configured](#when-no-pack-is-configured) says.
 `pull_request_target` runs the base branch's workflow with the repository's secrets, even for a fork's pull request.
 The job reads the text through the API and checks out none of the pull request's code, so a fork runs nothing there.
 A comment's run reports on no pull request, so the job posts its result as a `pr-text` status on the head commit.
-The kit's own `.github/workflows/pr-text.yml` is a complete example.
+These events run the default branch's copy of the file, so a pull request that changes it runs the old copy until it merges.
+The kit's suite checks the file `checks-workflows` writes, so a repository needs no run of its own before that merge.
 
 ## When no pack is configured
 
-The kit's workflow skips the scan when `CHECKS_SECRETS_PACK` is unset or empty, instead of failing.
+The workflow skips the scan when `CHECKS_SECRETS_PACK` is unset or empty, instead of failing.
 It writes a notice and a job summary line that say so, and posts a `pr-text` status of success whose description reads `scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)`.
 A skip is a coverage gap, not a pass: no private term was checked on that pull request.
 Only the repository secret decides a skip, so no input from a pull request's author can cause one.

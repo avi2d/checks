@@ -5,8 +5,12 @@ import type { CallerSet } from "./site-names.ts";
 // npm trusted publishing names the kit's release.yml, so a kit release file the set does not write stays as the kit holds it.
 const KIT_OWN = ["release.yml", "release-pr.yml"];
 
+// A private repository's pull request text reaches no public reader, so the set writes no scan there and keeps one it holds.
+const HELD_SCAN = "pr-text.yml";
+
 export function isIgnoredWorkflow(name: string, kit: boolean, required: readonly WorkflowFile[]): boolean {
-  return name === "pr-text.yml" || (kit && KIT_OWN.includes(name) && !required.some((file) => file.name === name));
+  const keptByHand = name === HELD_SCAN || (kit && KIT_OWN.includes(name));
+  return keptByHand && !required.some((file) => file.name === name);
 }
 
 export type WorkflowFile = { readonly name: string; readonly text: string };
