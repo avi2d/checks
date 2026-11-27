@@ -2,15 +2,15 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Exit } from "effect";
-import { ReportError as MutationReportError } from "../../../src/testing/mutation-compare.ts";
-import { fileSeconds, parseReport, ReportError as TestReportError } from "../../../src/testing/test-report.ts";
+import { MutationCompareReportError } from "../../../src/testing/mutation-compare.ts";
+import { fileSeconds, parseReport, TestReportError } from "../../../src/testing/test-report.ts";
 
 test("each report handler leaves the other module’s error uncaught", () => {
-  const mutationError = new MutationReportError({ message: "mutation" });
+  const mutationError = new MutationCompareReportError({ message: "mutation" });
   const testError = new TestReportError({ message: "test" });
-  const failure = (error: MutationReportError | TestReportError) => Effect.fail(error);
-  const mutationWithTestHandler = failure(mutationError).pipe(Effect.catchTag(testError._tag, () => Effect.succeed("caught")));
-  const testWithMutationHandler = failure(testError).pipe(Effect.catchTag(mutationError._tag, () => Effect.succeed("caught")));
+  const failure = (error: MutationCompareReportError | TestReportError) => Effect.fail(error);
+  const mutationWithTestHandler = failure(mutationError).pipe(Effect.catchTag("TestReportError", () => Effect.succeed("caught")));
+  const testWithMutationHandler = failure(testError).pipe(Effect.catchTag("MutationCompareReportError", () => Effect.succeed("caught")));
   expect(Exit.isFailure(Effect.runSyncExit(mutationWithTestHandler))).toBe(true);
   expect(Exit.isFailure(Effect.runSyncExit(testWithMutationHandler))).toBe(true);
 });

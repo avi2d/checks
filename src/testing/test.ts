@@ -17,7 +17,7 @@ import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test
 import { readSuiteScope, readTestFileSkips, type SuiteSelection } from "./test-selection.ts";
 import { parseShard, type Shard } from "../core/shard.ts";
 import { scanTestFiles, selectedTierFile, type Environment, type SkipDeclaration } from "./test-skips.ts";
-import { fileSeconds, NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
+import { fileSeconds, NAME_SEPARATOR, parseReport, TestReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export { suiteArgs, type SuiteSelection } from "./test-selection.ts";
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
@@ -377,7 +377,7 @@ const judgeRun = Effect.fn("judgeRun")(function* (
       return false;
     }
     if ((yield* scanTestFiles(process.cwd())).length > 0) {
-      return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
+      return yield* new TestReportError({ message: `bun test passed but wrote no report to ${outfile}` });
     }
     yield* Console.log(`${NAME}: no test file found`);
     return true;

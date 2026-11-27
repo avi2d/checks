@@ -33,7 +33,7 @@ const published = [
   { subpath: "testing/run-effect.ts", module: runEffect, source: runEffectSource, names: ["run"] },
   { subpath: "delivery/gitleaks.ts", module: gitleaks, source: gitleaksSource, names: ["gitleaksBuildFor", "pinnedGitleaks", "scanCommits", "scanDirectory"] },
   { subpath: "dependencies/cache-root.ts", module: cacheRoot, source: cacheRootSource, names: ["cacheRoot"] },
-  { subpath: "testing/test-report.ts", module: testReport, source: testReportSource, names: ["parseReport", "reporterArgs", "ReportError"] },
+  { subpath: "testing/test-report.ts", module: testReport, source: testReportSource, names: ["parseReport", "reporterArgs", "TestReportError"] },
   { subpath: "testing/test.ts", module: testGate, source: testSource, names: ["judgeSkips", "passes", "report", "SkipGateError"] },
   { subpath: "scripts/test-skips.ts", module: testSkips, source: testSkipsSource, names: ["readSkipDeclarations"] },
 ];
