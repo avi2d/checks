@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect, Schema } from "effect";
 import { readFile } from "node:fs/promises";
 import { Usage } from "../../../src/core/main.ts";
-import { parseKillRun, ReportError } from "../../../src/testing/mutation-compare.ts";
+import { parseKillRun, MutationCompareReportError } from "../../../src/testing/mutation-compare.ts";
 import { analyze, bailWarning, formatReport, parseArgs, type Report } from "../../../src/testing/subsumed-tests.ts";
 
 const FIXTURES = new URL("../../fixtures/subsumed-tests/", import.meta.url);
@@ -75,8 +75,8 @@ test("only the report path parses", () => {
 });
 
 test("a report without a files or a testFiles table is refused", () => {
-  expect(() => Effect.runSync(parseKillRun("report", "{}"))).toThrow(ReportError);
-  expect(() => Effect.runSync(parseKillRun("report", '{"files": {}}'))).toThrow(ReportError);
+  expect(() => Effect.runSync(parseKillRun("report", "{}"))).toThrow(MutationCompareReportError);
+  expect(() => Effect.runSync(parseKillRun("report", '{"files": {}}'))).toThrow(MutationCompareReportError);
 });
 
 test("a bail-off report reads without a warning", async () => {
@@ -86,7 +86,7 @@ test("a bail-off report reads without a warning", async () => {
 test("a report built with bail on is refused with the flag that rebuilds it", async () => {
   for (const config of [{ disableBail: false }, {}]) {
     const text = await withConfig(config);
-    expect(() => bailOf(text)).toThrow(ReportError);
+    expect(() => bailOf(text)).toThrow(MutationCompareReportError);
     expect(() => bailOf(text)).toThrow(/config\.disableBail is not true.*bunx stryker run --disableBail/);
   }
 });
