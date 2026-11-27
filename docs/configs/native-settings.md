@@ -11,7 +11,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | File | Setting | Reader |
 | --- | --- | --- |
 | `.github/workflows/*.yml` | Pull request commands, scheduled commands, runner labels, run steps | GitHub Actions, `checks-ci-wiring` and `checks-plain-steps` |
-| `oxlint.config.ts` | Effect paths and their exemptions, ignore patterns, and any rule or budget the repository sets over the kit's defaults | oxlint and `checks-effect-scope` |
+| `oxlint.config.ts` | Effect paths and their exemptions, ignore patterns, and any rule or budget the repository sets over the kit's defaults | oxlint, `checks-effect-scope` and `checks-lint-coverage` |
 | `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
 | `stylelint-suppressions.json` | The existing violations stylelint suppresses, per file and rule | stylelint, `checks-frontend-syntax` and `checks-suppressions-ratchet` |
 | `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-graphwalk` |
@@ -20,7 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key except the six scoped keys it removes from the top-level `diagnosticSeverity` | TypeScript and Effect language service |
-| `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-workflows`, `checks-setup`, `checks-release-tag`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
+| `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-workflows`, `checks-setup`, `checks-release-tag`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-lint-coverage`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery, quarantine exclusion and the preload that guards agent runs | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -110,6 +110,7 @@ export default defineConfig({
 | `repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
 | `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
 | `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
+| `extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
 | `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
 | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
 | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
@@ -121,6 +122,7 @@ export default defineConfig({
 | `browserTimings` | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
 | `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
 | `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
 | `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |

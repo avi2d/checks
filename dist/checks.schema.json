@@ -55,6 +55,46 @@
       "additionalProperties": false,
       "description": "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies."
     },
+    "extraTestJobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The id of the job in ci.yml, which the checks job requires."
+          },
+          "env": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The environment variables the job sets for its setup and test commands."
+          },
+          "setup": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The commands the job runs, one step each, before the test command, such as one that installs a tool."
+          },
+          "run": {
+            "type": "string",
+            "description": "The test command."
+          }
+        },
+        "required": [
+          "name",
+          "run"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
+      "default": []
+    },
     "trackerKeyPrefixes": {
       "type": "array",
       "items": {
@@ -811,6 +851,28 @@
       ],
       "additionalProperties": false,
       "description": "The input globs for the frontend syntax gate."
+    },
+    "nestedOxlintConfigs": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "minLength": 1
+          }
+        ],
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets."
     },
     "agentTests": {
       "type": "object",

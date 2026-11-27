@@ -53,6 +53,8 @@ export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmp
 
 export const Inputs = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
 
+export const NestedOxlintConfigs = Schema.Record(Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString));
+
 export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 
 export const ReleaseAssets = Schema.Boolean;
@@ -72,6 +74,33 @@ export const PlatformPackages = Schema.Struct({
 
 export type PlatformPackages = typeof PlatformPackages.Type;
 
+const Command = Schema.String.check(Schema.isPattern(/^[^\r\n]*\S[^\r\n]*$/, { message: "is not one line holding a command" }));
+
+export const ExtraTestJob = Schema.Struct({
+  name: Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_-]*$/, { message: "is not a job id, such as sandbox" })).annotate({
+    description: "The id of the job in ci.yml, which the checks job requires.",
+  }),
+  env: Schema.optionalKey(
+    Schema.Record(
+      Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_]*$/, { message: "is not an environment variable name, such as SANDBOX_TESTS" })),
+      Schema.String.check(Schema.isPattern(/^[^\r\n]*$/, { message: "is not one line" })),
+    ).annotate({ description: "The environment variables the job sets for its setup and test commands." }),
+  ),
+  setup: Schema.optionalKey(Schema.Array(Command).annotate({ description: "The commands the job runs, one step each, before the test command, such as one that installs a tool." })),
+  run: Command.annotate({ description: "The test command." }),
+});
+
+export type ExtraTestJob = typeof ExtraTestJob.Type;
+
+const EXTRA_TEST_JOBS_ANNOTATIONS = {
+  description: "The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command.",
+  default: [],
+};
+
+export const ExtraTestJobs = Schema.Array(ExtraTestJob).annotate(EXTRA_TEST_JOBS_ANNOTATIONS).check(
+  Schema.makeFilter((jobs) => new Set(jobs.map(({ name }) => name)).size === jobs.length || "names a job twice", EXTRA_TEST_JOBS_ANNOTATIONS),
+);
+
 export const Settings = Schema.Struct({
   repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   releaseAssets: Schema.optionalKey(ReleaseAssets.annotate({
@@ -81,6 +110,7 @@ export const Settings = Schema.Struct({
   platformPackages: Schema.optionalKey(PlatformPackages.annotate({
     description: "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies.",
   })),
+  extraTestJobs: Schema.optionalKey(ExtraTestJobs),
   trackerKeyPrefixes: Schema.optionalKey(TrackerKeyPrefixes.annotate({
     description: "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
     default: [],
@@ -95,6 +125,9 @@ export const Settings = Schema.Struct({
   browserTimings: Schema.optionalKey(BrowserTimings.annotate({ description: "The measured milliseconds of each browser check at each route, which browser shards balance on." })),
   copy: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the copy gate." })),
   frontendSyntax: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the frontend syntax gate." })),
+  nestedOxlintConfigs: Schema.optionalKey(NestedOxlintConfigs.annotate({
+    description: "The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets.",
+  })),
   agentTests: Schema.optionalKey(AgentTests),
   testFileMaxSeconds: Schema.optionalKey(TestFileMaxSeconds.annotate({
     description: "The time limit in seconds for each test file in CI.",
