@@ -15,7 +15,6 @@ export type OnMain = {
   readonly output: () => Promise<string>;
   readonly state: FakeGh["state"];
   readonly npm: FakeNpm["state"];
-  readonly npmRegistry: FakeNpm["registry"];
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
   readonly changelog: string;
 };
@@ -73,7 +72,6 @@ export function releasedMains(prefix: string): (subject: string, shape?: Shape) 
       output: () => readFile(output, "utf8"),
       state: gh.state,
       npm: npm.state,
-      npmRegistry: npm.registry,
       inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
       changelog: await readFile(join(repo.dir, "CHANGELOG.md"), "utf8"),
     };

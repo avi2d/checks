@@ -89,7 +89,7 @@ test(
     expect(await widget.inOrigin("rev-parse", "refs/tags/v0.2.0")).toBe(landed);
     const { releases } = await widget.state();
     expect(releases.map(({ tag_name, body }) => [tag_name, body.slice(body.indexOf("### Maintenance"))])).toEqual([["v0.2.0", entries]]);
-    expect((await npm.state()).latest).toBe("0.2.0");
+    expect((await npm.state()).latestByPackage["widget"]).toBe("0.2.0");
     expect((await npm.state()).published).toEqual([landed]);
   },
   60_000,
