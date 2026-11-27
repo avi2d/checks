@@ -287,7 +287,7 @@ Each job reads the rule once from the `release` output of `changes`, as `if: nee
 
 The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
-A job whose step with id `test` runs a command is a test job.
+A job whose step with id `test` runs a command is a test job, unless `extraTestJobs` declares its name, which makes `checks.config.ts` its record.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
 A single all-tier `test` or `unit` job using `bunx checks-test --pr` or `bun run test --pr` becomes separate tier jobs.
 The split keeps a `--parallel` argument and moves the browser setup to `e2e`.
