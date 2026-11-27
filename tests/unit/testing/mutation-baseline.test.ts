@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
-import { incrementalCandidates, newestFirst, pruneReport, pruned, superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
+import { incrementalCandidates, newerThan, newestFirst, superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
+import { pruneReport, pruned } from "../../../src/testing/mutation-baseline-report.ts";
 import { inRefreshWindow } from "../../../src/testing/mutation-baseline-full.ts";
 import { outlived, withoutReasons, withoutStale } from "../../../src/testing/mutation-baseline-saved.ts";
 
@@ -54,6 +55,13 @@ test("superseded keeps the newest of each baseline name, expired artifacts and o
   ];
   expect(superseded(artifacts, new Set([200, 350]))).toEqual([artifact(300, "mutation-baseline")]);
   expect(superseded(artifacts, new Set([200, 300, 350]))).toEqual([]);
+});
+
+test("newerThan stops before the run holding the full baseline instead of taking every run, and takes all runs when there is none", () => {
+  expect(newerThan([50, 40, 30, 20], Option.some(30))).toEqual([50, 40]);
+  expect(newerThan([50, 40, 30, 20], Option.some(50))).toEqual([]);
+  expect(newerThan([50, 40], Option.none())).toEqual([50, 40]);
+  expect(newerThan([50, 40], Option.some(10))).toEqual([50, 40]);
 });
 
 test("uploadedBy keeps the running run's unexpired baselines and nothing without a running run", () => {

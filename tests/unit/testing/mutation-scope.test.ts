@@ -209,10 +209,11 @@ test("the arguments are a base and an optional report, and nothing else", async 
   expect(await Promise.all([[], ["--full"], ["abc123", "--json"], ["abc123", "a.json", "extra"]].map(parsed))).toEqual(["usage", "usage", "usage", "usage"]);
 });
 
-test("--shards takes a count from 1 to the 256 jobs a matrix runs and an optional report, and refuses zero, a fraction or a flag", async () => {
-  expect(await parsed(["--shards", "4"])).toEqual({ kind: "shards", count: 4, report: undefined });
-  expect(await parsed(["--shards", "256", "last/mutation.json"])).toEqual({ kind: "shards", count: 256, report: "last/mutation.json" });
-  const refused = [["--shards"], ["--shards", "0"], ["--shards", "257"], ["--shards", "1.5"], ["--shards", "04"], ["--shards", "2", "--json"], ["--shards", "2", "a.json", "extra"]];
+test("--shards takes a count from 1 to the 256 jobs a matrix runs, an optional report and a state after it, and refuses zero, a fraction, a flag or a third operand", async () => {
+  expect(await parsed(["--shards", "4"])).toEqual({ kind: "shards", count: 4, report: undefined, state: undefined });
+  expect(await parsed(["--shards", "256", "last/mutation.json"])).toEqual({ kind: "shards", count: 256, report: "last/mutation.json", state: undefined });
+  expect(await parsed(["--shards", "3", "last/mutation.json", "last/state.json"])).toEqual({ kind: "shards", count: 3, report: "last/mutation.json", state: "last/state.json" });
+  const refused = [["--shards"], ["--shards", "0"], ["--shards", "257"], ["--shards", "1.5"], ["--shards", "04"], ["--shards", "2", "--json"], ["--shards", "2", "a.json", "--json"], ["--shards", "2", "a.json", "b.json", "extra"]];
   expect(await Promise.all(refused.map(parsed))).toEqual(refused.map(() => "usage"));
 });
 

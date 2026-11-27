@@ -58,6 +58,27 @@ test("the bin leaves static and Ignored mutants out of each file's weight rather
   expect(done.text).toContain("mutation-scope: shard 2 holds 2 file(s) and about 8 mutant(s)");
 });
 
+test("the bin weighs a file by the mutants the resumed state holds no result for, so a file the state fully covers adds nothing rather than its whole count", async () => {
+  const { repo } = await repoWith({
+    "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }),
+    "src/a.ts": body("a"),
+    "src/b.ts": body("b"),
+    "src/c.ts": body("c"),
+    "src/d.ts": body("d"),
+  });
+  await repo.write({
+    "last.json": JSON.stringify({ files: { "src/a.ts": { mutants: runnable(6) }, "src/b.ts": { mutants: runnable(5) }, "src/c.ts": { mutants: runnable(4) }, "src/d.ts": { mutants: runnable(3) } } }),
+    "state.json": JSON.stringify({ files: { "src/a.ts": { mutants: runnable(6) } } }),
+  });
+
+  const done = await ran($`bun ${SCOPE} --shards 2 last.json state.json`.cwd(repo.dir));
+
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain('SHARDS=["src/a.ts,src/b.ts","src/c.ts,src/d.ts"]');
+  expect(done.text).toContain("mutation-scope: shard 1 holds 2 file(s) and about 5 mutant(s)");
+  expect(done.text).toContain("mutation-scope: shard 2 holds 2 file(s) and about 7 mutant(s)");
+});
+
 test("with no last-report operand the bin splits by file count rather than failing with no report to balance by", async () => {
   const { repo } = await repoWith({ "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }), "src/a.ts": body("a"), "src/b.ts": body("b"), "src/c.ts": body("c") });
 

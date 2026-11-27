@@ -3,6 +3,7 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { BaselineFailure, gh, pruneFullState } from "./mutation-baseline-full.ts";
+import { type Kept, type Missed, pruneReport, pruned } from "./mutation-baseline-report.ts";
 import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
 
 const NAME = "checks-mutation-baseline";
@@ -13,6 +14,7 @@ const BRANCH = "main";
 const REPORT_ALONE = "mutation.json";
 const KEPT_PER_ARTIFACT = 2;
 const FULL_ARTIFACT = "mutation-baseline-full";
+const REFRESH_ARTIFACT = "mutation-refresh-state";
 const LATEST_LIMIT = 20;
 const FULL_LIMIT = 50;
 const PAGE_SIZE = 100;
@@ -69,6 +71,13 @@ const fullCandidates = Effect.gen(function* () {
   return byNewest(perEvent.flat());
 });
 
+// A full baseline supersedes every resume state before it, so only the runs newer than the run holding it can hold the state to resume from.
+export function newerThan(runs: readonly number[], full: Option.Option<number>): readonly number[] {
+  if (Option.isNone(full)) return runs;
+  const at = runs.indexOf(full.value);
+  return at === -1 ? runs : runs.slice(0, at);
+}
+
 // A successful run uploaded the files, so the newest unexpired artifact is the one the restore takes.
 // A failed lookup aborts rather than counting as absent, since that would delete the artifact the restore takes.
 const keptArtifact = Effect.fn("keptArtifact")(function* (runs: readonly number[], name: string) {
@@ -113,9 +122,11 @@ const keptLatest = Effect.fn("keptLatest")(function* (runs: readonly number[], s
 const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
   const running = yield* Config.Int("GITHUB_RUN_ID").pipe(Config.option);
   const latest = yield* keptLatest(yield* latestRuns, yield* savedShelf(yield* runnerCache));
-  const full = yield* keptArtifact((yield* fullCandidates).map((run) => run.databaseId), FULL_ARTIFACT);
+  const fullRuns = (yield* fullCandidates).map((run) => run.databaseId);
+  const full = yield* keptArtifact(fullRuns, FULL_ARTIFACT);
+  const resume = yield* keptArtifact(newerThan(fullRuns, Option.map(full, (kept) => kept.run)), REFRESH_ARTIFACT);
   const artifacts = yield* everyArtifact();
-  const keeping = [...Option.toArray(latest.kept), ...Option.toArray(full), ...uploadedBy(artifacts, running)];
+  const keeping = [...Option.toArray(latest.kept), ...Option.toArray(full), ...Option.toArray(resume), ...uploadedBy(artifacts, running)];
   const victims = superseded(artifacts, new Set(keeping.map((keep) => keep.id)));
   const removed: number[] = [];
   const missed: Missed[] = [];
@@ -155,11 +166,9 @@ const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Art
   return fetched && (yield* holds(dir, needed));
 });
 
-export type Kept = { readonly run: number; readonly id: number; readonly name: string };
+const BASELINE_ARTIFACTS = new Set([LATEST_ARTIFACT, FULL_ARTIFACT, REFRESH_ARTIFACT]);
 
-export type Missed = { readonly id: number; readonly name: string; readonly error: string };
-
-const isBaseline = (artifact: Artifact): boolean => (artifact.name === LATEST_ARTIFACT || artifact.name === FULL_ARTIFACT) && !artifact.expired;
+const isBaseline = (artifact: Artifact): boolean => BASELINE_ARTIFACTS.has(artifact.name) && !artifact.expired;
 
 // The restore reads only successful runs, so the running run's own uploads join the keepers rather than replace them.
 export function uploadedBy(artifacts: readonly Artifact[], running: Option.Option<number>): readonly Kept[] {
@@ -172,30 +181,6 @@ export function uploadedBy(artifacts: readonly Artifact[], running: Option.Optio
 
 export function superseded(artifacts: readonly Artifact[], kept: ReadonlySet<number>): readonly Artifact[] {
   return artifacts.filter((artifact) => isBaseline(artifact) && !kept.has(artifact.id)).sort((one, other) => one.id - other.id);
-}
-
-// A workflow command ends at a newline, so the error's own newlines and percent signs are escaped.
-const annotated = (text: string): string => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
-
-export function pruneReport(dryRun: boolean, removed: readonly number[], missed: readonly Missed[], keeping: readonly Kept[], saved: Option.Option<number>): string {
-  const holdings = [
-    ...keeping.map((keep) => `${keep.name} artifact ${keep.id} from run ${keep.run}`),
-    ...Option.toArray(saved).map((run) => `the ${LATEST_ARTIFACT} run ${run} saved on the runner's disk`),
-  ];
-  const kept = holdings.length === 0 ? "no baseline artifacts" : holdings.join(", ");
-  const deleted = removed.length === 0 ? "nothing to delete" : `deleted artifacts ${removed.join(", ")}`;
-  if (dryRun) return `mutation-baseline: dry run, ${removed.length === 0 ? "nothing to delete" : `would delete artifacts ${removed.join(", ")}`}; would keep ${kept}`;
-  if (missed.length === 0) return `mutation-baseline: ${deleted}; kept ${kept}`;
-  const warnings = missed.map((miss) => `::warning::mutation-baseline: could not delete ${miss.name} artifact ${miss.id}: ${annotated(miss.error)}`);
-  return [...warnings, `mutation-baseline: ${deleted}; kept ${kept}; could not delete artifacts ${missed.map((miss) => miss.id).join(", ")}`].join("\n");
-}
-
-export function pruned(entries: readonly string[], kept: number, restoring: string): readonly string[] {
-  return entries
-    .filter((entry) => /^\d+$/.test(entry))
-    .sort((one, other) => Number(other) - Number(one))
-    .slice(kept)
-    .filter((entry) => entry !== restoring);
 }
 
 const prune = Effect.fn("prune")(function* (shelf: string, restoring: string) {
@@ -358,14 +343,41 @@ const restoredRun = Effect.fn("restoredRun")(function* (run: Run, name: string, 
   return true;
 });
 
-const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request) {
-  const name = request.full ? FULL_ARTIFACT : LATEST_ARTIFACT;
-  const root = yield* runnerCache;
-  const shelf = request.full ? Option.none<string>() : yield* savedShelf(root);
-  for (const run of yield* request.full ? fullCandidates : latestCandidates) {
-    if (yield* restoredRun(run, name, root, shelf, request)) return true;
+const resumedState = Effect.fn("resumedState")(function* (runs: readonly Run[], ids: readonly number[], state: string, root: Option.Option<string>) {
+  const request: Request = { kind: "restore", full: false, needed: { from: [INCREMENTAL], to: state }, optional: [] };
+  for (const run of runs.filter((candidate) => ids.includes(candidate.databaseId))) {
+    const artifact = yield* artifactOf(run.databaseId, REFRESH_ARTIFACT).pipe(Effect.catch(warned(Option.none<Artifact>())));
+    if (Option.isSome(artifact) && (yield* restoredFrom(run.databaseId, artifact.value, root, request))) {
+      yield* pruneFullState(run, state);
+      return;
+    }
   }
-  yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${name} artifact, so nothing was restored`);
+});
+
+const restoreFull = Effect.fn("restoreFull")(function* (request: Request) {
+  const root = yield* runnerCache;
+  const runs = yield* fullCandidates;
+  let restored = Option.none<number>();
+  for (const run of runs) {
+    if (yield* restoredRun(run, FULL_ARTIFACT, root, Option.none<string>(), request)) {
+      restored = Option.some(run.databaseId);
+      break;
+    }
+  }
+  if (Option.isNone(restored)) yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${FULL_ARTIFACT} artifact, so nothing was restored`);
+  const state = request.optional[0]?.to;
+  if (state !== undefined) yield* resumedState(runs, newerThan(runs.map((run) => run.databaseId), restored), state, root);
+  return true;
+});
+
+const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request) {
+  if (request.full) return yield* restoreFull(request);
+  const root = yield* runnerCache;
+  const shelf = yield* savedShelf(root);
+  for (const run of yield* latestCandidates) {
+    if (yield* restoredRun(run, LATEST_ARTIFACT, root, shelf, request)) return true;
+  }
+  yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${LATEST_ARTIFACT} artifact, so nothing was restored`);
   return true;
 });
 

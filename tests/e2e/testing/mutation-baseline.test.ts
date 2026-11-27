@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { baseline, fullBaseline, fullReport, gitRunner, MAIN_RUNS, run, savedEntry, SAVED_SHELF, selfHosted, shallowRunner, SHELVES, type Runner } from "../lib/baseline-runner.ts";
+import { baseline, fullBaseline, fullReport, gitRunner, MAIN_RUNS, refreshState, run, savedEntry, SAVED_SHELF, selfHosted, shallowRunner, SHELVES, type Runner } from "../lib/baseline-runner.ts";
 
 const NOW_MS = Number(process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] ?? Date.now());
 process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] = String(NOW_MS);
@@ -159,6 +159,43 @@ test("--full with an incremental destination restores the report and the state, 
   expect(await runner.read("again/mutation.json")).toBe('{"report":"with state"}');
   expect(await runner.read("again/stryker-incremental.json")).toBe('{"state":"with state"}');
   expect(await runner.downloads()).toHaveLength(1);
+}, 30_000);
+
+const earlier = (): string => new Date(NOW_MS - 60_000).toISOString();
+
+test("--full takes the state a newer stopped run left in place of the older full baseline's state, and keeps the full report", async () => {
+  const runner = await gitRunner({}, (sha) => [
+    run(40, "workflow_dispatch", started(), [refreshState(400, "resumed")], sha),
+    run(35, "workflow_dispatch", earlier(), [fullBaseline(350, "full")], sha),
+  ]);
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-refresh-state artifact 400 from run 40");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"full"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"resumed"}');
+}, 30_000);
+
+test("--full ignores a stopped run's state older than the full baseline, which the full baseline superseded", async () => {
+  const runner = await gitRunner({}, (sha) => [
+    run(40, "workflow_dispatch", started(), [fullBaseline(400, "full")], sha),
+    run(35, "workflow_dispatch", earlier(), [refreshState(350, "superseded")], sha),
+  ]);
+
+  await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"full"}');
+}, 30_000);
+
+test("--full resumes from a stopped run's state when no full baseline exists yet, and restores no report", async () => {
+  const runner = await gitRunner({}, (sha) => [run(40, "workflow_dispatch", started(), [refreshState(400, "first pass")], sha)]);
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(await runner.read("full/mutation.json")).toBeUndefined();
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"first pass"}');
 }, 30_000);
 
 test("--full with an incremental destination still restores the report when the artifact holds no state", async () => {

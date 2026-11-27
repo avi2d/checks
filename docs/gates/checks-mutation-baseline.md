@@ -27,7 +27,11 @@ It tries those runs newest first, and restores the first `mutation-baseline-full
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so a later full run started with that destination retests the mutants its changes reach.
-The refresh in the `mutation.yml` [checks-setup](checks-setup.md) writes passes no incremental destination and tests every mutant except static ones.
+The refresh in the `mutation.yml` [checks-setup](checks-setup.md) writes passes one, and tests the mutants its state holds no result for, except static ones.
+With an incremental destination, `--full` also looks at the successful runs newer than the one whose full artifact it restored, newest first.
+It takes the first `mutation-refresh-state` artifact among them that downloads and holds `stryker-incremental.json`, and that state replaces the full artifact's, since the full artifact's state is older.
+A run older than the restored full run never supplies one, because that full run superseded it.
+With no full artifact at all, it still restores such a state and no report.
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.
@@ -43,12 +47,13 @@ It creates the directories each destination needs.
 
 With `--prune` it deletes the repository's superseded baselines instead of restoring one.
 It keeps the newest unexpired `mutation-baseline` among the runs the restore reads, and the newest unexpired `mutation-baseline-full` the restore takes first.
+It also keeps the newest unexpired `mutation-refresh-state` among the runs newer than that full artifact's run, and deletes the rest.
 A run whose baseline the runner's disk holds stops that search, and every older `mutation-baseline` goes, since the restore reads that run's saved baseline first.
 It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names.
 The restore reads only successful runs, so it takes them once that run succeeds.
 A failed artifact lookup while it picks what to keep stops it before it deletes anything.
 Treating that artifact as absent would delete the one the restore takes.
-It deletes only artifacts with exactly those two names in the repository it runs in.
+It deletes only artifacts with exactly those three names in the repository it runs in.
 It deletes only unexpired artifacts, since the restore never reads an expired one.
 With `--dry-run` it prints what it would delete and what it would keep, and deletes nothing.
 It deletes through `gh`, which needs a token that deletes the repository's Actions artifacts, such as `GH_TOKEN: ${{ github.token }}` with `actions: write`.
@@ -57,7 +62,8 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
-The `mutation-baseline-full` artifact holds `mutation.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/full/` writes.
+The `mutation-baseline-full` artifact holds `mutation.json` and `stryker-incremental.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/full/` writes.
+The `mutation-refresh-state` artifact holds `stryker-incremental.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/refresh/` writes when a shard stopped.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
 When it prunes a restored state it reads the run's head through `gh run view <run> --json headSha`.

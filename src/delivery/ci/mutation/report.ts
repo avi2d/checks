@@ -25,6 +25,17 @@ export function scoreSummary(title: string, report: Report | undefined): string 
   return `## ${title}\n\n${report === undefined ? "No report was written." : scoreLine(scoreOf(report.files))}\n`;
 }
 
+export const SHARD_DIRECTORY = "reports/shard";
+export const DOWNLOADED_DIRECTORY = "shards";
+export const STATE_PREFIX = "state-";
+const STOPPED_PREFIX = "stopped-";
+
+export const stateName = (index: string): string => `${STATE_PREFIX}${index}.json`;
+
+export const stoppedName = (index: string): string => `${STOPPED_PREFIX}${index}`;
+
+export const anyStopped = (names: readonly string[]): boolean => names.some((name) => name.startsWith(STOPPED_PREFIX));
+
 export function shardsOf(scopeOutput: string): string | undefined {
   const line = scopeOutput.split("\n").find((candidate) => candidate.startsWith("SHARDS="));
   return line?.slice("SHARDS=".length);

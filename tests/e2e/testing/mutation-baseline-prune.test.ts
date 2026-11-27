@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { baseline, fullReport, run, savedEntry, selfHosted } from "../lib/baseline-runner.ts";
+import { baseline, fullReport, refreshState, run, savedEntry, selfHosted } from "../lib/baseline-runner.ts";
 
 // The restore takes run 20's baseline and run 35's full report, so the prune keeps artifacts 200 and 350.
 const PRUNE_RUNS = [
@@ -31,6 +31,21 @@ test("--prune deletes every superseded baseline but the newest of each, and neve
   expect(deleted(await runner.calls())).toEqual([100, 250, 300]);
   const again = await runner.run(["--prune", "--dry-run"]);
   expect(again.text).toBe("mutation-baseline: dry run, nothing to delete; would keep mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35\n");
+}, 30_000);
+
+test("--prune keeps the newest stopped-run state newer than the full baseline and deletes one the full baseline superseded", async () => {
+  const runner = await selfHosted([
+    run(50, "workflow_dispatch", "2026-10-05T00:00:00Z", [refreshState(500, "newest pass")]),
+    run(45, "workflow_dispatch", "2026-10-04T12:00:00Z", [refreshState(450, "older pass")]),
+    ...PRUNE_RUNS.slice(0, 1),
+    run(34, "workflow_dispatch", "2026-10-03T12:00:00Z", [refreshState(340, "before the full baseline")]),
+  ]);
+
+  const dried = await runner.run(["--prune", "--dry-run"]);
+
+  expect(dried.text).toBe(
+    "mutation-baseline: dry run, would delete artifacts 340, 450; would keep mutation-baseline-full artifact 350 from run 35, mutation-refresh-state artifact 500 from run 50\n",
+  );
 }, 30_000);
 
 test("--prune --dry-run lists what would go and deletes nothing", async () => {
