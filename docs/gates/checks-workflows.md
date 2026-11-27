@@ -66,7 +66,7 @@ A private root with public workspace packages also holds the `suite` job and set
 A private root with a `test` script also holds the `suite` job, and its `ci.yml` runs static checks and tests on release pull requests.
 Its `ci.yml` runs the docs build there when `package.json` defines `docs:build`.
 A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is kept in the test and flake jobs.
-The `testTierShards` setting splits a default unit or e2e test job into matrix jobs while the `checks` job keeps its name.
+The `workflows.testShards` setting splits a default unit or e2e test job into matrix jobs while the `checks` job keeps its name.
 Each configured tier must have a default job for that tier.
 The command refuses a key without that default job, including a custom command with `--parallel`.
 [checks-test](checks-test.md#parallel-runs) describes the setting and file assignment.
@@ -79,7 +79,7 @@ The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
 The kit keeps its own `release-pr.yml` because npm trusted publishing names `release.yml`.
-With `releaseAssets` enabled, `checks-workflows` writes the kit's `release.yml` with an `assets` job after `github-release`.
+With `workflows.releaseAssets` enabled, `checks-workflows` writes the kit's `release.yml` with an `assets` job after `github-release`.
 A job in those files that calls another repository's workflow is still refused.
 Replace it with its own steps by hand.
 
@@ -103,7 +103,7 @@ Each optional file keeps what the file it replaces does:
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `flake.yml` | `workflow_dispatch`, plus `schedule` when `flakeCron` is set | the `node-version-file` an `actions/setup-node` step sets up |
+| `flake.yml` | `workflow_dispatch`, plus `schedule` when `workflows.flakeCron` is set | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
 A `docs.yml` that gives no build step and path is no workflow of the set.
@@ -126,11 +126,11 @@ Each difference names the file, and each changed line names what the file holds 
 
 ### Flake schedule
 
-Set `flakeCron` in `checks.config.ts` to schedule the flake workflow in a code repository:
+Set `workflows.flakeCron` in `checks.config.ts` to schedule the flake workflow in a code repository:
 
 ```ts
 export default defineConfig({
-  flakeCron: "23 5 * * 1",
+  workflows: { flakeCron: "23 5 * * 1" },
 });
 ```
 
@@ -138,7 +138,7 @@ The setting takes one five-field GitHub Actions cron expression in UTC that runs
 The minute must be one number from 0 to 59, and the hour must be one number from 0 to 23.
 Run `bunx checks-workflows --write` to create or update `flake.yml`.
 The schedule runs on the default branch, and `workflow_dispatch` still starts the workflow by hand.
-Without `flakeCron`, the workflow is optional and starts only by hand.
+Without `workflows.flakeCron`, the workflow is optional and starts only by hand.
 
 ### Release a chosen version
 
@@ -172,7 +172,7 @@ A run without `-f version` plans the bump the unreleased changes need.
 
 ### Attach release assets
 
-Set `releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
+Set `workflows.releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
 The setting defaults to `false`, and without it `main.yml` holds no `assets` job.
 With it, `main.yml` holds an `assets` job after the `release` job.
 
@@ -191,15 +191,15 @@ A release then holds a compiled file and its SHA-256 file for each platform.
 In the kit, `release.yml` builds both platforms before it publishes to npm.
 After the `github-release` job, the `assets` job attaches the files from those builds.
 
-`checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
+`checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `workflows.repositoryVisibility` is `private`.
 
 ### Publish platform packages
 
-Set `platformPackages` in `checks.config.ts` to publish a compiled binary to npm as one package per platform, the way the kit publishes its own:
+Set `workflows.platformPackages` in `checks.config.ts` to publish a compiled binary to npm as one package per platform, the way the kit publishes its own:
 
 ```ts
 export default defineConfig({
-  platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] },
+  workflows: { platformPackages: { binary: "acme", platforms: ["darwin-arm64", "linux-x64"] } },
 });
 ```
 
@@ -247,23 +247,25 @@ It resolves `<name>-<os>-<cpu>/<binary>-<version>` from its install and runs tha
 When no platform package matches the host, it runs its source.
 npm installs only the optional dependency whose `os`, `cpu` and `libc` match the host, so an install runs no `postinstall` script and downloads one binary.
 
-`checks-workflows` refuses the setting when the root has no `release:assets` script, in a site, in the kit, and when `repositoryVisibility` is `private`.
+`checks-workflows` refuses the setting when the root has no `release:assets` script, in a site, in the kit, and when `workflows.repositoryVisibility` is `private`.
 It also refuses a private root without exactly one public workspace.
 
 ### Add a test job with its own setup
 
-Set `extraTestJobs` in `checks.config.ts` to add a test job that needs its own environment or a tool installed first:
+Set `workflows.extraTestJobs` in `checks.config.ts` to add a test job that needs its own environment or a tool installed first:
 
 ```ts
 export default defineConfig({
-  extraTestJobs: [
-    {
-      name: "sandbox",
-      env: { SANDBOX_TESTS: "1" },
-      setup: ["npm install --global acme-sandbox@1.2.3"],
-      run: "bunx checks-test --tier=live",
-    },
-  ],
+  workflows: {
+    extraTestJobs: [
+      {
+        name: "sandbox",
+        env: { SANDBOX_TESTS: "1" },
+        setup: ["npm install --global acme-sandbox@1.2.3"],
+        run: "bunx checks-test --tier=live",
+      },
+    ],
+  },
 });
 ```
 
@@ -317,10 +319,10 @@ Each job reads the rule once from the `release` output of `changes`, as `if: nee
 
 The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
-A job whose step with id `test` runs a command is a test job, unless `extraTestJobs` declares its name, which makes `checks.config.ts` its record.
+A job whose step with id `test` runs a command is a test job, unless `workflows.extraTestJobs` declares its name, which makes `checks.config.ts` its record.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
 A test job's `runs-on` can be a string or a non-empty list of label strings.
-For example, a private repository can use `runs-on: [self-hosted, macOS, ARM64]` when `selfHostedRunners` lists that set of labels.
+For example, a private repository can use `runs-on: [self-hosted, macOS, ARM64]` when `workflows.selfHostedRunsOn` lists that set of labels.
 [checks-ci-wiring](checks-ci-wiring.md#runners) still judges which runners a job may use.
 A single all-tier `test` or `unit` job using `bunx checks-test --pr` or `bun run test --pr` becomes separate tier jobs.
 The split keeps a `--parallel` argument and moves the browser setup to `e2e`.
@@ -333,7 +335,7 @@ The generated `ci.yml` runs on pull requests, pushes to `main`, and manual dispa
 On pushes to `main`, the default test jobs run their whole tiers and the browser walks every route.
 If the pull request reaches no browser route, the browser job skips and the gate accepts the skip.
 A change confined to TypeScript files under `tests/unit/` and `tests/e2e/`, including helpers, skips both the site build and its dependent jobs.
-A `checks.config.ts` change confined to `reach` entries counts the same way, as [checks-ci](checks-ci.md) says.
+A `checks.config.ts` change confined to `test.affected` entries counts the same way, as [checks-ci](checks-ci.md) says.
 Existing screenshot test jobs keep their commands, and the kit adds no default screenshot job.
 A job that runs `bunx checks-test --pr-screens` narrows screenshot tests on pull requests and runs the whole pixel tier on other events.
 A site production run runs the full browser walk and compares screenshots on the staged release commit.
@@ -353,7 +355,7 @@ The `checks` job requires both jobs when both exist.
 Rulesets that require individual test jobs must require `unit` and, when present, `e2e`.
 A ruleset requiring only the aggregate `checks` job needs no change.
 
-Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
+Set `workflows.repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
 A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml`, `pr-text.yml`, `preview-close.yml` and `whole-tree-run.yml`.
 Its other workflows keep `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
@@ -362,7 +364,7 @@ The generated mutation workflow always uses hosted runners.
 The default test runner follows the setting even when a previous `ci.yml` holds the other default.
 
 To add a test job, copy the `unit` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
-A test job that needs its own environment or setup steps goes in [`extraTestJobs`](#add-a-test-job-with-its-own-setup) instead.
+A test job that needs its own environment or setup steps goes in [`workflows.extraTestJobs`](#add-a-test-job-with-its-own-setup) instead.
 
 ## What it reads
 
@@ -395,8 +397,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | `flakeCron` is set in a site, `extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
-| 2 | `flakeCron` does not decode, `--write` meets `flakeCron` in a site, `extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` or `platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `releaseAssets` or `platformPackages` in a site or a private repository, or `platformPackages` with a private `package.json` and no public workspace |
+| 1 | `workflows.flakeCron` is set in a site, `workflows.extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `workflows.releaseAssets` or `workflows.platformPackages` in a site or a private repository, or `workflows.platformPackages` with a private `package.json` and no public workspace |
+| 2 | `workflows.flakeCron` does not decode, `--write` meets `workflows.flakeCron` in a site, `workflows.extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `workflows.releaseAssets` or `workflows.platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `workflows.platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `workflows.releaseAssets` or `workflows.platformPackages` in a site or a private repository, or `workflows.platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 

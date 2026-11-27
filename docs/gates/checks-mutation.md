@@ -17,7 +17,7 @@ A person can run incrementally outside CI only with an existing report, because 
 That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to pass `--mutate <glob>`, or to start the full baseline in CI with `gh workflow run mutation`.
 The bin passes `--help`, `-h` and `--version` straight to Stryker for a person.
-For an agent outside CI, the bin refuses every invocation unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
+For an agent outside CI, the bin refuses every invocation unless `test.allowAgentRunsOutsideCI` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A laptop with `CI=true` set opts in to a full run on purpose, and the refusal lets it through.
 
 The shared Stryker preset makes the same decision from `process.argv` when a `stryker run` loads it.
@@ -58,7 +58,7 @@ export default {
 
 ## What it reads
 
-It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `test.allowAgentRunsOutsideCI` to decide whether an agent can run tests outside CI.
 When Stryker loads the preset, the preset reads `CHECKS_MUTATION_MODE` and `RUNNER_ENVIRONMENT` from the environment.
 For a `stryker run`, the preset reads `bunfig.toml` and resolves its package-name preloads.
 It forwards every argument to `stryker run` through `bun x stryker run`.
@@ -77,7 +77,7 @@ Every argument after the bin name forwards to `stryker run`.
 | --- | --- |
 | 0 | Stryker exited 0 |
 | 1 | Stryker exited nonzero, including an incremental run refused for a missing report |
-| 2 | a full run outside CI was refused, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, an agent run outside CI whose `checks.config.ts` does not load, or Stryker could not start |
+| 2 | a full run outside CI was refused, an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false`, an agent run outside CI whose `checks.config.ts` does not load, or Stryker could not start |
 
 ## Sample output
 

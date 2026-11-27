@@ -25,7 +25,7 @@ test("platformPackages under a private root with one public workspace writes the
   const repo = await open({
     "package.json": manifest({ private: true, workspaces: ["packages/*"], scripts: { "release:assets": "bun scripts/assets.ts" } }),
     "packages/run/package.json": JSON.stringify({ name: "@acme/cli", version: "1.0.0" }),
-    "checks.config.ts": 'export default { platformPackages: { binary: "acme", platforms: ["linux-x64"] } };\n',
+    "checks.config.ts": 'export default { workflows: { platformPackages: { binary: "acme", platforms: ["linux-x64"] } } };\n',
   });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
@@ -45,10 +45,10 @@ test("platformPackages under a private root with two public workspaces is refuse
     "package.json": manifest({ private: true, workspaces: ["packages/*"], scripts: { "release:assets": "bun scripts/assets.ts" } }),
     "packages/run/package.json": JSON.stringify({ name: "@acme/cli", version: "1.0.0" }),
     "packages/web/package.json": JSON.stringify({ name: "@acme/web", version: "1.0.0" }),
-    "checks.config.ts": 'export default { platformPackages: { binary: "acme", platforms: ["linux-x64"] } };\n',
+    "checks.config.ts": 'export default { workflows: { platformPackages: { binary: "acme", platforms: ["linux-x64"] } } };\n',
   });
   await repo.commit("start");
-  const refused = { exitCode: 2, text: "workflows: checks.config.ts sets platformPackages, but the private root has more than one public workspace, so publish only one workspace\n" };
+  const refused = { exitCode: 2, text: "workflows: checks.config.ts sets workflows.platformPackages, but the private root has more than one public workspace, so publish only one workspace\n" };
   expect(await workflows(repo, ["--write"])).toEqual(refused);
   expect(await workflows(repo)).toEqual(refused);
 }, 30_000);

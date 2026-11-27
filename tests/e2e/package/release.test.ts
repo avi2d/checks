@@ -48,7 +48,7 @@ test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compil
   const packed = await $`bun pm pack --destination ${pack} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
   await installConsumer(app, "file:" + packed.stdout.toString().trim());
   await $`git init -q`.cwd(app).quiet();
-  await writeFile(join(app, "checks.config.ts"), 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ releaseAssets: true });\n');
+  await writeFile(join(app, "checks.config.ts"), 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ workflows: { releaseAssets: true } });\n');
 
   const root = join(app, "node_modules/@avi2dg/checks");
   const platform = `${process.platform}-${process.arch}`;

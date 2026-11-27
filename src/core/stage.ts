@@ -46,7 +46,7 @@ export const trackedFiles = Effect.fn("trackedFiles")(function* (root: string) {
 // A gate whose inputs do not decode stays in the source stage, so it runs before any build and names what is wrong.
 export const stageOf = Effect.fn("stageOf")(function* (gate: KitGate, root: string, tracked: readonly string[]) {
   if (!isDeclaredGate(gate)) return "source" satisfies Stage;
-  const declared = decodeInputs((yield* loadSettings(root))[gate.appliesTo.setting]);
+  const declared = decodeInputs((yield* loadSettings(root)).values[gate.appliesTo.setting]);
   if (Option.isNone(declared)) return "source" satisfies Stage;
   const prefixes = [...new Set(declared.value.inputs.map(staticPrefixOf))];
   const ignored = new Set<string>();

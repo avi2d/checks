@@ -297,7 +297,7 @@ const USAGE = `usage: ${NAME} [--pr] [--shard=<index>/<count>] [<directory>]`;
 
 const readSharding = Effect.fn("readSharding")(function* (root: string, shard: Shard | undefined) {
   if (shard === undefined) return undefined;
-  const raw = (yield* loadSettings(root))["browserTimings"];
+  const raw = (yield* loadSettings(root)).values["browserTimings"];
   const timings = raw === undefined ? {} : yield* decodeSetting("browserTimings", BrowserTimings, raw);
   return { shard, timings } satisfies Sharding;
 });

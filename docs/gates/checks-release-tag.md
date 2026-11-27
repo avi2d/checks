@@ -36,11 +36,11 @@ When `GITHUB_OUTPUT` is set, it then writes the tag as the step output `tag`.
 The `assets` job that [Attach release assets](checks-workflows.md#attach-release-assets) describes reads that output.
 It runs `bun run build` before publishing, including when the tag already points at the release commit.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
-When `checks.config.ts` sets `platformPackages`, it first stages and publishes one package per platform from the binaries in the directory `CHECKS_PLATFORM_BINARIES` names, as [Publish platform packages](checks-workflows.md#publish-platform-packages) says.
+When `checks.config.ts` sets `workflows.platformPackages`, it first stages and publishes one package per platform from the binaries in the directory `CHECKS_PLATFORM_BINARIES` names, as [Publish platform packages](checks-workflows.md#publish-platform-packages) says.
 It then adds those packages to `optionalDependencies` in the main package's `package.json` before it publishes the main package.
 It refuses before it tags anything when `CHECKS_PLATFORM_BINARIES` is unset or a platform's binary is missing.
 When the root is private and `CHECKS_PUBLISH_WORKSPACES` is `true`, it publishes each public workspace package instead.
-With `platformPackages` the private root must publish exactly one workspace, and that workspace, such as `packages/run/package.json`, is the main package.
+With `workflows.platformPackages` the private root must publish exactly one workspace, and that workspace, such as `packages/run/package.json`, is the main package.
 Each public workspace version must equal the root release version before it tags anything.
 The release pull request sets those versions before its checks run.
 The changelog is built once, by the release pull request, and this run reads the committed file.
@@ -65,7 +65,7 @@ The next run of the workflow that tags it then cuts the release again with every
 It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit.
 It reads the tag through the GitHub API.
 When workspace publishing is enabled, it reads the workspace patterns and each workspace `package.json`.
-It reads `platformPackages` from `checks.config.ts` and the binaries in the directory `CHECKS_PLATFORM_BINARIES` names.
+It reads `workflows.platformPackages` from `checks.config.ts` and the binaries in the directory `CHECKS_PLATFORM_BINARIES` names.
 With a workflow argument it names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 With no argument it names `release`.
 The build it runs reads the whole history, so the checkout fetches all of it.
@@ -90,7 +90,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, the tag is pushed and the release workflow dispatched, or the release is tagged, released on GitHub and published |
-| 2 | the arguments do not parse, the release commit lacks `CHANGELOG.md`, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, the release commit lacks `CHANGELOG.md`, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `workflows.platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
 
 ## Sample output
 

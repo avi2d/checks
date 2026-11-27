@@ -5,7 +5,7 @@ audience: consumers
 # checks-flake
 
 `checks-flake` finds flaky tests and records the seeds each one fails with.
-The generated workflow starts by hand or on the schedule `flakeCron` sets, as [Flake schedule](checks-workflows.md#flake-schedule) describes.
+The generated workflow starts by hand or on the schedule `workflows.flakeCron` sets, as [Flake schedule](checks-workflows.md#flake-schedule) describes.
 
 ## What it checks
 
@@ -46,7 +46,7 @@ A run whose worker crashed gets a replay of that worker's files up to the crashe
 ## What it reads
 
 It reads bun's JUnit report of each run.
-It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `test.allowAgentRunsOutsideCI` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads the test runner from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
 It hunts serially when the file is missing or its `test` script does not run `checks-test`.
 Under workers it reads `CI_CORES` unless the test script sets `--parallel=<workers>`.
@@ -73,7 +73,7 @@ Under workers the record also holds `parallel`, the worker count and each replay
 | --- | --- |
 | 0 | every run passed |
 | 1 | a run failed |
-| 2 | an argument does not parse, `CI_CORES` is read but is not a positive whole number, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, or an agent run outside CI whose `checks.config.ts` does not load |
+| 2 | an argument does not parse, `CI_CORES` is read but is not a positive whole number, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused outside CI when `test.allowAgentRunsOutsideCI` is `false`, or an agent run outside CI whose `checks.config.ts` does not load |
 
 ## Sample output
 
@@ -106,12 +106,12 @@ Rerunning a seed with bun test --randomize --seed=<seed> --parallel=4 reproduces
 
 ## When it runs
 
-Only a workflow the repository starts runs it, by hand or on the schedule `flakeCron` sets.
+Only a workflow the repository starts runs it, by hand or on the schedule `workflows.flakeCron` sets.
 
 ## Running it by hand
 
 A repository runs it from a workflow someone starts with `gh workflow run`, and keeps the record of a failed run as an artifact.
-Without `flakeCron` the workflow holds no schedule, and [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses a schedule it did not write from `flakeCron`:
+Without `workflows.flakeCron` the workflow holds no schedule, and [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses a schedule it did not write from `workflows.flakeCron`:
 
 ```yaml
 on:

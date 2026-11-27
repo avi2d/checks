@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { Listed } from "./browser-settings.ts";
 import { Usage } from "./main.ts";
 
@@ -148,59 +148,9 @@ export const LegacySettings = Schema.Struct({
 
 const legacy = LegacySettings.fields;
 
-const GroupedSettings = {
-  workflows: Schema.Struct({
-    repositoryVisibility: legacy.repositoryVisibility,
-    releaseAssets: legacy.releaseAssets,
-    platformPackages: legacy.platformPackages,
-    extraTestJobs: legacy.extraTestJobs,
-    mutationRunsOn: legacy.mutationRunner,
-    selfHostedRunsOn: legacy.selfHostedRunners,
-    testShards: legacy.testTierShards,
-    flakeCron: legacy.flakeCron,
-  }),
-  test: Schema.Struct({
-    extraLocalFiles: legacy.smoke,
-    affected: legacy.reach,
-    allowAgentRunsOutsideCI: Schema.optionalKey(AllowAgentRunsOutsideCI),
-    fileTimeoutSeconds: legacy.testFileMaxSeconds,
-    fileTimingsSeconds: legacy.testFileTimings,
-    excludeFiles: legacy.testFileSkips,
-  }),
-  commentGate: Schema.Struct({ trackerKeyPrefixes: legacy.trackerKeyPrefixes }),
-  lintCoverage: Schema.Struct({ allowedNestedOxlintRules: legacy.nestedOxlintConfigs }),
-};
-
-export const Settings = Schema.Struct({
-  workflows: Schema.optionalKey(GroupedSettings.workflows),
-  test: Schema.optionalKey(GroupedSettings.test),
-  copy: legacy.copy,
-  frontendSyntax: legacy.frontendSyntax,
-  commentGate: Schema.optionalKey(GroupedSettings.commentGate),
-  lintCoverage: Schema.optionalKey(GroupedSettings.lintCoverage),
-  browser: legacy.browser,
-  browserRoutes: legacy.browserRoutes,
-  browserBuild: legacy.browserBuild,
-  browserTimings: legacy.browserTimings,
-});
-
 export type SettingKey = keyof typeof legacy;
 
-const SETTING_KEYS = [...Object.keys(Settings.fields), ...Object.keys(legacy).filter((key) => !Object.hasOwn(Settings.fields, key))];
-
-export type OldPlace = { readonly file: string } | { readonly manifestKey: string };
-
-const UnknownFields = Schema.Record(Schema.String, Schema.Unknown);
-
-const SettingsModule = Schema.Struct({ default: UnknownFields });
-
-const decodeSettingsModule = Schema.decodeUnknownEffect(SettingsModule);
-
-const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) }));
-
-const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
-
-const TRANSITION_KEYS = {
+export const TRANSITION_KEYS = {
   workflows: {
     repositoryVisibility: "repositoryVisibility",
     releaseAssets: "releaseAssets",
@@ -221,7 +171,69 @@ const TRANSITION_KEYS = {
   },
   commentGate: { trackerKeyPrefixes: "trackerKeyPrefixes" },
   lintCoverage: { allowedNestedOxlintRules: "nestedOxlintConfigs" },
-} satisfies { [Section in keyof typeof GroupedSettings]: Record<keyof (typeof GroupedSettings)[Section]["fields"], SettingKey> };
+} satisfies Readonly<Record<string, Readonly<Record<string, SettingKey>>>>;
+
+const groupedSources = { ...legacy, agentTests: Schema.optionalKey(AllowAgentRunsOutsideCI) };
+
+function groupedFields<const Keys extends Readonly<Record<string, SettingKey>>>(keys: Keys) {
+  return Object.fromEntries(Object.entries(keys).map(([key, legacyKey]) => [key, groupedSources[legacyKey]])) as {
+    [Key in keyof Keys]: (typeof groupedSources)[Keys[Key]];
+  };
+}
+
+export const GroupedSettings = {
+  workflows: Schema.Struct(groupedFields(TRANSITION_KEYS.workflows)),
+  test: Schema.Struct(groupedFields(TRANSITION_KEYS.test)),
+  commentGate: Schema.Struct(groupedFields(TRANSITION_KEYS.commentGate)),
+  lintCoverage: Schema.Struct(groupedFields(TRANSITION_KEYS.lintCoverage)),
+};
+
+export const Settings = Schema.Struct({
+  workflows: Schema.optionalKey(GroupedSettings.workflows),
+  test: Schema.optionalKey(GroupedSettings.test),
+  copy: legacy.copy,
+  frontendSyntax: legacy.frontendSyntax,
+  commentGate: Schema.optionalKey(GroupedSettings.commentGate),
+  lintCoverage: Schema.optionalKey(GroupedSettings.lintCoverage),
+  browser: legacy.browser,
+  browserRoutes: legacy.browserRoutes,
+  browserBuild: legacy.browserBuild,
+  browserTimings: legacy.browserTimings,
+});
+
+const SETTING_KEYS = [...Object.keys(Settings.fields), ...Object.keys(legacy).filter((key) => !Object.hasOwn(Settings.fields, key))];
+
+export type SettingLocations = Readonly<Partial<Record<SettingKey, string>>>;
+
+export type LoadedSettings = {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly locations: SettingLocations;
+};
+
+export function settingPath(key: SettingKey): string {
+  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) {
+    for (const [member, legacyKey] of Object.entries(keys)) {
+      if (key === legacyKey) return `${section}.${member}`;
+    }
+  }
+  return key;
+}
+
+export function settingLocation(locations: SettingLocations, key: SettingKey): string {
+  return locations[key] ?? settingPath(key);
+}
+
+export type OldPlace = { readonly file: string } | { readonly manifestKey: string };
+
+const UnknownFields = Schema.Record(Schema.String, Schema.Unknown);
+
+const SettingsModule = Schema.Struct({ default: UnknownFields });
+
+const decodeSettingsModule = Schema.decodeUnknownEffect(SettingsModule);
+
+const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) }));
+
+const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
 
 const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
   location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[],
@@ -233,7 +245,7 @@ const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
 });
 
 const normalizeSection = Effect.fn("normalizeSection")(function* (
-  settings: Record<string, unknown>, section: string, keys: Readonly<Record<string, SettingKey>>,
+  settings: Record<string, unknown>, locations: Partial<Record<SettingKey, string>>, section: string, keys: Readonly<Record<string, SettingKey>>,
 ) {
   if (!Object.hasOwn(settings, section)) return;
   const location = `${SETTINGS_FILE} key ${section}`;
@@ -247,13 +259,14 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
     const agentPolicy = legacyKey === "agentTests";
     const old = settings[legacyKey];
     const repeated = agentPolicy
-      ? old !== undefined && Object.hasOwn(yield* decodeSetting(legacyKey, AgentTests, old), "allowLocal")
+      ? old !== undefined && Object.hasOwn(yield* decodeSetting(legacyKey, AgentTests, old, legacyKey), "allowLocal")
       : Object.hasOwn(settings, legacyKey);
     if (repeated) {
       const oldPath = agentPolicy ? "agentTests.allowLocal" : legacyKey;
       const newPath = `${section}.${key}`;
       return yield* new Usage({ message: `${SETTINGS_FILE} key ${oldPath} and ${SETTINGS_FILE} key ${newPath} set the same setting; keep only ${newPath}` });
     }
+    locations[legacyKey] = `${section}.${key}`;
     settings[legacyKey] = agentPolicy ? { allowLocal: values[key] } : values[key];
   }
 });
@@ -261,7 +274,7 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
 export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, SETTINGS_FILE);
-  if (!(yield* fs.exists(file))) return {};
+  if (!(yield* fs.exists(file))) return { values: {}, locations: {} } satisfies LoadedSettings;
   const loaded: unknown = yield* Effect.tryPromise({
     try: () => import(file),
     catch: (cause) => new Usage({ message: `${SETTINGS_FILE} does not load: ${String(cause)}` }),
@@ -270,12 +283,20 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
     Effect.mapError(() => new Usage({ message: `${SETTINGS_FILE} has no default export of a settings object; export defineConfig({ ... }) from @avi2dg/checks/config` })),
   );
   if (Object.hasOwn(settings, "localTests")) {
-    return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use agentTests.allowLocal instead` });
+    return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use test.allowAgentRunsOutsideCI instead` });
   }
   yield* refuseUnknownSettings(SETTINGS_FILE, settings, SETTING_KEYS);
   const normalized = { ...settings };
-  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, section, keys);
-  return normalized;
+  const locations: Partial<Record<SettingKey, string>> = {};
+  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
+  for (const keys of Object.values(TRANSITION_KEYS)) {
+    for (const key of Object.values(keys)) {
+      if (!Object.hasOwn(settings, key)) continue;
+      locations[key] ??= key;
+      yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${settingPath(key)}`);
+    }
+  }
+  return { values: normalized, locations } satisfies LoadedSettings;
 });
 
 function oldPlaceName(old: OldPlace): string {
@@ -296,18 +317,19 @@ const holdsOldPlace = Effect.fn("holdsOldPlace")(function* (root: string, old: O
 
 export const refuseOldPlace = Effect.fn("refuseOldPlace")(function* (root: string, key: SettingKey, old: OldPlace) {
   if (!(yield* holdsOldPlace(root, old))) return;
-  return yield* new Usage({ message: `${oldPlaceName(old)} is no longer read; move it to the ${key} key of ${SETTINGS_FILE}` });
+  return yield* new Usage({ message: `${oldPlaceName(old)} is no longer read; move it to the ${settingPath(key)} key of ${SETTINGS_FILE}` });
 });
 
-export const decodeSetting = Effect.fn("decodeSetting")(function* <A>(key: SettingKey, schema: Schema.Decoder<A>, value: unknown) {
+export const decodeSetting = Effect.fn("decodeSetting")(function* <A>(key: SettingKey, schema: Schema.Decoder<A>, value: unknown, location = settingPath(key)) {
   return yield* Schema.decodeUnknownEffect(schema)(value, { onExcessProperty: "error" }).pipe(
-    Effect.mapError(({ message }) => new Usage({ message: `${SETTINGS_FILE} key ${key} does not decode: ${message}` })),
+    Effect.mapError(({ message }) => new Usage({ message: `${SETTINGS_FILE} key ${location} does not decode: ${message}` })),
   );
 });
 
 export const readSetting = Effect.fn("readSetting")(function* <A>(root: string, key: SettingKey, schema: Schema.Decoder<A>, old: OldPlace) {
   yield* refuseOldPlace(root, key, old);
-  const value = (yield* loadSettings(root))[key];
+  const settings = yield* loadSettings(root);
+  const value = settings.values[key];
   if (value === undefined) return undefined;
-  return yield* decodeSetting(key, schema, value);
+  return yield* decodeSetting(key, schema, value, settingLocation(settings.locations, key));
 });

@@ -59,14 +59,14 @@ In a private repository any other job that names `CI_RUNS_ON` in `runs-on` carri
 A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
 A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` or `issue_comment`, directly, through a local reusable workflow a reached job calls, or through a `workflow_run` trigger that names a reached workflow.
 Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a runner `group` and any other expression.
-It also refuses a label in a set declared under `mutationRunner` or `selfHostedRunners` in `checks.config.ts`.
+It also refuses a label in a set declared under `workflows.mutationRunsOn` or `workflows.selfHostedRunsOn` in `checks.config.ts`.
 A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
 The values for the key are the combinations its axis values form, without combinations an `exclude` entry removes, plus its `include` rows, which merge into the original combinations they match and otherwise run as their own combinations.
-It refuses a value that names `self-hosted` or falls inside a label set declared under `mutationRunner` or `selfHostedRunners` in `checks.config.ts`.
+It refuses a value that names `self-hosted` or falls inside a label set declared under `workflows.mutationRunsOn` or `workflows.selfHostedRunsOn` in `checks.config.ts`.
 Any other expression refuses as unresolvable.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.
-In a private repository each mutation job carries exactly the labels the consumer declares under `mutationRunner` in `checks.config.ts`.
-Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `selfHostedRunners` in `checks.config.ts`.
+In a private repository each mutation job carries exactly the labels the consumer declares under `workflows.mutationRunsOn` in `checks.config.ts`.
+Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `workflows.selfHostedRunsOn` in `checks.config.ts`.
 A `checks` object in `package.json` that still sets `mutationRunner` or `selfHostedRunners` fails the gate with exit 2, naming the key it moves to.
 A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
 The pick is the repository file `runner.yml` under `.github/workflows/`.
@@ -128,7 +128,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 
 ### Schedules
 
-It accepts a schedule in the flake workflow only if the file matches what [checks-workflows](checks-workflows.md#flake-schedule) writes from `flakeCron`.
+It accepts a schedule in the flake workflow only if the file matches what [checks-workflows](checks-workflows.md#flake-schedule) writes from `workflows.flakeCron`.
 The flake schedule runs at most once a day, with one minute and one hour.
 Apart from the release and flake schedules, it accepts only a weekly advisory scan in a public repository.
 A test, mutation, browser, or whole-tree workflow starts only by hand, with `gh workflow run`.
@@ -150,8 +150,8 @@ Each refusal names the workflow file, the job and the limit.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
-It reads `flakeCron` from `checks.config.ts` when it compares the held and generated flake workflows.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `workflows.mutationRunsOn` and `workflows.selfHostedRunsOn` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
+It reads `workflows.flakeCron` from `checks.config.ts` when it compares the held and generated flake workflows.
 It checks that `HEAD:CHANGELOG.md` is a committed file at the repository root when workflows use the release tools.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.

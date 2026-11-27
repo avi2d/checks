@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
-import { decodeSetting, ExtraTestJobs, FlakeCron, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE, type ExtraTestJob } from "../core/settings.ts";
+import { decodeSetting, ExtraTestJobs, FlakeCron, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE, settingLocation, type SettingLocations, type ExtraTestJob } from "../core/settings.ts";
 import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, extraTestJobFault, testTierOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
@@ -131,31 +131,31 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, hasE2e: boolean | undefined, declared: readonly string[]) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, hasE2e, declared }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-function releaseAssetsFault(site: boolean, publicRepository: boolean): string | undefined {
-  if (site) return `${SETTINGS_FILE} sets releaseAssets, but a site's main.yml holds no release job to attach the assets to, so remove it`;
-  if (!publicRepository) return `${SETTINGS_FILE} sets releaseAssets in a private repository, where checks-ci-wiring refuses the macOS runner the assets job needs, so remove it`;
+function releaseAssetsFault(site: boolean, publicRepository: boolean, locations: SettingLocations): string | undefined {
+  if (site) return `${SETTINGS_FILE} sets ${settingLocation(locations, "releaseAssets")}, but a site's main.yml holds no release job to attach the assets to, so remove it`;
+  if (!publicRepository) return `${SETTINGS_FILE} sets ${settingLocation(locations, "releaseAssets")} in a private repository, where checks-ci-wiring refuses the macOS runner the assets job needs, so remove it`;
   return undefined;
 }
 
-function platformPackagesFault(site: boolean, publicRepository: boolean, publishes: boolean, publishWorkspaces: boolean): string | undefined {
-  if (site) return `${SETTINGS_FILE} sets platformPackages, but a site's main.yml holds no release job to publish the packages from, so remove it`;
-  if (!publicRepository) return `${SETTINGS_FILE} sets platformPackages in a private repository, where checks-ci-wiring refuses the hosted runners the binaries job needs, so remove it`;
-  if (!publishes && !publishWorkspaces) return `${SETTINGS_FILE} sets platformPackages, but package.json is private, so no published package names the platform packages; remove it or publish package.json`;
+function platformPackagesFault(site: boolean, publicRepository: boolean, publishes: boolean, publishWorkspaces: boolean, locations: SettingLocations): string | undefined {
+  if (site) return `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")}, but a site's main.yml holds no release job to publish the packages from, so remove it`;
+  if (!publicRepository) return `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")} in a private repository, where checks-ci-wiring refuses the hosted runners the binaries job needs, so remove it`;
+  if (!publishes && !publishWorkspaces) return `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")}, but package.json is private, so no published package names the platform packages; remove it or publish package.json`;
   return undefined;
 }
 
-function workflowOptionFault(site: boolean, options: Pick<CallerOptions, "flakeCron" | "releaseAssets" | "platformPackages" | "publicRepository" | "publishes" | "publishWorkspaces">): string | undefined {
-  if (site && options.flakeCron !== undefined) return `${SETTINGS_FILE} sets flakeCron, but a site does not have a flake.yml, so remove it`;
-  const assetsFault = options.releaseAssets ? releaseAssetsFault(site, options.publicRepository) : undefined;
-  return assetsFault ?? (options.platformPackages === undefined ? undefined : platformPackagesFault(site, options.publicRepository, options.publishes, options.publishWorkspaces));
+function workflowOptionFault(site: boolean, options: Pick<CallerOptions, "flakeCron" | "releaseAssets" | "platformPackages" | "publicRepository" | "publishes" | "publishWorkspaces">, locations: SettingLocations): string | undefined {
+  if (site && options.flakeCron !== undefined) return `${SETTINGS_FILE} sets ${settingLocation(locations, "flakeCron")}, but a site does not have a flake.yml, so remove it`;
+  const assetsFault = options.releaseAssets ? releaseAssetsFault(site, options.publicRepository, locations) : undefined;
+  return assetsFault ?? (options.platformPackages === undefined ? undefined : platformPackagesFault(site, options.publicRepository, options.publishes, options.publishWorkspaces, locations));
 }
 
-function testTierShardsFault(ci: CiJobs, testTierShards: TestTierShards | undefined): string | undefined {
+function testTierShardsFault(ci: CiJobs, testTierShards: TestTierShards | undefined, locations: SettingLocations): string | undefined {
   const tier = (["unit", "e2e"] as const).find((candidate) => testTierShards?.[candidate] !== undefined && !ci.tests.some((test) => testTierOf(test.run) === candidate));
-  return tier === undefined ? undefined : `${SETTINGS_FILE} sets testTierShards.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key`;
+  return tier === undefined ? undefined : `${SETTINGS_FILE} sets ${settingLocation(locations, "testTierShards")}.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key`;
 }
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards, extraTestJobs?: readonly ExtraTestJob[], flakeCron?: string) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards, extraTestJobs?: readonly ExtraTestJob[], flakeCron?: string, locations: SettingLocations = {}) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
@@ -167,12 +167,12 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     });
   }
   const site = holdsSiteWorkflow(workflows) || flagged;
-  const optionFault = workflowOptionFault(site, options);
+  const optionFault = workflowOptionFault(site, options, locations);
   if (optionFault !== undefined) return yield* new CallerSetFault({ message: optionFault });
-  const extraFault = (extraTestJobs ?? []).map((job) => extraTestJobFault(job)).find((fault) => fault !== undefined);
+  const extraFault = (extraTestJobs ?? []).map((job) => extraTestJobFault(job, settingLocation(locations, "extraTestJobs"))).find((fault) => fault !== undefined);
   if (extraFault !== undefined) return yield* new CallerSetFault({ message: extraFault });
   const ci = yield* heldCiJobs(site ? "site" : "code", workflows, publicRepository, buildDocs, hasE2e, (extraTestJobs ?? []).map(({ name }) => name));
-  const shardsFault = testTierShardsFault(ci, testTierShards);
+  const shardsFault = testTierShardsFault(ci, testTierShards, locations);
   if (shardsFault !== undefined) return yield* new CallerSetFault({ message: shardsFault });
   const settled = { ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined || extraTestJobs.length === 0 ? {} : { extraTestJobs }) };
   if (!site) return { kind: "code", ci, options, ...settled } satisfies CallerSet;
@@ -232,41 +232,41 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[]; readonly flakeCron: string | undefined };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[]; readonly flakeCron: string | undefined; readonly settingLocations?: SettingLocations };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
 export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, overrides?: CallerInputOverrides) {
   const held = yield* readPackage(root);
-  const settings = yield* loadSettings(root);
+  const { values: settings, locations } = yield* loadSettings(root);
   const configuredVisibility = settings["repositoryVisibility"];
-  const visibility = configuredVisibility === undefined ? "public" : yield* decodeSetting("repositoryVisibility", RepositoryVisibility, configuredVisibility);
+  const visibility = configuredVisibility === undefined ? "public" : yield* decodeSetting("repositoryVisibility", RepositoryVisibility, configuredVisibility, settingLocation(locations, "repositoryVisibility"));
   const configuredAssets = settings["releaseAssets"];
-  const releaseAssets = configuredAssets === undefined ? false : yield* decodeSetting("releaseAssets", ReleaseAssets, configuredAssets);
+  const releaseAssets = configuredAssets === undefined ? false : yield* decodeSetting("releaseAssets", ReleaseAssets, configuredAssets, settingLocation(locations, "releaseAssets"));
   if (releaseAssets && held?.scripts?.[RELEASE_ASSETS_SCRIPT] === undefined) {
-    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets releaseAssets, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the assets, so add the script or remove the setting` });
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets ${settingLocation(locations, "releaseAssets")}, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the assets, so add the script or remove the setting` });
   }
   const configuredPackages = settings["platformPackages"];
-  const platformPackages = configuredPackages === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configuredPackages);
+  const platformPackages = configuredPackages === undefined ? undefined : yield* decodeSetting("platformPackages", PlatformPackages, configuredPackages, settingLocation(locations, "platformPackages"));
   if (platformPackages !== undefined && held?.scripts?.[RELEASE_ASSETS_SCRIPT] === undefined) {
-    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the binaries, so add the script or remove the setting` });
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")}, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the binaries, so add the script or remove the setting` });
   }
   if (platformPackages !== undefined && held?.name === KIT_PACKAGE_NAME) {
-    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but the kit's own release.yml publishes its platform packages, so remove it` });
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")}, but the kit's own release.yml publishes its platform packages, so remove it` });
   }
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
   if (platformPackages !== undefined && isPrivate && workspaces.length > 1) {
-    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets platformPackages, but the private root has more than one public workspace, so publish only one workspace` });
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets ${settingLocation(locations, "platformPackages")}, but the private root has more than one public workspace, so publish only one workspace` });
   }
   const configuredShards = settings["testTierShards"];
-  const testTierShards = configuredShards === undefined ? undefined : yield* decodeSetting("testTierShards", TestTierShards, configuredShards);
-  const flakeCron = yield* decodeSetting("flakeCron", Schema.UndefinedOr(FlakeCron), settings["flakeCron"]);
+  const testTierShards = configuredShards === undefined ? undefined : yield* decodeSetting("testTierShards", TestTierShards, configuredShards, settingLocation(locations, "testTierShards"));
+  const flakeCron = yield* decodeSetting("flakeCron", Schema.UndefinedOr(FlakeCron), settings["flakeCron"], settingLocation(locations, "flakeCron"));
   const configuredExtra = settings["extraTestJobs"];
-  const extraTestJobs = configuredExtra === undefined ? undefined : yield* decodeSetting("extraTestJobs", ExtraTestJobs, configuredExtra);
+  const extraTestJobs = configuredExtra === undefined ? undefined : yield* decodeSetting("extraTestJobs", ExtraTestJobs, configuredExtra, settingLocation(locations, "extraTestJobs"));
   const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, flakeCron, ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined ? {} : { extraTestJobs }) } satisfies CallerInputs;
+  return { settingLocations: locations, publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, flakeCron, ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined ? {} : { extraTestJobs }) } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

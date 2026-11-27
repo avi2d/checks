@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
 import type { TestTier } from "../core/test-script.ts";
-import { SETTINGS_FILE } from "../core/settings.ts";
+import { SETTINGS_FILE, settingPath } from "../core/settings.ts";
 
 const whenSchema = Schema.Literals(["ci", "local"]);
 const platformSchema = Schema.Literals(["darwin", "linux", "win32"]);
@@ -23,7 +23,6 @@ export class SkipDeclarationError extends Schema.TaggedError<SkipDeclarationErro
 }) {}
 
 const TEST_FILES = ["tests/**/*.test.ts", "tests/**/*.test.tsx"] as const;
-const SMOKE = `${SETTINGS_FILE} smoke`;
 const SKIP_HELPER_MODULE = "test-skips.ts";
 
 export function skipReason(_reason: string, label: string, _when?: Environment, _platform?: SkipPlatform): string {
@@ -212,14 +211,14 @@ export type SmokeScope =
   | { readonly kind: "valid"; readonly files: readonly string[] }
   | { readonly kind: "invalid"; readonly message: string };
 
-export function smokeFiles(scanned: readonly string[], smoke: readonly string[]): SmokeScope {
+export function smokeFiles(scanned: readonly string[], smoke: readonly string[], location = settingPath("smoke")): SmokeScope {
   const missing = smoke.filter((file) => !scanned.includes(file));
-  if (missing.length > 0) return { kind: "invalid", message: SMOKE + " names no test file at " + missing.join(", ") };
+  if (missing.length > 0) return { kind: "invalid", message: `${SETTINGS_FILE} ${location}` + " names no test file at " + missing.join(", ") };
   const ignored = smoke.filter((file) => !selectedTierFile(file, undefined));
   if (ignored.length > 0) {
     return {
       kind: "invalid",
-      message: SMOKE + " cannot name a quarantined, live or pixel test at " + ignored.join(", "),
+      message: `${SETTINGS_FILE} ${location}` + " cannot name a quarantined, live or pixel test at " + ignored.join(", "),
     };
   }
   return { kind: "valid", files: unitTierPlus(scanned, smoke) };
@@ -233,8 +232,9 @@ export function unitTierPlus(scanned: readonly string[], extra: readonly string[
 export const readSmokeFiles = Effect.fn("readSmokeFiles")(function* (
   root: string,
   smoke: readonly string[],
+  location = settingPath("smoke"),
 ) {
-  const scoped = smokeFiles(yield* scanTestFiles(root), smoke);
+  const scoped = smokeFiles(yield* scanTestFiles(root), smoke, location);
   if (scoped.kind === "invalid") return yield* new SkipDeclarationError({ message: scoped.message });
   return scoped.files;
 });

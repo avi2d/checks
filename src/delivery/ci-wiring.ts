@@ -310,7 +310,7 @@ const writtenSetOf = Effect.fn("writtenSetOf")(function* (root: string, workflow
   if (workflows.length === 0) return undefined;
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
-    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs, inputs.flakeCron);
+    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets, inputs.platformPackages, inputs.testTierShards, inputs.extraTestJobs, inputs.flakeCron, inputs.settingLocations);
     return { set, kit: inputs.kit };
   }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(undefined))));
 });

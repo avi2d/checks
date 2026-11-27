@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
-import { SETTINGS_FILE, type ExtraTestJob } from "../core/settings.ts";
+import { settingPath, SETTINGS_FILE, type ExtraTestJob } from "../core/settings.ts";
 import { runFaults } from "./plain-steps.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
@@ -59,8 +59,8 @@ export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
 const DEFAULT_TEST_NAMES: readonly string[] = [UNIT, E2E, BROWSER].map(({ name }) => name);
 
 // docs is refused without a docs:build script too, so adding the script later cannot collide with a declared job.
-export function extraTestJobFault(job: ExtraTestJob): string | undefined {
-  const at = `${SETTINGS_FILE} extraTestJobs job ${job.name}`;
+export function extraTestJobFault(job: ExtraTestJob, location = settingPath("extraTestJobs")): string | undefined {
+  const at = `${SETTINGS_FILE} ${location} job ${job.name}`;
   if (isFixed(job.name, true)) return `${at} takes a name the written ci.yml gives its own job, so rename it`;
   if (DEFAULT_TEST_NAMES.includes(job.name)) return `${at} takes the name of a default test job, so rename it`;
   const commands = [...(job.setup ?? []).map((command) => ["setup command", command] as const), ["run", job.run] as const];

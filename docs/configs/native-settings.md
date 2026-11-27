@@ -92,52 +92,57 @@ export default defineConfig({ baseline: "widely", tokens: false });
 
 `checks.config.ts` holds the settings the kit reads that no tool file owns.
 A repository creates `checks.config.ts` only when it declares a setting, and a missing file reads as no settings.
+Publishing, repository visibility, runner labels, and CI jobs belong under `workflows`.
+Local test selection, affected tests, agent policy, timeouts, timings, and exclusions belong under `test`.
+Tracker prefixes belong under `commentGate`, and nested oxlint allowances belong under `lintCoverage`.
+`copy`, `frontendSyntax`, and the browser settings stay at the root.
 Its default export is the result of `defineConfig` from `@avi2dg/checks/config`, and every key is optional:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
 export default defineConfig({
-  smoke: ["tests/e2e/checkout.test.ts"],
+  test: { extraLocalFiles: ["tests/e2e/checkout.test.ts"] },
   copy: { inputs: ["src/content/**/*.md"] },
 });
 ```
 
 <!-- generated settings-keys: bun run build writes it from src/core/settings.ts and scripts/doc-blocks.ts -->
 
-| Key | Default | What it holds | Reader |
-| --- | --- | --- | --- |
-| `repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
-| `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
-| `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
-| `extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
-| `flakeCron` | None | The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
-| `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
-| `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
-| `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
-| `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `browser` | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserRoutes` | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserBuild` | None | The command that builds the site for the browser test-only proof. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserTimings` | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
-| `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
-| `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
-| `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
-| `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |
-| `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
-| `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
-| `testTierShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
-| `testFileTimings` | None | The recorded seconds per test file, which balance the shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
-| `testFileSkips` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
+| Key | Flat key still read | Default | What it holds | Reader |
+| --- | --- | --- | --- | --- |
+| `workflows.repositoryVisibility` | `repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
+| `workflows.releaseAssets` | `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
+| `workflows.platformPackages` | `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
+| `workflows.extraTestJobs` | `extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
+| `workflows.mutationRunsOn` | `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `workflows.selfHostedRunsOn` | `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `workflows.testShards` | `testTierShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
+| `workflows.flakeCron` | `flakeCron` | None | The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
+| `test.extraLocalFiles` | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
+| `test.affected` | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
+| `test.allowAgentRunsOutsideCI` | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
+| `test.fileTimeoutSeconds` | `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
+| `test.fileTimingsSeconds` | `testFileTimings` | None | The recorded seconds per test file, which balance the shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
+| `test.excludeFiles` | `testFileSkips` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
+| `copy` | None | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
+| `frontendSyntax` | None | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `commentGate.trackerKeyPrefixes` | `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
+| `lintCoverage.allowedNestedOxlintRules` | `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
+| `browser` | None | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserRoutes` | None | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserBuild` | None | None | The command that builds the site for the browser test-only proof. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserTimings` | None | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
 
 <!-- end generated settings-keys -->
 
-The build also writes the [JSON Schema](../../dist/checks.schema.json) for the data the config exports.
+The TypeScript config type and the generated [JSON Schema](../../dist/checks.schema.json) both come from the grouped settings.
+The loader also reads the flat keys in the table and prints deprecation notes on standard error.
+Two definitions of one setting fail, even when their values match.
 The kit loads a TypeScript file, not a JSON config.
 
 A key the kit does not know fails the reading gate.
-A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.
+A setting left outside `checks.config.ts` fails its gate with exit 2 and a message naming the key it moves to.
 A `checks` object in `package.json` that sets `smoke`, `reach`, `mutationRunner` or `selfHostedRunners` fails the gate that reads that key with exit 2.
 A root `browser-checks.json`, `copy.json` or `frontend-syntax.json` fails the gate that reads that key with exit 2.
 `advisory-acks.json` stays a file of its own, since [checks-advisories](../gates/checks-advisories.md) reads it at a commit rather than from the working tree.

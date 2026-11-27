@@ -7,7 +7,7 @@ import { ciCores } from "../core/ci-cores.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
-import { decodeSetting, loadSettings, refuseOldPlace, Smoke, TestFileTimings } from "../core/settings.ts";
+import { decodeSetting, loadSettings, refuseOldPlace, settingLocation, Smoke, TestFileTimings, type LoadedSettings } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -313,9 +313,10 @@ function emptySelectionMessage(selection: SuiteSelection): string | undefined {
   return undefined;
 }
 
-const shardingOf = Effect.fn("shardingOf")(function* (shard: Shard | undefined, configured: unknown) {
+const shardingOf = Effect.fn("shardingOf")(function* (shard: Shard | undefined, settings: LoadedSettings) {
   if (shard === undefined) return undefined;
-  const timings = configured === undefined ? {} : yield* decodeSetting("testFileTimings", TestFileTimings, configured);
+  const configured = settings.values["testFileTimings"];
+  const timings = configured === undefined ? {} : yield* decodeSetting("testFileTimings", TestFileTimings, configured, settingLocation(settings.locations, "testFileTimings"));
   return { shard, timings };
 });
 
@@ -334,19 +335,19 @@ const testEntry = Effect.gen(function* () {
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
   const settings = yield* loadSettings(root);
   const policy: RunPolicy = environment === "ci"
-    ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds(settings["testFileMaxSeconds"]) }
+    ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds(settings.values["testFileMaxSeconds"], settingLocation(settings.locations, "testFileMaxSeconds")) }
     : { environment };
-  const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
+  const excluded = yield* readTestFileSkips(root, settings.values["testFileSkips"], settingLocation(settings.locations, "testFileSkips"));
   const selection = yield* entrySelection(run, options, environment);
   const nothingSelected = emptySelectionMessage(selection);
   if (nothingSelected !== undefined) {
     yield* Console.log(`${NAME}: ${nothingSelected}`);
     return true;
   }
-  const configuredSmoke = settings["smoke"];
-  const smoke = selection.kind === "smoke" && configuredSmoke !== undefined ? yield* decodeSetting("smoke", Smoke, configuredSmoke) : [];
-  const sharding = yield* shardingOf(shard, settings["testFileTimings"]);
-  const scope = yield* readSuiteScope(root, selection, smoke, excluded, sharding);
+  const configuredSmoke = settings.values["smoke"];
+  const smoke = selection.kind === "smoke" && configuredSmoke !== undefined ? yield* decodeSetting("smoke", Smoke, configuredSmoke, settingLocation(settings.locations, "smoke")) : [];
+  const sharding = yield* shardingOf(shard, settings);
+  const scope = yield* readSuiteScope(root, selection, smoke, excluded, sharding, settingLocation(settings.locations, "smoke"));
   if (scope.kind === "empty") {
     yield* Console.log(`${NAME}: ${scope.message}`);
     return true;
@@ -386,6 +387,7 @@ const judgeRun = Effect.fn("judgeRun")(function* (
   const xml = yield* fs.readFileString(outfile);
   const { results, crashedFiles } = yield* parseReport(xml);
   const timings = [...(yield* fileSeconds(xml))].filter(([, seconds]) => seconds > 0);
+  yield* Console.log(`${NAME}: record these file times in test.fileTimingsSeconds`);
   yield* Console.log(`${NAME}: testFileTimings ${JSON.stringify(Object.fromEntries(timings))}`);
   for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
   const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));

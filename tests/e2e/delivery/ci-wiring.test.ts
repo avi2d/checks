@@ -147,7 +147,7 @@ test("a private repository names the mutation runner fault on a hand-written fil
   });
   const undeclared = await wiring(repo, privateEvent);
   expect(undeclared.exitCode).toBe(1);
-  expect(undeclared.text).toContain("job mutation-compare: a mutation job in a private repository has no mutationRunner in checks.config.ts");
+  expect(undeclared.text).toContain("job mutation-compare: a mutation job in a private repository has no workflows.mutationRunsOn in checks.config.ts");
   const unknown = await wiring(repo, REPOSITORY);
   expect(unknown.exitCode).toBe(1);
   expect(unknown.text).toContain("1 job(s) run mutation outside the mutation workflow");
@@ -195,7 +195,7 @@ test("runner labels left under package.json checks are refused naming the checks
   });
   await repo.commit("start");
   const refused = await wiring(repo, { ...REPOSITORY, GITHUB_EVENT_PATH: join(repo.dir, "event.json") });
-  expect(refused.text).toContain("package.json checks.selfHostedRunners is no longer read; move it to the selfHostedRunners key of checks.config.ts");
+  expect(refused.text).toContain("package.json checks.selfHostedRunners is no longer read; move it to the workflows.selfHostedRunsOn key of checks.config.ts");
   expect(refused.exitCode).toBe(2);
 }, 30_000);
 

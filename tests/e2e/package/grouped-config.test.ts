@@ -21,7 +21,7 @@ const WORKFLOWS = {
 const { CI: _ci, GITHUB_EVENT_NAME: _event, GITHUB_EVENT_PATH: _eventPath, GITHUB_BASE_REF: _base, AI_AGENT: _agent, CHECKS_AGENT: _checksAgent, ...localEnv } = process.env;
 
 function config(body: string): string {
-  return `import { defineConfig } from "@avi2dg/checks/config";\nconst extra = ["${EXTRA}"];\nexport default defineConfig(${body});\n`;
+  return `const extra = ["${EXTRA}"];\nexport default ${body};\n`;
 }
 
 function fixtureTest(): string {
