@@ -4,6 +4,13 @@ import { FlakeCron } from "../../../src/core/settings.ts";
 
 const decodeFlakeCron = Schema.decodeUnknownOption(FlakeCron);
 
+test("generated schema retains the platform description and binary pattern instead of dropping them", async () => {
+  const schema = await Bun.file(new URL("../../../dist/checks.schema.json", import.meta.url)).json();
+  const properties = schema.properties.workflows.properties.platformPackages.properties;
+  expect(properties.platforms.description).toBe("The platforms to build on and publish a package for.");
+  expect(properties.binary.pattern).toBe("^[a-z0-9][a-z0-9._-]*$");
+});
+
 test.each([
   "*/5 * * * *",
   "* * * * *",

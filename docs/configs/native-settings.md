@@ -17,6 +17,7 @@ Put the browser plan in `checks.browser.config.ts` and shared kit settings in `c
 | `stylelint-suppressions.json` | The existing violations stylelint suppresses, per file and rule | stylelint, `checks-frontend-syntax` and `checks-suppressions-ratchet` |
 | `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-graphwalk` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
+| `.jscpd-baseline.json` | The existing repeated lines, per file, for whole-tree scans | `checks-repetition` |
 | `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip and `checks-graphwalk` |
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
