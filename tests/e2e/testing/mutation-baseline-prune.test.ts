@@ -48,6 +48,19 @@ test("--prune keeps the newest stopped-run state newer than the full baseline an
   );
 }, 30_000);
 
+test("--prune does not remove another branch's full report or stopped state", async () => {
+  const runner = await selfHosted([
+    { ...run(50, "workflow_dispatch", "2026-10-05T00:00:00Z", [fullReport(500, "branch report")]), headBranch: "topic" },
+    { ...run(51, "workflow_dispatch", "2026-10-06T00:00:00Z", [refreshState(510, "branch state")]), headBranch: "topic" },
+    ...PRUNE_RUNS,
+  ]);
+
+  const pruned = await runner.run(["--prune"]);
+
+  expect(pruned.exitCode).toBe(0);
+  expect(deleted(await runner.calls())).toEqual([100, 250, 300]);
+}, 30_000);
+
 test("--prune --dry-run lists what would go and deletes nothing", async () => {
   const runner = await selfHosted(PRUNE_RUNS);
 

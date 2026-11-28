@@ -4,13 +4,13 @@ audience: consumers
 ---
 # checks-mutation-baseline
 
-`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` run.
+`checks-mutation-baseline` restores mutation reports and incremental state, and deletes superseded baselines after a `main` run.
 On a self-hosted runner it keeps each baseline it downloads, so the next job copies it instead.
 There it also saves a run's baseline on the runner's disk, so the baseline never counts against the account's Actions storage.
 
 ## What it checks
 
-It reads the successful runs of `mutation.yml` on `main`.
+By default it reads the successful runs of `mutation.yml` on `main`.
 Without `--full` it takes the 20 newest of those runs that a pull request did not start, newest first, down to the newest push.
 It restores the baseline that run saved on the runner's disk, as [The saved baselines](#the-saved-baselines) says.
 Without one there, it restores that run's `mutation-baseline` artifact.
@@ -30,8 +30,20 @@ With an incremental destination it also copies `stryker-incremental.json` when t
 The refresh in the `mutation.yml` [checks-setup](checks-setup.md) writes passes one, and tests the mutants its state holds no result for, except static ones.
 With an incremental destination, `--full` also looks at the successful runs newer than the one whose full artifact it restored, newest first.
 It takes the first `mutation-refresh-state` artifact among them that downloads and holds `stryker-incremental.json`, and that state replaces the full artifact's, since the full artifact's state is older.
-A run older than the restored full run never supplies one, because that full run superseded it.
+A run on the same branch older than the restored full run never supplies one, because that full run superseded it.
+A stopped state the restore drops as stale replaces nothing, so the state restored before it stays.
 With no full artifact at all, it still restores such a state and no report.
+
+If `CHECKS_MUTATION_BRANCH` names a branch other than `main`, `--full` looks on that branch first.
+If that branch has no full report, it looks for a report on `main`.
+State from the named branch takes priority over state from `main`, even when the report came from `main`.
+If the named branch has neither a full report nor a stopped state it keeps, the restore uses the same state it would use on `main`.
+
+If `CHECKS_MUTATION_RESUME_RUN_ID` names a run, `--full` takes incremental state from that run's `mutation-refresh-state` artifact alone.
+It looks for the report on the selected branch, then on `main`.
+It fails when the named run holds no such state.
+The same rules for dropping stale state apply to a named run.
+
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.
@@ -47,7 +59,8 @@ It creates the directories each destination needs.
 
 With `--prune` it deletes the repository's superseded baselines instead of restoring one.
 It keeps the newest unexpired `mutation-baseline` among the runs the restore reads, and the newest unexpired `mutation-baseline-full` the restore takes first.
-It also keeps the newest unexpired `mutation-refresh-state` among the runs newer than that full artifact's run, and deletes the rest.
+It also keeps the newest unexpired `mutation-refresh-state` among the `main` runs newer than that full artifact's run, and deletes older or superseded refresh artifacts on `main`.
+Full reports and stopped state from other branches expire on their own.
 A run whose baseline the runner's disk holds stops that search, and every older `mutation-baseline` goes, since the restore reads that run's saved baseline first.
 It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names.
 The restore reads only successful runs, so it takes them once that run succeeds.
@@ -66,6 +79,8 @@ The `mutation-baseline-full` artifact holds `mutation.json` and `stryker-increme
 The `mutation-refresh-state` artifact holds `stryker-incremental.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/refresh/` writes when a shard stopped.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
+`--full` reads `CHECKS_MUTATION_BRANCH`, which defaults to `main`, and the optional `CHECKS_MUTATION_RESUME_RUN_ID`.
+The generated mutation workflow sets them from the branch that started it and its `resume-run-id` input.
 When it prunes a restored state it reads the run's head through `gh run view <run> --json headSha`.
 It diffs that head against `HEAD`, so a depth-1 checkout is enough.
 It shows `bunfig.toml` and the files the active Stryker config imports at both revisions.
@@ -139,6 +154,7 @@ checks-mutation-baseline --prune [--dry-run]
 | 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, `--save` runs where it refuses, or `--full` with an incremental destination cannot read the run's head, diff it, or parse the restored state |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
+With a named run ID, `--full` exits `2` if the ID is invalid, it cannot restore state from that run, or it has no incremental destination.
 With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some.
 `2` means the arguments do not parse, or `gh` cannot list the runs, a run's artifacts or the repository's artifacts.
 A failed delete prints a `::warning::` annotation naming the artifact and the `gh` error, moves on, and the summary names the artifacts it could not delete.
@@ -225,7 +241,7 @@ The merge prepares both files before the upload:
 ```
 
 When a shard stops, the merge instead uploads the slimmed incremental state as `mutation-refresh-state`, with no report.
-The next refresh restores that state to resume.
+The next refresh on the same branch restores that state to resume.
 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
 A scope step with a full report loses its coverage when no full baseline outlives the gap.

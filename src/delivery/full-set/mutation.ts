@@ -1,13 +1,25 @@
 import { DEFAULT_MUTATION_SHARD_COUNT } from "../../core/settings.ts";
 import { DOWNLOADED_DIRECTORY, SHARD_DIRECTORY, STATE_PREFIX } from "../ci/mutation/report.ts";
-import { BY_HAND } from "./ci.ts";
 import { checkout, DOWNLOAD, expression, HOSTED, SETUP, TOKEN, UPLOAD, workflowText, type Job, type Step } from "./steps.ts";
 
 const MAX_PARALLEL_SHARDS = 4;
 const SHARD_JOB_MINUTES = 35;
 const INCREMENTAL = "reports/stryker-incremental.json";
 
-const prune: Step = { name: "prune superseded baselines", env: [TOKEN], run: "bunx checks-mutation-baseline --prune" };
+const prune: Step = {
+  if: expression("github.ref == 'refs/heads/main'"),
+  name: "prune superseded baselines",
+  env: [TOKEN],
+  run: "bunx checks-mutation-baseline --prune",
+};
+
+const restoreInputs = [
+  "  inputs:",
+  "    resume-run-id:",
+  "      description: Run ID to restore mutation state from",
+  "      type: string",
+  "      required: false",
+];
 
 const everyShardFinished = "steps.pass.outputs.finished == 'true'";
 const someShardStopped = "steps.pass.outputs.finished == 'false'";
@@ -117,10 +129,14 @@ const REFRESH_JOBS: readonly Job[] = [
 // A whole-tree run calls the refresh as a local reusable workflow, since a job of its own that runs mutation is refused.
 export const mutationWorkflow = (shardCount = DEFAULT_MUTATION_SHARD_COUNT): string => workflowText({
   name: "mutation",
-  on: [...BY_HAND, "workflow_call:"],
+  on: ["workflow_dispatch:", ...restoreInputs, "workflow_call:"],
   concurrency: "mutation-refresh",
   cancelInProgress: false,
-  env: [["RUNNER_ENVIRONMENT", "github-hosted"]],
+  env: [
+    ["RUNNER_ENVIRONMENT", "github-hosted"],
+    ["CHECKS_MUTATION_BRANCH", expression("github.ref_type == 'branch' && github.ref_name || 'main'")],
+    ["CHECKS_MUTATION_RESUME_RUN_ID", expression("inputs.resume-run-id")],
+  ],
   jobs: [refreshPlan(shardCount), ...REFRESH_JOBS],
 });
 

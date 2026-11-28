@@ -45,6 +45,8 @@ When either config cannot load or another setting changes, the config makes the 
 
 `test` refuses a malformed `TEST_SHARD` or one set without `TEST_TIER`.
 
+`mutation shard` retries a lost Bun inspector result only when [the mutation workflow's retry rule](checks-mutation.md#running-it-in-ci) allows it.
+
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 
 ## What it reads

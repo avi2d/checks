@@ -2,6 +2,11 @@ name: mutation
 
 on:
   workflow_dispatch:
+    inputs:
+      resume-run-id:
+        description: Run ID to restore mutation state from
+        type: string
+        required: false
   workflow_call:
 
 concurrency:
@@ -13,6 +18,8 @@ permissions:
 
 env:
   RUNNER_ENVIRONMENT: github-hosted
+  CHECKS_MUTATION_BRANCH: ${{ github.ref_type == 'branch' && github.ref_name || 'main' }}
+  CHECKS_MUTATION_RESUME_RUN_ID: ${{ inputs.resume-run-id }}
 
 jobs:
   refresh-plan:
@@ -121,7 +128,8 @@ jobs:
           path: ${{ runner.temp }}/refresh/
           retention-days: 30
           if-no-files-found: error
-      - name: prune superseded baselines
+      - if: ${{ github.ref == 'refs/heads/main' }}
+        name: prune superseded baselines
         env:
           GH_TOKEN: ${{ github.token }}
         run: bunx checks-mutation-baseline --prune

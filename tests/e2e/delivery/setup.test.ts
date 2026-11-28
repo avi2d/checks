@@ -506,7 +506,7 @@ async () => {
 const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }) });
 const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com", "--production", "shop/shop.example.com");
 expect(run.exitCode).toBe(0);
-expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/mutation.yml"), "utf8"))).toMatchObject({ on: { workflow_dispatch: null, workflow_call: null } });
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/mutation.yml"), "utf8"))).toMatchObject({ on: { workflow_dispatch: { inputs: { "resume-run-id": { type: "string", required: false } } }, workflow_call: null } });
 expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/whole-tree-run.yml"), "utf8"))).toMatchObject({ on: { workflow_dispatch: null } });
 expect(run.text.split("\n").filter((line) => line.includes(".github/workflows/mutation.yml"))).toEqual(["checks-setup: wrote .github/workflows/mutation.yml"]);
 const ci = await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8");
@@ -549,7 +549,7 @@ expect(run.text.split("\n").filter((line) => line.includes(".github/workflows/mu
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
 expect(text).toBe(MUTATION_WORKFLOW);
 expectNoRemoteUses("mutation.yml", text);
-expect(Bun.YAML.parse(text)).toMatchObject({ on: { workflow_dispatch: null, workflow_call: null } });
+expect(Bun.YAML.parse(text)).toMatchObject({ on: { workflow_dispatch: { inputs: { "resume-run-id": { type: "string", required: false } } }, workflow_call: null } });
 },
 60_000,
 );

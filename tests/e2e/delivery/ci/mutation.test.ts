@@ -55,6 +55,47 @@ test.each([0, 124])("a shard must upload newly written same-size state after Str
   ]);
 });
 
+function lostEnd(inspectorPasses: number, extra = ""): string {
+  const message = [
+    `bun's summary counts 4713 passing test(s), but the Bun inspector reported ${inspectorPasses}: test events were lost or merged on the way from bun to the runner`,
+    "1 test(s) started but never reported a result: their TestReporter.end events were lost",
+    extra,
+    'the inspector WebSocket also closed unexpectedly (close code=1006 reason="" wasClean=false, 521ms after the last received frame), which is routine on its own and listed only as context',
+  ].filter((reason) => reason !== "").join("; ");
+  return `printf '%s\\n' "stryker-bun-runner: dry run data-completeness check failed — ${message.replaceAll('"', '\\"')}. Completing this dry run would hand Stryker incomplete data." >&2
+exit 1`;
+}
+
+test("a lost end event with a complete Bun summary retries instead of failing a shard whose second dry run passes", async () => {
+  const ran = await shard(`if [ ! -f attempted ]; then
+  touch attempted
+  ${lostEnd(4712)}
+fi
+mkdir -p reports
+printf '%s\\n' '{"files":{"src/a.ts":{"mutants":[]}}}' > ${STATE}`);
+  expect(ran.exitCode).toBe(0);
+  expect(ran.stderr).toContain("Bun inspector reported 4712");
+  expect(recordedCalls(scratch.at("calls"))).toHaveLength(2);
+  expect(scratch.read(OUTPUT)).toBe(WRITTEN);
+});
+
+test.each([
+  ["a larger disagreement", lostEnd(4711)],
+  ["a coverage disagreement", lostEnd(4712, "coverage keys did not match")],
+] as const)("a shard must not retry %s even if the inspector also closed with 1006", async (_name, diagnostic) => {
+  const ran = await shard(diagnostic);
+  expect(ran.exitCode).toBe(1);
+  expect(recordedCalls(scratch.at("calls"))).toHaveLength(1);
+  expect(existsSync(scratch.at(OUTPUT))).toBe(false);
+});
+
+test("a second lost end event fails the shard instead of accepting incomplete data or retrying again", async () => {
+  const ran = await shard(lostEnd(4712));
+  expect(ran.exitCode).toBe(1);
+  expect(recordedCalls(scratch.at("calls"))).toHaveLength(2);
+  expect(existsSync(scratch.at(OUTPUT))).toBe(false);
+});
+
 test("a first pass must upload new state without a restored input", async () => {
   const ran = await shard(`mkdir -p reports\nprintf '%s\\n' '{"files":{"src/a.ts":{"mutants":[]}}}' > ${STATE}\nexit 0`);
   expect(ran.exitCode).toBe(0);

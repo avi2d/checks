@@ -1,14 +1,13 @@
 import { Config, Console, Data, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { mutatedBy } from "../../../testing/mutation-scope.ts";
-import { commandExit, commandOutput } from "../lib/run.ts";
+import { commandOutput } from "../lib/run.ts";
 import { anyStopped, DOWNLOADED_DIRECTORY, Report, scoreSummary, SHARD_DIRECTORY, shardsOf, STATE_PREFIX, stateName, stoppedName } from "./report.ts";
+import { runShard, STOP_MINUTES } from "./shard-run.ts";
 
 class MutationStepError extends Data.TaggedError("MutationStepError")<{ readonly message: string }> {}
 
 const MERGED_REPORT = "reports/mutation/mutation.json";
 const INCREMENTAL_STATE = "reports/stryker-incremental.json";
-const STRYKER = "node_modules/.bin/stryker";
-const STOP_MINUTES = 30;
 const TIMED_OUT = 124;
 
 const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Report));
@@ -55,7 +54,7 @@ const shard = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const previousModified = (yield* fs.exists(INCREMENTAL_STATE)) ? Option.getOrUndefined((yield* fs.stat(INCREMENTAL_STATE)).mtime)?.getTime() : undefined;
-  const exit = yield* commandExit("timeout", ["-s", "TERM", `${STOP_MINUTES}m`, STRYKER, "run", "--incremental", "--mutate", mutate]);
+  const exit = yield* runShard(mutate);
   const stopped = exit === TIMED_OUT;
   if (exit !== 0 && !stopped) return yield* new MutationStepError({ message: `stryker exited ${exit}` });
   const modified = (yield* fs.exists(INCREMENTAL_STATE)) ? Option.getOrUndefined((yield* fs.stat(INCREMENTAL_STATE)).mtime)?.getTime() : undefined;

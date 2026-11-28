@@ -93,7 +93,9 @@ An `--incremental` run with no report stops before instrumenting with the missin
 ## When it runs
 
 A repository runs mutation through the `mutation` workflow that [checks-setup](checks-setup.md) writes.
-A manual start with `gh workflow run mutation` starts the refresh.
+A manual start with `gh workflow run mutation` starts the refresh on the default branch.
+To refresh another branch, pass `--ref <branch>`.
+To restore state from a named run instead, pass `-f resume-run-id=<run-id>`.
 No push to `main` starts a run.
 Run scoped checks locally during development.
 
@@ -104,14 +106,20 @@ A refresh restores the previous full report and its incremental state with `--fu
 To change that limit, set `workflows.mutationShardCount` in `checks.config.ts` to an integer from 1 to 256, such as `workflows: { mutationShardCount: 4 }`.
 Run `checks-workflows --write` to apply the setting to `mutation.yml`.
 It runs each shard with static mutants ignored, at most 4 shards at a time.
+A shard retries once within the same timeout when the inspector lost exactly one end event and Bun's summary counts one extra pass.
+The inspector WebSocket must also have closed with code 1006.
+The retry must pass the dry-run data-completeness check of `@hughescr/stryker-bun-runner`, which covers test results and coverage.
+The first attempt's incomplete results are never scored.
+Other mismatches still fail the shard.
 A failing shard does not cancel the other shards, but the merge job does not run.
 A shard stops itself after 30 minutes and hands on the incremental state it has, so no shard reaches the 35-minute job timeout.
 When a shard stopped, the merge uploads the merged state as a `mutation-refresh-state` artifact and publishes no report.
-The next start of the workflow restores that state in place of the older full state and runs only the mutants it lacks.
+The next start on the same branch restores that state in place of the older full state and runs only the mutants it lacks.
 When every shard finished, the merge posts the score in its summary and uploads the slimmed report as a fresh `mutation-baseline-full` artifact.
 It starts by hand every 28 days, and again after each run that stopped a shard.
 [checks-mutation-scope](checks-mutation-scope.md) reads the full report to bring in the sources a changed unit test covers or kills.
-The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
+Automatic restore reads only successful runs of `mutation.yml`, so a sweep that fails publishes nothing a scope step reads.
+The refresh looks for saved state on its own branch first, as [checks-mutation-baseline](checks-mutation-baseline.md) describes.
 
 The refresh jobs run on `ubuntu-latest`.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON` in `runs-on`.
