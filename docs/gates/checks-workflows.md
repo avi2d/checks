@@ -98,6 +98,7 @@ Replace a job that calls another repository's workflow with its own steps by han
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
 A code repository may hold `advisories.yml`, `flake.yml` and `docs.yml`.
+When `workflows.flakeCron` is set, `flake.yml` is required.
 The kit may also hold `mutation.yml`, which starts on `workflow_dispatch` or `workflow_call` and keeps the full mutation refresh.
 Each optional file keeps what the file it replaces does:
 
