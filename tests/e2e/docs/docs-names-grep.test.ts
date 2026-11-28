@@ -21,7 +21,7 @@ async function fixedStringLines(dir: string, names: readonly string[]): Promise<
   return (await $`git grep -I -F -h --no-color -f - HEAD -- ${OUTSIDE_DOCS} < ${listed}`.cwd(dir).nothrow().quiet()).stdout.toString();
 }
 
-const hasPcre = (await $`git grep --no-index -P -q -e . -- ${import.meta.path}`.nothrow().quiet()).exitCode === 0;
+const gitLacksPcre = (await $`git grep --no-index -P -q -e . -- ${import.meta.path}`.nothrow().quiet()).exitCode !== 0;
 
 async function escapedNamesSelectLiteralLines(syntax: Syntax): Promise<void> {
   const { dir, write, commit } = await repository();
@@ -36,7 +36,7 @@ async function escapedNamesSelectLiteralLines(syntax: Syntax): Promise<void> {
   expect(lines).toBe(fixed);
 }
 
-test.skipIf(!hasPcre)(skipReason("git is built without PCRE", "with -P, the escaped names select the lines -F selects, and no name matches as a pattern", "local"), () => escapedNamesSelectLiteralLines("-P"));
+test.skipIf(gitLacksPcre)(skipReason("git is built without PCRE", "with -P, the escaped names select the lines -F selects, and no name matches as a pattern", "local"), () => escapedNamesSelectLiteralLines("-P"));
 
 test("with -E, the escaped names select the lines -F selects, and no name matches as a pattern", () => escapedNamesSelectLiteralLines("-E"));
 
@@ -60,6 +60,6 @@ async function splitPatternsFindEveryHeldName(syntax: Syntax): Promise<void> {
   expect(names.filter((name) => found.includes(name))).toEqual(held);
 }
 
-test.skipIf(!hasPcre)(skipReason("git is built without PCRE", "names past what one PCRE pattern compiles split into alternations git accepts, and every held name is still found", "local"), () => splitPatternsFindEveryHeldName("-P"));
+test.skipIf(gitLacksPcre)(skipReason("git is built without PCRE", "names past what one PCRE pattern compiles split into alternations git accepts, and every held name is still found", "local"), () => splitPatternsFindEveryHeldName("-P"));
 
 test("with -E, split alternations find every held name without refusing a pattern", () => splitPatternsFindEveryHeldName("-E"));
