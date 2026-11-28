@@ -80,6 +80,41 @@ test.each([undefined, "23 5 * * 1"])("flake job verifies Nix before running the 
   expect(await file.text()).toBe(baseline);
 });
 
+test("whole-tree test job sets up Nix on opt-in, mutation.yml gets none, and opt-out bytes stay unchanged", async () => {
+  const config = (setupNix?: boolean) => "export default " + JSON.stringify({ workflows: { repositoryVisibility: "private", setupNix } }) + ";\n";
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
+    "checks.config.ts": config(),
+  });
+  const written = await repo.script(WORKFLOWS, "--write");
+  expect(written.exitCode, written.text).toBe(0);
+  const wholeTree = Bun.file(join(repo.dir, ".github", "workflows", "whole-tree-run.yml"));
+  const mutation = Bun.file(join(repo.dir, ".github", "workflows", "mutation.yml"));
+  const baseline = await wholeTree.text();
+  const mutationBaseline = await mutation.text();
+  const run = { run: "bunx checks-ci whole-tree tests" };
+  expect(await stepsOf(repo, "whole-tree-run.yml", "tests")).toContainEqual(run);
+  expect(baseline).not.toContain("install-nix-action");
+
+  await repo.write({ "checks.config.ts": config(true) });
+  const stale = await repo.script(WORKFLOWS);
+  expect(stale.exitCode, stale.text).toBe(1);
+  const rewritten = await repo.script(WORKFLOWS, "--write");
+  expect(rewritten.exitCode, rewritten.text).toBe(0);
+  const steps = await stepsOf(repo, "whole-tree-run.yml", "tests");
+  const installIndex = steps?.findIndex((step) => Bun.deepEquals(step, install)) ?? -1;
+  expect(installIndex).toBeGreaterThanOrEqual(0);
+  expect(steps?.slice(installIndex, installIndex + 3)).toEqual([install, verify, run]);
+  expect(await mutation.text()).toBe(mutationBaseline);
+  const accepted = await repo.script(WORKFLOWS);
+  expect(accepted.exitCode, accepted.text).toBe(0);
+
+  await repo.write({ "checks.config.ts": config(false) });
+  const disabled = await repo.script(WORKFLOWS, "--write");
+  expect(disabled.exitCode, disabled.text).toBe(0);
+  expect(await wholeTree.text()).toBe(baseline);
+});
+
 test.each([false, true])("site Nix opt-in is refused before writes when site names are held: %j", async (held) => {
   const flags = ["--pages", "acme", "--domain", "acme.example", "--production", "acme/acme.example"];
   const repo = await open({

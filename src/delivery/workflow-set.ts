@@ -1,6 +1,6 @@
 import { PLAYWRIGHT_USES, runnerOf } from "./ci-jobs.ts";
 import wholeTreeRun from "./full-set/whole-tree-run.txt";
-import { CHECKOUT, DOWNLOAD, UPLOAD } from "./full-set/steps.ts";
+import { CHECKOUT, DOWNLOAD, UPLOAD, nixSetup, stepLines } from "./full-set/steps.ts";
 import { fullAdvisories, fullDocs, fullFlake, fullRequiredSet } from "./full-set.ts";
 import { mutationWorkflow } from "./full-set/mutation.ts";
 import type { CallerSet } from "./site-names.ts";
@@ -37,12 +37,14 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
   if (kit) return required;
   const browsers = [...new Set([...(set.kind === "site" ? ["chromium", "webkit"] : []), ...set.ci.tests.flatMap((job) => job.browsers.split(/\s+/).filter(Boolean))])].join(" ");
   const playwright = browsers === "" ? "" : `      - uses: ${PLAYWRIGHT_USES}\n        with:\n          browsers: ${browsers}\n`;
+  const nix = nixSetup(set.options.setupNix).flatMap((step) => stepLines(step, "      ")).join("\n");
   const text = wholeTreeRun
     .replaceAll("__RUNNER__", runnerOf(set.options.publicRepository))
     .replaceAll("__CHECKOUT__", CHECKOUT)
     .replaceAll("__UPLOAD__", UPLOAD)
     .replaceAll("__DOWNLOAD__", DOWNLOAD)
-    .replace("__PLAYWRIGHT__\n", playwright);
+    .replace("__PLAYWRIGHT__\n", playwright)
+    .replace("__NIX__\n", nix === "" ? "" : nix + "\n");
   return [...required, mutationFile(set), { name: "whole-tree-run.yml", text }];
 }
 

@@ -7,7 +7,7 @@ import { calledFileOf, workflowJobs, type Workflow } from "./workflow-references
 export const RELEASE_ASSETS_SCRIPT = "release:assets";
 export const RELEASE_ASSETS_DIRECTORY = "release-assets";
 
-export type Flake = { readonly nodeVersionFile: string | undefined };
+type Flake = { readonly nodeVersionFile: string | undefined };
 
 export type CallerOptions = {
   readonly advisoriesCron: string | undefined;

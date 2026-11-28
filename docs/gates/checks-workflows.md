@@ -136,11 +136,13 @@ The setting adds two steps before the tests in these jobs:
 - The `unit` and `e2e` jobs of `ci.yml`.
 - The `suite` job of `main.yml`.
 - The `flake` job of `flake.yml`, whether it starts by hand or on a schedule.
+- The `tests` job of `whole-tree-run.yml`, in a repository that is not the kit.
 
 The first step uses a pinned `cachix/install-nix-action` on GitHub-hosted runners.
 The second step runs `nix --version` on every runner.
 On a self-hosted runner, make `nix` available on `PATH` before the job starts.
 The setting changes no runner and adds no job.
+`mutation.yml` gets neither step, so a test that needs Nix fails in the mutation run.
 The default is `false`, which adds neither step.
 
 ### Flake schedule
