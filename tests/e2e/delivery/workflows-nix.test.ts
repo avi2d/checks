@@ -150,3 +150,26 @@ test.each([false, true])("site Nix opt-in is refused before writes when site nam
     expect(await ci.exists()).toBe(false);
   }
 });
+
+test.each([undefined, "public"])("public repository Nix opt-in with visibility %j is refused before writes instead of writing a check hosted runners fail", async (repositoryVisibility) => {
+  const config = (setupNix: boolean) => "export default " + JSON.stringify({ workflows: { repositoryVisibility, setupNix } }) + ";\n";
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
+    "tests/e2e/one.test.ts": "export {};\n",
+    "checks.config.ts": config(false),
+  });
+  const written = await repo.script(WORKFLOWS, "--write");
+  expect(written.exitCode, written.text).toBe(0);
+  const ci = Bun.file(join(repo.dir, ".github", "workflows", "ci.yml"));
+  const baseline = await ci.text();
+  await repo.write({ "checks.config.ts": config(true) });
+  for (const command of [WORKFLOWS, "delivery/setup.ts"]) {
+    const result = await repo.script(command, ...(command === WORKFLOWS ? ["--write"] : []));
+    expect(result.exitCode, result.text).toBe(2);
+    expect(result.text).toContain("workflows.setupNix in a public repository");
+  }
+  const checked = await repo.script(WORKFLOWS);
+  expect(checked.exitCode, checked.text).toBe(1);
+  expect(checked.text).toContain("workflows.setupNix in a public repository");
+  expect(await ci.text()).toBe(baseline);
+});

@@ -148,6 +148,7 @@ function platformPackagesFault(site: boolean, publicRepository: boolean, publish
 function workflowOptionFault(site: boolean, options: Pick<CallerOptions, "setupNix" | "flakeCron" | "releaseAssets" | "platformPackages" | "publicRepository" | "publishes" | "publishWorkspaces">, locations: SettingLocations): string | undefined {
   if (site && options.flakeCron !== undefined) return `${SETTINGS_FILE} sets ${settingLocation(locations, "flakeCron")}, but a site does not have a flake.yml, so remove it`;
   if (site && options.setupNix) return `${SETTINGS_FILE} sets ${settingLocation(locations, "setupNix")}, but a site does not support Nix setup, so remove it`;
+  if (options.setupNix && options.publicRepository) return `${SETTINGS_FILE} sets ${settingLocation(locations, "setupNix")} in a public repository, where ci.yml and whole-tree-run.yml run tests on GitHub-hosted runners without Nix, so remove it`;
   const assetsFault = options.releaseAssets ? releaseAssetsFault(site, options.publicRepository, locations) : undefined;
   return assetsFault ?? (options.platformPackages === undefined ? undefined : platformPackagesFault(site, options.publicRepository, options.publishes, options.publishWorkspaces, locations));
 }
