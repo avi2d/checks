@@ -34,7 +34,7 @@ const ShardCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isL
 export const TestTierShards = Schema.Struct({ unit: Schema.optionalKey(ShardCount), e2e: Schema.optionalKey(ShardCount) });
 export type TestTierShards = typeof TestTierShards.Type;
 
-export const TrackerKeyPrefixes = Schema.Array(Schema.String.check(Schema.isPattern(/^[A-Z][A-Z0-9]*$/)));
+export const TrackerKeyPrefixes = Schema.Array(Schema.String.check(Schema.isPattern(/^[A-Z][A-Z0-9]*$/u)));
 
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
@@ -72,7 +72,7 @@ const FLAKE_CRON_ANNOTATIONS = {
 };
 
 export const FlakeCron = Schema.String.annotate(FLAKE_CRON_ANNOTATIONS).check(
-  Schema.isPattern(/^[0-5]?[0-9][ \t]+(?:[01]?[0-9]|2[0-3])(?:[ \t]+[^\s]+){3}$/, { message: "must be a five-field cron expression that runs at most once a day, with one minute from 0 to 59 and one hour from 0 to 23, such as 23 5 * * 1" }),
+  Schema.isPattern(/^[0-5]?[0-9][ \t]+(?:[01]?[0-9]|2[0-3])(?:[ \t]+[^\s]+){3}$/u, { message: "must be a five-field cron expression that runs at most once a day, with one minute from 0 to 59 and one hour from 0 to 23, such as 23 5 * * 1" }),
   Schema.makeFilter((cron) => {
     const fields = cron.split(/[ \t]+/);
     const invalid = cronFields.find((field, index) => !validCronField(fields[index + 2] ?? "", field));
@@ -97,16 +97,16 @@ export const PlatformPackages = Schema.Struct({
 
 export type PlatformPackages = typeof PlatformPackages.Type;
 
-const Command = Schema.String.check(Schema.isPattern(/^[^\r\n]*\S[^\r\n]*$/, { message: "is not one line holding a command" }));
+const Command = Schema.String.check(Schema.isPattern(/^[^\r\n]*\S[^\r\n]*$/u, { message: "is not one line holding a command" }));
 
 export const ExtraTestJob = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_-]*$/, { message: "is not a job id, such as sandbox" })).annotate({
+  name: Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_-]*$/u, { message: "is not a job id, such as sandbox" })).annotate({
     description: "The id of the job in ci.yml, which the checks job requires.",
   }),
   env: Schema.optionalKey(
     Schema.Record(
-      Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_]*$/, { message: "is not an environment variable name, such as SANDBOX_TESTS" })),
-      Schema.String.check(Schema.isPattern(/^[^\r\n]*$/, { message: "is not one line" })),
+      Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_]*$/u, { message: "is not an environment variable name, such as SANDBOX_TESTS" })),
+      Schema.String.check(Schema.isPattern(/^[^\r\n]*$/u, { message: "is not one line" })),
     ).annotate({ description: "The environment variables the job sets for its setup and test commands." }),
   ),
   setup: Schema.optionalKey(Schema.Array(Command).annotate({ description: "The commands the job runs, one step each, before the test command, such as one that installs a tool." })),
