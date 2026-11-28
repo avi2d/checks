@@ -7,7 +7,7 @@ import { calledFileOf, workflowJobs, type Workflow } from "./workflow-references
 export const RELEASE_ASSETS_SCRIPT = "release:assets";
 export const RELEASE_ASSETS_DIRECTORY = "release-assets";
 
-export type Flake = { readonly nodeVersionFile: string | undefined };
+type Flake = { readonly nodeVersionFile: string | undefined };
 
 export type CallerOptions = {
   readonly advisoriesCron: string | undefined;
@@ -25,6 +25,7 @@ export type CallerOptions = {
   readonly releaseVersionInput: boolean;
   readonly releaseAssets: boolean;
   readonly platformPackages: PlatformPackages | undefined;
+  readonly setupNix: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -43,6 +44,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   releaseVersionInput: false,
   releaseAssets: false,
   platformPackages: undefined,
+  setupNix: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -167,7 +169,7 @@ const decodeVersionInput = Schema.decodeUnknownOption(
 
 const holdsVersionInput = (release: Workflow | undefined): boolean => release !== undefined && Option.isSome(decodeVersionInput(release.document));
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean, platformPackages: PlatformPackages | undefined, flakeCron?: string): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean, platformPackages: PlatformPackages | undefined, flakeCron?: string, setupNix = false): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
@@ -184,5 +186,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     releaseVersionInput: holdsVersionInput(held("release.yml")),
     releaseAssets,
     platformPackages,
+    setupNix,
   };
 }

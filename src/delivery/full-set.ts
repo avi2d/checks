@@ -3,9 +3,9 @@ import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import type { PlatformPackages } from "../core/settings.ts";
 import { HOSTED_PLATFORMS, PLATFORM_BINARIES_ENV } from "./platform-packages.ts";
 import { type CallerSet } from "./site-names.ts";
-import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
+import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall, nixVersionCheck } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow, gitleaksCache } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 import { PR_TEXT } from "./full-set/pr-text.ts";
@@ -124,7 +124,7 @@ const releaseGate = (suite: boolean, packaged: boolean): Pick<Job, "needs" | "if
 };
 
 // A full-test run gates the publish, so the release job waits for it and still runs when the commit is no release commit and it skips.
-function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, platformPackages }: CallerOptions): Workflow {
+function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, platformPackages, setupNix }: CallerOptions): Workflow {
   const suite = fullTest || checkRelease || publishWorkspaces;
   const packaged = platformPackages !== undefined;
   return {
@@ -139,7 +139,14 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, pl
               runsOn: RUNNER,
               timeout: 45,
               permissions: ["contents: read"],
-              steps: [checkout({ history: true }), SETUP, gitleaksCache(false), { run: "bunx checks-ci gitleaks" }, { name: "run the full test suite on the release commit", run: "bun run test --full" }],
+              steps: [
+                checkout({ history: true }),
+                SETUP,
+                gitleaksCache(false),
+                { run: "bunx checks-ci gitleaks" },
+                ...nixVersionCheck(setupNix),
+                { name: "run the full test suite on the release commit", run: "bun run test --full" },
+              ],
             },
           ]
         : []),
@@ -235,10 +242,10 @@ export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
     ],
   });
 
-export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined, cron?: string): FullWorkflow =>
+export const fullFlake = ({ flake: { nodeVersionFile }, claudeVersion, flakeCron, setupNix }: Pick<CallerOptions, "flake" | "claudeVersion" | "flakeCron" | "setupNix">): FullWorkflow =>
   fileOf({
     name: "flake",
-    on: dispatchAndSchedule(cron),
+    on: dispatchAndSchedule(flakeCron),
     jobs: [
       {
         id: "flake",
@@ -250,6 +257,7 @@ export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | un
           SETUP,
           ...(nodeVersionFile === undefined ? [] : [{ uses: SETUP_NODE, with: [["node-version-file", nodeVersionFile]] } satisfies Step]),
           ...claudeInstall(claudeVersion),
+          ...nixVersionCheck(setupNix),
           { run: "bunx checks-flake --runs 10 --report flake-report.json" },
           { ...keepArtifacts("flake-report", "flake-report.json"), with: [["name", "flake-report"], ["path", "flake-report.json"], ["retention-days", "7"], ["if-no-files-found", "ignore"]] },
         ],

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Option, Schema } from "effect";
-import { FlakeCron } from "../../../src/core/settings.ts";
+import { FlakeCron } from "../../../src/core/cron-fields.ts";
 
 const decodeFlakeCron = Schema.decodeUnknownOption(FlakeCron);
 

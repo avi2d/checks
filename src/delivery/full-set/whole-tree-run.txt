@@ -18,6 +18,7 @@ jobs:
       - uses: __CHECKOUT__
       - uses: ./.github/actions/setup
 __PLAYWRIGHT__
+__NIX__
       - run: bunx checks-ci whole-tree tests
       - uses: __UPLOAD__
         with:

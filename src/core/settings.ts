@@ -1,6 +1,6 @@
 import { Console, Effect, FileSystem, Path, Schema, Struct } from "effect";
 import { browserSettingDestination, LegacyBrowserFields } from "./browser-settings.ts";
-import { cronFields, validCronField } from "./cron-fields.ts";
+import { FlakeCron } from "./cron-fields.ts";
 import { Usage } from "./main.ts";
 
 export const SETTINGS_FILE = "checks.config.ts";
@@ -58,19 +58,6 @@ export const NestedOxlintConfigs = Schema.Record(Schema.NonEmptyString, Schema.N
 export const RepositoryVisibility = Schema.Literals(["public", "private"]);
 
 export const ReleaseAssets = Schema.Boolean;
-
-const FLAKE_CRON_ANNOTATIONS = {
-  description: "The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour.",
-};
-
-export const FlakeCron = Schema.String.annotate(FLAKE_CRON_ANNOTATIONS).check(
-  Schema.isPattern(/^[0-5]?[0-9][ \t]+(?:[01]?[0-9]|2[0-3])(?:[ \t]+[^\s]+){3}$/u, { message: "must be a five-field cron expression that runs at most once a day, with one minute from 0 to 59 and one hour from 0 to 23, such as 23 5 * * 1" }),
-  Schema.makeFilter((cron) => {
-    const fields = cron.split(/[ \t]+/);
-    const invalid = cronFields.find((field, index) => !validCronField(fields[index + 2] ?? "", field));
-    return invalid === undefined || `has an invalid ${invalid.name} field`;
-  }, FLAKE_CRON_ANNOTATIONS),
-);
 
 const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
 
@@ -157,11 +144,18 @@ const LegacySettings = Schema.Struct({
 
 const legacy = LegacySettings.fields;
 
-export type SettingKey = keyof typeof legacy;
+export const SetupNix = Schema.Boolean.annotate({
+  description: "Whether unit, e2e, release suite, flake, and whole-tree test jobs in private code repositories run nix --version before tests. The jobs do not install Nix.",
+  default: false,
+});
+
+const workflowOnly = { setupNix: Schema.optionalKey(SetupNix) };
+
+export type SettingKey = keyof typeof legacy | keyof typeof workflowOnly;
 
 const groupedSources = { ...legacy, agentTests: Schema.optionalKey(AllowAgentRunsOutsideCI) };
 
-function moved<const Key extends SettingKey>(legacyKey: Key) {
+function moved<const Key extends keyof typeof legacy>(legacyKey: Key) {
   return { legacyKey, schema: groupedSources[legacyKey] };
 }
 
@@ -207,8 +201,13 @@ export const TRANSITION_KEYS = {
   lintCoverage: legacyKeys(MOVES.lintCoverage),
 };
 
+export const GROUPED_KEYS = {
+  ...TRANSITION_KEYS,
+  workflows: { ...TRANSITION_KEYS.workflows, ...Object.fromEntries(Struct.keys(workflowOnly).map((key) => [key, key] as const)) },
+};
+
 export const GroupedSettings = {
-  workflows: Schema.Struct(Struct.map(schemaOf)(MOVES.workflows)),
+  workflows: Schema.Struct({ ...Struct.map(schemaOf)(MOVES.workflows), ...workflowOnly }),
   test: Schema.Struct(Struct.map(schemaOf)(MOVES.test)),
   commentGate: Schema.Struct(Struct.map(schemaOf)(MOVES.commentGate)),
   lintCoverage: Schema.Struct(Struct.map(schemaOf)(MOVES.lintCoverage)),
@@ -234,7 +233,7 @@ export type LoadedSettings = {
 };
 
 export function settingPath(key: SettingKey): string {
-  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) {
+  for (const [section, keys] of Object.entries(GROUPED_KEYS)) {
     for (const [member, legacyKey] of Object.entries(keys)) {
       if (key === legacyKey) return `${section}.${member}`;
     }
@@ -344,7 +343,7 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string, s
   yield* refuseUnknownSettings(SETTINGS_FILE, settings, SETTING_KEYS, Object.keys(Settings.fields));
   const normalized = { ...settings };
   const locations: Partial<Record<SettingKey, string>> = {};
-  for (const [section, keys] of Object.entries(TRANSITION_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
+  for (const [section, keys] of Object.entries(GROUPED_KEYS)) yield* normalizeSection(normalized, locations, section, keys);
   for (const key of flatKeysPresent(settings)) {
     if (key === "agentTests" && (settings[key] === undefined || !Object.hasOwn(yield* decodeSetting(key, AgentTests, settings[key], key), "allowLocal"))) continue;
     locations[key] ??= key;

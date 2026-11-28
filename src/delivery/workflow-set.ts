@@ -1,6 +1,6 @@
 import { PLAYWRIGHT_USES, runnerOf } from "./ci-jobs.ts";
 import wholeTreeRun from "./full-set/whole-tree-run.txt";
-import { CHECKOUT, DOWNLOAD, UPLOAD } from "./full-set/steps.ts";
+import { CHECKOUT, DOWNLOAD, UPLOAD, nixVersionCheck, stepLines } from "./full-set/steps.ts";
 import { fullAdvisories, fullDocs, fullFlake, fullRequiredSet } from "./full-set.ts";
 import { mutationWorkflow } from "./full-set/mutation.ts";
 import type { CallerSet } from "./site-names.ts";
@@ -27,8 +27,8 @@ type DifferentLine = { readonly line: number; readonly holds: string | undefined
 
 const mutationFile = (set: Pick<CallerSet, "mutationShardCount">): WorkflowFile => ({ name: "mutation.yml", text: mutationWorkflow(set.mutationShardCount) });
 
-export function scheduledFlakeOf({ kind, options: { flake, claudeVersion, flakeCron } }: CallerSet): WorkflowFile | undefined {
-  return kind === "code" && flakeCron !== undefined ? fullFlake(flake, claudeVersion, flakeCron) : undefined;
+export function scheduledFlakeOf({ kind, options }: CallerSet): WorkflowFile | undefined {
+  return kind === "code" && options.flakeCron !== undefined ? fullFlake(options) : undefined;
 }
 
 export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
@@ -37,21 +37,23 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
   if (kit) return required;
   const browsers = [...new Set([...(set.kind === "site" ? ["chromium", "webkit"] : []), ...set.ci.tests.flatMap((job) => job.browsers.split(/\s+/).filter(Boolean))])].join(" ");
   const playwright = browsers === "" ? "" : `      - uses: ${PLAYWRIGHT_USES}\n        with:\n          browsers: ${browsers}\n`;
+  const nix = nixVersionCheck(set.options.setupNix).flatMap((step) => stepLines(step, "      ")).join("\n");
   const text = wholeTreeRun
     .replaceAll("__RUNNER__", runnerOf(set.options.publicRepository))
     .replaceAll("__CHECKOUT__", CHECKOUT)
     .replaceAll("__UPLOAD__", UPLOAD)
     .replaceAll("__DOWNLOAD__", DOWNLOAD)
-    .replace("__PLAYWRIGHT__\n", playwright);
+    .replace("__PLAYWRIGHT__\n", playwright)
+    .replace("__NIX__\n", nix === "" ? "" : nix + "\n");
   return [...required, mutationFile(set), { name: "whole-tree-run.yml", text }];
 }
 
 // An optional file may be absent, but a present one holds exactly this text.
 export function byHandSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
-  const { advisoriesCron, flake, flakeCron, pages } = set.options;
+  const { advisoriesCron, flakeCron, pages } = set.options;
   const docs = pages === undefined ? [] : [fullDocs(pages)];
   const advisories = fullAdvisories(advisoriesCron);
-  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [mutationFile(set)] : []), ...(flakeCron === undefined ? [fullFlake(flake, set.options.claudeVersion)] : []), ...docs];
+  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [mutationFile(set)] : []), ...(flakeCron === undefined ? [fullFlake(set.options)] : []), ...docs];
 }
 
 export function differentLines(holds: string, writes: string): readonly DifferentLine[] {

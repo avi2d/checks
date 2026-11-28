@@ -23,6 +23,8 @@ export type StepHead = {
 
 export type Step = StepHead & ({ readonly uses: string; readonly with?: readonly Pair[] } | { readonly run: string; readonly env?: readonly Pair[]; readonly shell?: "bash" });
 
+export const nixVersionCheck = (enabled: boolean): readonly Step[] => enabled ? [{ run: "nix --version" }] : [];
+
 export type Job = {
   readonly id: string;
   readonly needs?: string;
