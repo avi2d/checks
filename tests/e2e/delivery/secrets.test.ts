@@ -5,7 +5,6 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, withOwnInstall, type FixtureRepo } from "../lib/fixture-repo.ts";
-import { hex } from "../lib/spread-hex.ts";
 
 const open = fixtureRepos("checks-secrets-");
 const scratch = scratchDirs();
@@ -14,6 +13,7 @@ const SCAN_MS = 120_000;
 
 // Each secret is assembled at run time, so the kit's own scan finds none in this file.
 const base64Key = () => randomBytes(32).toString("base64");
+const hex = (bytes: number) => randomBytes(bytes).toString("hex");
 const alphanumeric = (length: number) => randomBytes(length * 2).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, length);
 const link = (scheme: string, rest: string) => `${scheme}://${rest}`;
 const withPadding = (text: string) => Buffer.from(text + " ".repeat((4 - (text.length % 3)) % 3)).toString("base64");
