@@ -121,12 +121,12 @@ test.each([false, true])("site Nix opt-in is refused before writes when site nam
     "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
     "checks.config.ts": 'export default { workflows: { setupNix: false } };\n',
   });
+  const ci = Bun.file(join(repo.dir, ".github", "workflows", "ci.yml"));
   if (held) {
     const written = await repo.script(WORKFLOWS, "--write", ...flags);
     expect(written.exitCode, written.text).toBe(0);
   }
-  const ci = Bun.file(join(repo.dir, ".github", "workflows", "ci.yml"));
-  const baseline = await ci.exists() ? await ci.text() : undefined;
+  const baseline = held ? await ci.text() : undefined;
   await repo.write({ "checks.config.ts": 'export default { workflows: { setupNix: true } };\n' });
   const names = held ? [] : flags;
   for (const command of [WORKFLOWS, "delivery/setup.ts"]) {
@@ -139,6 +139,9 @@ test.each([false, true])("site Nix opt-in is refused before writes when site nam
     const result = await repo.script(WORKFLOWS);
     expect(result.exitCode, result.text).toBe(1);
     expect(result.text).toContain("a site does not support Nix setup");
+    if (baseline === undefined) {
+      throw new Error("the held run wrote no ci.yml baseline");
+    }
     expect(await ci.text()).toBe(baseline);
   } else {
     expect(await ci.exists()).toBe(false);
