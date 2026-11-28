@@ -1,10 +1,10 @@
 import { Effect, Schema } from "effect";
 import type { LegacyBrowserFields } from "../src/core/browser-settings.ts";
-import { browserConfigRows, browserStarterLines } from "./browser-doc-rows.ts";
+import { browserConfigRows, browserStarterLines, migrationBrowserRows } from "./browser-doc-rows.ts";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
+import { flatSettingPath, GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
@@ -248,8 +248,7 @@ function settingRow(path: string, key: DocumentedKey, schema: Schema.Top): Effec
   const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
   const description = annotations?.description;
   if (description === undefined) return Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no description for ${path}` }));
-  const old = path === key ? "None" : code(key === "agentTests" ? "agentTests.allowLocal" : key);
-  return Effect.succeed(`| ${code(path)} | ${old} | ${fallback} | ${description} | ${SETTING_READERS[key]} |`);
+  return Effect.succeed(`| ${code(path)} | ${fallback} | ${description} | ${SETTING_READERS[key]} |`);
 }
 
 const SETTINGS: Block = {
@@ -268,8 +267,21 @@ const SETTINGS: Block = {
             : settingRow(`${section}.${key}`, legacyKey, field);
         });
       })),
-      (rows) => ["| Key | Flat key still read | Default | What it holds | Reader |", "| --- | --- | --- | --- | --- |", ...rows] as const,
+      (rows) => ["| Key | Default | What it holds | Reader |", "| --- | --- | --- | --- |", ...rows] as const,
     ),
+};
+
+const CONFIG_MIGRATION: Block = {
+  name: "config-migration-keys",
+  from: ["src/core/settings.ts", "src/core/browser-settings.ts", "scripts/browser-doc-rows.ts"],
+  render: () => Effect.succeed([
+    "| Flat key in `checks.config.ts` | Where it goes |",
+    "| --- | --- |",
+    ...Object.entries(TRANSITION_KEYS).flatMap(([section, keys]) =>
+      Object.entries(keys).map(([key, old]) => `| ${code(flatSettingPath(old))} | ${code(`${section}.${key}`)} |`),
+    ),
+    ...migrationBrowserRows,
+  ]),
 };
 
 const BROWSER_SETTINGS: Block = {
@@ -335,6 +347,7 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
   { file: BINS_PAGE, blocks: [GATES] },
   { file: "docs/shipped-files.md", blocks: [WHERE] },
   { file: "docs/how-to/upgrade-the-kit.md", blocks: [UPGRADE_INSTALL] },
+  { file: "docs/how-to/migrate-checks-configuration.md", blocks: [CONFIG_MIGRATION] },
   ...Object.entries(OPT_IN_PEERS).map(([bin, names]) => ({ file: `${GATE_PAGES}/${bin}.md`, blocks: [optInInstall(names)] })),
   { file: `${GATE_PAGES}/checks-browser.md`, blocks: [BROWSER_SETTINGS, SIZES, STARTER] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },

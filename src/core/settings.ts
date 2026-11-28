@@ -242,6 +242,10 @@ export function settingPath(key: SettingKey): string {
   return key;
 }
 
+export function flatSettingPath(key: SettingKey): string {
+  return key === "agentTests" ? "agentTests.allowLocal" : key;
+}
+
 export function settingLocation(locations: SettingLocations, key: SettingKey): string {
   return locations[key] ?? settingPath(key);
 }
@@ -286,8 +290,7 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
       : Object.hasOwn(settings, legacyKey);
     const newPath = `${section}.${key}`;
     if (repeated) {
-      const oldPath = agentPolicy ? "agentTests.allowLocal" : legacyKey;
-      return yield* new Usage({ message: `${SETTINGS_FILE} key ${oldPath} and ${SETTINGS_FILE} key ${newPath} set the same setting; keep only ${newPath}` });
+      return yield* new Usage({ message: `${SETTINGS_FILE} key ${flatSettingPath(legacyKey)} and ${SETTINGS_FILE} key ${newPath} set the same setting; keep only ${newPath}` });
     }
     locations[legacyKey] = newPath;
     settings[legacyKey] = agentPolicy ? { allowLocal: yield* decodeSetting(legacyKey, AllowAgentRunsOutsideCI, values[key], newPath) } : values[key];
@@ -315,7 +318,7 @@ const reportDeprecation = Effect.fn("reportDeprecation")(function* (file: string
   const deprecationId = `${file}\0${key}`;
   if (reportedDeprecations.has(deprecationId)) return;
   reportedDeprecations.add(deprecationId);
-  yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${migrationDestination(key)}`);
+  yield* Console.error(`${SETTINGS_FILE} key ${flatSettingPath(key)} is deprecated; move it to ${migrationDestination(key)}`);
 });
 
 export const readSettingsModule = Effect.fn("readSettingsModule")(function* (file: string, filename: string, example: string) {

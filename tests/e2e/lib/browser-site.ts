@@ -24,6 +24,7 @@ export type Declared = {
   readonly shift?: { readonly max: number };
   readonly roles?: Readonly<Record<string, readonly string[]>>;
   readonly hooks?: string;
+  readonly buildCommand?: readonly [string, ...string[]];
 };
 
 export function page(body: string, { head = "", lang = "en", viewport = "width=device-width, initial-scale=1" } = {}): string {
@@ -42,14 +43,12 @@ export function routesOf(pages: Readonly<Record<string, string>>): readonly { re
 
 export function declaration(declared: Declared): string {
   return settingsFile({
-    browser: {
-      site: "dist",
-      routes: [{ path: "/", locale: "en" }],
-      viewports: [{ name: "phone", width: 320, height: 640 }],
-      states: [{ name: "default" }],
-      targets: [{ name: "link", selector: "main a", focusable: true }],
-      ...declared,
-    },
+    site: "dist",
+    routes: [{ path: "/", locale: "en" }],
+    viewports: [{ name: "phone", width: 320, height: 640 }],
+    states: [{ name: "default" }],
+    targets: [{ name: "link", selector: "main a", focusable: true }],
+    ...declared,
   });
 }
 

@@ -27,6 +27,8 @@ To move a repository to a newer release of the kit:
 
    <!-- end generated install -->
 
+   If you use flat settings, follow [Migrate checks configuration](migrate-checks-configuration.md).
+
    A repository that opted in to `checks-browser`, `checks-frontend-syntax` or `checks-copy` also reruns the `bun add` line on its page.
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.

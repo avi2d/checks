@@ -24,11 +24,11 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-async function rootWith(routes: string): Promise<string> {
+async function rootWith(routes: string, legacy = false): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);
-  await writeFile(join(dir, "checks.config.ts"), `export default { browserRoutes: ${routes} };
-`);
+  if (legacy) await writeFile(join(dir, "checks.config.ts"), `export default { browserRoutes: ${routes} };\n`);
+  else await writeFile(join(dir, "checks.browser.config.ts"), `export default { ...${JSON.stringify(declaration)}, affectedRoutes: ${routes} };\n`);
   return dir;
 }
 
@@ -129,7 +129,7 @@ test("a component an unmapped one reaches through an alias widens instead of nar
 });
 
 test("an unknown route from the flat key widens and names checks.config.ts key browserRoutes instead of affectedRoutes", async () => {
-  const root = await rootWith('{ "src/home.ts": ["/missing/"] }');
+  const root = await rootWith('{ "src/home.ts": ["/missing/"] }', true);
   expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "checks.config.ts key browserRoutes names undeclared route /missing/" });
 });
 
@@ -151,7 +151,8 @@ test("an empty change widens instead of reaching no route", async () => {
 });
 
 test("tests without a route map reach no route instead of widening", async () => {
-  const root = await rootWith("undefined");
+  const root = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
+  dirs.push(root);
   expect(await selected(root, ["tests/unit/home.test.ts", "tests/e2e/home.test.ts"])).toEqual({ kind: "routes", routes: new Set() });
 });
 

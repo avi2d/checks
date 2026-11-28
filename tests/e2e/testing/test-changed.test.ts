@@ -53,7 +53,7 @@ test("two pull request shards run each selected file once and leave untouched fi
   const repo = await open({
     "package.json": JSON.stringify({ name: "shard-fixture", type: "module" }),
     "bunfig.toml": UNVENDORED_BUNFIG,
-    "checks.config.ts": 'export default { testFileTimings: { "tests/unit/b.test.ts": 10, "tests/unit/c.test.ts": 2 } };\n',
+    "checks.config.ts": 'export default { test: { fileTimingsSeconds: { "tests/unit/b.test.ts": 10, "tests/unit/c.test.ts": 2 } } };\n',
     "tests/unit/a.test.ts": FAILING,
     "tests/unit/b.test.ts": PASSING,
     "tests/unit/c.test.ts": PASSING,

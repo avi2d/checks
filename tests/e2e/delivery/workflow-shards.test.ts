@@ -10,10 +10,10 @@ const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 for (const tier of ["unit", "e2e"] as const) {
   for (const kind of ["code", "site"] as const) {
     for (const run of [undefined, `bunx checks-test --pr --parallel=4 --tier=${tier}`, `bun run test --pr --tier=${tier}`]) {
-      test(`${kind} workflows refuse testTierShards.${tier} without a default job instead of silently ignoring it (${run ?? "missing"})`, async () => {
+      test(`${kind} workflows refuse workflows.testShards.${tier} without a default job instead of silently ignoring it (${run ?? "missing"})`, async () => {
         const repo = await open({
           "package.json": JSON.stringify({ name: "acme", private: true }),
-          "checks.config.ts": `export default { testTierShards: { ${tier}: 2 } };\n`,
+          "checks.config.ts": `export default { workflows: { testShards: { ${tier}: 2 } } };\n`,
           ...(run === undefined ? {} : { "tests/e2e/one.test.ts": "export {};\n" }),
           ".github/workflows/ci.yml": Bun.YAML.stringify({
             name: "ci",
@@ -26,7 +26,7 @@ for (const tier of ["unit", "e2e"] as const) {
         for (const args of [[], ["--write"]]) {
           const result = await ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env(withoutPullRequestEvent()));
           expect(result.exitCode).toBe(args.length === 0 ? 1 : 2);
-          expect(result.text).toContain(`testTierShards.${tier}`);
+          expect(result.text).toContain(`workflows.testShards.${tier}`);
           expect(result.text).toContain(`no default ${tier} test job`);
         }
       });
@@ -37,7 +37,7 @@ for (const tier of ["unit", "e2e"] as const) {
 test.each([false, true])("default tier shards survive a write and reread instead of being refused as custom commands, with release checks %s", async (releaseChecks) => {
   const repo = await open({
     "package.json": JSON.stringify({ name: "acme", private: true, ...(releaseChecks ? { scripts: { test: "checks-test" } } : {}) }),
-    "checks.config.ts": "export default { testTierShards: { unit: 2, e2e: 2 } };\n",
+    "checks.config.ts": "export default { workflows: { testShards: { unit: 2, e2e: 2 } } };\n",
     "tests/e2e/one.test.ts": "export {};\n",
   });
   await repo.commit("test: configure default tier shards");
@@ -65,7 +65,7 @@ test.each([
 ])("the mutation workflow writes $count shards instead of losing the setting or cancelling sibling shards", async ({ config, count }) => {
   const repo = await open({
     "package.json": JSON.stringify({ name: "acme", private: true }),
-    "checks.config.ts": `export default ${JSON.stringify(config)};\n`,
+    "checks.config.ts": `export default ${JSON.stringify({ workflows: config })};\n`,
     ".bun-version": await Bun.file(join(CHECKOUT, ".bun-version")).text(),
     "CHANGELOG.md": "# Changelog\n",
   });
@@ -84,9 +84,9 @@ test.each([
 });
 
 test.each([0, -1, 1.5, "4", 257])("workflow generation refuses mutationShardCount %j instead of writing an invalid matrix", async (count) => {
-  const repo = await open({ "checks.config.ts": `export default { mutationShardCount: ${JSON.stringify(count)} };\n` });
+  const repo = await open({ "checks.config.ts": `export default { workflows: { mutationShardCount: ${JSON.stringify(count)} } };\n` });
   const result = await ran($`bun ${SCRIPT} --write`.cwd(repo.dir).env(withoutPullRequestEvent()));
   expect(result.exitCode).toBe(2);
-  expect(result.text).toContain("checks.config.ts key mutationShardCount does not decode");
+  expect(result.text).toContain("checks.config.ts key workflows.mutationShardCount does not decode");
   expect(await Bun.file(join(repo.dir, MUTATION_PATH)).exists()).toBe(false);
 });

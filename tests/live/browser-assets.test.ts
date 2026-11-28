@@ -6,7 +6,7 @@ test("assets is red on an image the site does not serve and on a request that fa
   const site = await browserSite({
     "dist/index.html": pictured("/portrait.svg"),
     "dist/refused.html": pictured("http://127.0.0.1:1/portrait.svg"),
-    "checks.config.ts": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/refused.html", locale: "en" }], checks: ["assets"] }),
+    "checks.browser.config.ts": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/refused.html", locale: "en" }], checks: ["assets"] }),
   });
   const failed = await site.run();
   const origin = /(http:\/\/127\.0\.0\.1:\d+)\/portrait\.svg answers 404/.exec(failed.text)?.[1];
@@ -34,7 +34,7 @@ test("assets is red on a console error, an uncaught error and a script from anot
       "thrown.html": page(`<p><a href="/">Write to me</a></p><script>throw new Error("the menu never opened")</script>`),
       "outside.html": page(`<p><a href="/">Write to me</a></p><script src="${outside.url.origin}/widget.js"></script>`),
     };
-    const site = await browserSite({ ...sitePages(red), "checks.config.ts": declaration({ routes: routesOf(red), checks: ["assets"] }) });
+    const site = await browserSite({ ...sitePages(red), "checks.browser.config.ts": declaration({ routes: routesOf(red), checks: ["assets"] }) });
     const failed = await site.run();
     expect(failuresOf(failed.text)).toEqual([
       `${at("assets", "/logged.html")} logs the error: the form never started`,

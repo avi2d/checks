@@ -122,7 +122,7 @@ test(
 
 test("configured tracker keys go red while undeclared standards and other prefixes stay green", async () => {
   const { write, commit, script } = await repository({
-    "checks.config.ts": 'export default { trackerKeyPrefixes: ["ORC", "ADR"] };\n',
+    "checks.config.ts": 'export default { commentGate: { trackerKeyPrefixes: ["ORC", "ADR"] } };\n',
     "widget.ts": "export const widget = 1;\n",
   });
   const base = await commit("start with declared tracker prefixes");
@@ -141,7 +141,7 @@ test("configured tracker keys go red while undeclared standards and other prefix
   expect(green.text).toContain("carry no refused comment");
 }, 120_000);
 
-for (const config of [undefined, "export default { trackerKeyPrefixes: [] };\n"]) {
+for (const config of [undefined, "export default { commentGate: { trackerKeyPrefixes: [] } };\n"]) {
   test(`${config === undefined ? "missing" : "empty"} tracker prefix settings do not refuse arbitrary keys`, async () => {
     const { write, commit, script } = await repository(config === undefined ? {} : { "checks.config.ts": config });
     await write({ "widget.ts": "export const widget = 1;\n" });
@@ -157,12 +157,12 @@ for (const config of [undefined, "export default { trackerKeyPrefixes: [] };\n"]
 for (const prefixes of ["ORC", [1], [""], ["orc"], ["ORC|ADR"]]) {
   test(`invalid tracker prefixes ${JSON.stringify(prefixes)} fail instead of silently widening matching`, async () => {
     const { commit, script } = await repository({
-      "checks.config.ts": `export default { trackerKeyPrefixes: ${JSON.stringify(prefixes)} };\n`,
+      "checks.config.ts": `export default { commentGate: { trackerKeyPrefixes: ${JSON.stringify(prefixes)} } };\n`,
       "widget.ts": "export const widget = 1;\n",
     });
     const head = await commit("set invalid tracker prefixes");
     const result = await script(GATE, head);
     expect(result.exitCode).toBe(2);
-    expect(result.text).toContain("checks.config.ts key trackerKeyPrefixes does not decode");
+    expect(result.text).toContain("checks.config.ts key commentGate.trackerKeyPrefixes does not decode");
   }, 120_000);
 }

@@ -9,14 +9,12 @@ const runner = join(CHECKOUT, "src/quality/browser/browser.ts");
 
 function settings(extra: string): string {
   return `export default {
-    browser: {
-      site: "dist",
-      routes: [{ path: "/", locale: "en" }, { path: "/other/", locale: "en" }],
-      viewports: [{ name: "phone", width: 320, height: 640 }],
-      states: [{ name: "default" }],
-      targets: [{ name: "main", selector: "main" }],
-      checks: ["html", "links"]
-    },
+    site: "dist",
+    routes: [{ path: "/", locale: "en" }, { path: "/other/", locale: "en" }],
+    viewports: [{ name: "phone", width: 320, height: 640 }],
+    states: [{ name: "default" }],
+    targets: [{ name: "main", selector: "main" }],
+    checks: ["html", "links"],
     ${extra}
   };\n`;
 }
@@ -40,7 +38,7 @@ async function base(repo: FixtureRepo): Promise<void> {
 test("a mapped home change leaves unrelated content checks out but still checks incoming links", async () => {
   const repo = await open({
     ".gitignore": "event.json\n",
-    "checks.config.ts": settings('browserRoutes: { "src/home.ts": ["/"] },'),
+    "checks.browser.config.ts": settings('affectedRoutes: { "src/home.ts": ["/"] },'),
     "src/home.ts": "home\n",
     "dist/index.html": page('<a href="/">home</a>'),
     "dist/other/index.html": page('<a href="/">other</a>'),
@@ -57,7 +55,7 @@ test("a mapped home change leaves unrelated content checks out but still checks 
 test("a mapped stylesheet narrows the route selection instead of widening it", async () => {
   const repo = await open({
     ".gitignore": "event.json\n",
-    "checks.config.ts": settings('browserRoutes: { "src/site.css": ["/"] },'),
+    "checks.browser.config.ts": settings('affectedRoutes: { "src/site.css": ["/"] },'),
     "src/site.css": "body {}\n",
     "dist/index.html": page('<a href="/">home</a>'),
     "dist/other/index.html": page('<a href="/">other</a>'),
@@ -73,7 +71,7 @@ test("a mapped stylesheet narrows the route selection instead of widening it", a
 test("an unmapped component narrows to the page that imports it instead of walking every route", async () => {
   const repo = await open({
     ".gitignore": "event.json\n",
-    "checks.config.ts": settings('browserRoutes: { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] },'),
+    "checks.browser.config.ts": settings('affectedRoutes: { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] },'),
     "src/pages/index.astro": '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n',
     "src/pages/other.astro": "<p>other</p>\n",
     "src/components/Card.astro": "<div>card</div>\n",
@@ -91,7 +89,8 @@ test("an unmapped component narrows to the page that imports it instead of walki
 test("a stylesheet a mapped stylesheet imports reaches its routes instead of only the page that imports it", async () => {
   const repo = await open({
     ".gitignore": "event.json\n",
-    "checks.config.ts": settings('browserRoutes: { "src/pages/index.astro": ["/"], "src/styles/global.css": ["/other/"] }, reach: { "src/styles/tokens.css": [] },'),
+    "checks.browser.config.ts": settings('affectedRoutes: { "src/pages/index.astro": ["/"], "src/styles/global.css": ["/other/"] },'),
+    "checks.config.ts": 'export default { test: { affected: { "src/styles/tokens.css": [] } } };\n',
     "src/pages/index.astro": '---\nimport "../styles/tokens.css";\n---\n<p>home</p>\n',
     "src/styles/global.css": '@import "./tokens.css";\n',
     "src/styles/tokens.css": ":root { --ink: black; }\n",
@@ -117,7 +116,7 @@ await Bun.write("dist/other/index.html", ${JSON.stringify(other)});
 `;
   const repo = await open({
     ".gitignore": "dist/\nevent.json\n",
-    "checks.config.ts": settings('browserBuild: ["bun", "build-site.ts"],'),
+    "checks.browser.config.ts": settings('buildCommand: ["bun", "build-site.ts"],'),
     "build-site.ts": script,
     "tests/home.test.ts": "before\n",
   });
@@ -147,7 +146,7 @@ await Bun.write("dist/other/index.html", ${JSON.stringify(html)});
 `;
   const repo = await open({
     ".gitignore": "dist/\nevent.json\n",
-    "checks.config.ts": settings('browserBuild: ["bun", "build-site.ts"],'),
+    "checks.browser.config.ts": settings('buildCommand: ["bun", "build-site.ts"],'),
     "build-site.ts": script,
     "tests/home.test.ts": "before",
   });
