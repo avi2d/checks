@@ -1,0 +1,661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "site": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The directory of the built site, which the runner serves on a local port, with an index.html answering for its directory."
+    },
+    "routes": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "locale": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "path",
+                "locale"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "preset": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "every-page"
+                      ]
+                    }
+                  ]
+                },
+                "locale": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "preset",
+                "locale"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path",
+              "locale"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "preset": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "every-page"
+                    ]
+                  }
+                ]
+              },
+              "locale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "preset",
+              "locale"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Each page to visit, as a path from the site root and the locale it renders, or the every-page preset with a locale."
+    },
+    "viewports": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "width": {
+                  "type": "integer",
+                  "maximum": 9007199254740991,
+                  "exclusiveMinimum": 0
+                },
+                "height": {
+                  "type": "integer",
+                  "maximum": 9007199254740991,
+                  "exclusiveMinimum": 0
+                },
+                "touch": {
+                  "type": "boolean"
+                },
+                "device": {
+                  "type": "string",
+                  "enum": [
+                    "phone",
+                    "tablet",
+                    "desktop"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "width",
+                "height"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "preset": {
+                  "type": "string",
+                  "enum": [
+                    "anchor",
+                    "full"
+                  ]
+                }
+              },
+              "required": [
+                "preset"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "width": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              "touch": {
+                "type": "boolean"
+              },
+              "device": {
+                "type": "string",
+                "enum": [
+                  "phone",
+                  "tablet",
+                  "desktop"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "width",
+              "height"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "preset": {
+                "type": "string",
+                "enum": [
+                  "anchor",
+                  "full"
+                ]
+              }
+            },
+            "required": [
+              "preset"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Each window to visit in, with a name, a width and a height in pixels, touch for a phone that has touch and a mobile viewport, and device as phone, tablet or desktop, or the anchor or full preset, which stands for a set of screen sizes."
+    },
+    "states": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "textPx": {
+                  "type": "integer",
+                  "maximum": 9007199254740991,
+                  "exclusiveMinimum": 0
+                },
+                "reducedMotion": {
+                  "type": "string",
+                  "enum": [
+                    "reduce",
+                    "no-preference"
+                  ]
+                },
+                "checks": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "layout",
+                        "keyboard",
+                        "motion",
+                        "axe",
+                        "nesting",
+                        "html",
+                        "links",
+                        "assets",
+                        "contrast",
+                        "weight",
+                        "shift",
+                        "look"
+                      ]
+                    }
+                  ],
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "layout",
+                      "keyboard",
+                      "motion",
+                      "axe",
+                      "nesting",
+                      "html",
+                      "links",
+                      "assets",
+                      "contrast",
+                      "weight",
+                      "shift",
+                      "look"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "preset": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "enlarged-text"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "preset"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "textPx": {
+                "type": "integer",
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              "reducedMotion": {
+                "type": "string",
+                "enum": [
+                  "reduce",
+                  "no-preference"
+                ]
+              },
+              "checks": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "layout",
+                      "keyboard",
+                      "motion",
+                      "axe",
+                      "nesting",
+                      "html",
+                      "links",
+                      "assets",
+                      "contrast",
+                      "weight",
+                      "shift",
+                      "look"
+                    ]
+                  }
+                ],
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "layout",
+                    "keyboard",
+                    "motion",
+                    "axe",
+                    "nesting",
+                    "html",
+                    "links",
+                    "assets",
+                    "contrast",
+                    "weight",
+                    "shift",
+                    "look"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "preset": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "enlarged-text"
+                    ]
+                  }
+                ]
+              }
+            },
+            "required": [
+              "preset"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Each condition to visit in, with a name, textPx for the browser's default text size, reducedMotion as reduce or no-preference, and checks when it runs only some of the declared checks, or the enlarged-text preset."
+    },
+    "targets": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selector": {
+              "type": "string",
+              "minLength": 1
+            },
+            "routes": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ],
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "focusable": {
+              "type": "boolean"
+            },
+            "contrast": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "selector"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "selector": {
+            "type": "string",
+            "minLength": 1
+          },
+          "routes": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "focusable": {
+            "type": "boolean"
+          },
+          "contrast": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "selector"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Each named control or text the checks judge, with a CSS selector, the routes it is on when not every route, focusable when Tab must reach it, and contrast when the contrast check measures its text."
+    },
+    "checks": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "enum": [
+            "layout",
+            "keyboard",
+            "motion",
+            "axe",
+            "nesting",
+            "html",
+            "links",
+            "assets",
+            "contrast",
+            "weight",
+            "shift",
+            "look"
+          ]
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "layout",
+          "keyboard",
+          "motion",
+          "axe",
+          "nesting",
+          "html",
+          "links",
+          "assets",
+          "contrast",
+          "weight",
+          "shift",
+          "look"
+        ]
+      },
+      "description": "The built-in checks to run, from layout, keyboard, motion, axe, nesting, html, links, assets, contrast, weight, shift and look."
+    },
+    "weight": {
+      "type": "object",
+      "properties": {
+        "nonImageBytes": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "exclusiveMinimum": 0
+        },
+        "scriptBytes": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "exclusiveMinimum": 0
+        },
+        "imageBytes": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "nonImageBytes",
+        "scriptBytes",
+        "imageBytes"
+      ],
+      "additionalProperties": false,
+      "description": "The byte budgets each page must hold, as nonImageBytes outside images, scriptBytes in scripts and imageBytes in images."
+    },
+    "shift": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max"
+      ],
+      "additionalProperties": false,
+      "description": "The largest total layout movement a cold load may report, as max."
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "minLength": 1
+          }
+        ],
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Each role a text plays on the page, named, with the CSS selectors of the elements that play it, for the look check."
+    },
+    "hooks": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The module of product hooks, as a path from the directory the runner runs in."
+    },
+    "affectedRoutes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "The repository paths that can affect each browser route."
+    },
+    "buildCommand": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The command that builds the site for the browser test-only proof."
+    },
+    "timingsMs": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additionalProperties": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "description": "The measured milliseconds of each browser check at each route, which browser shards balance on."
+    }
+  },
+  "required": [
+    "site",
+    "routes",
+    "viewports",
+    "states",
+    "targets",
+    "checks"
+  ],
+  "additionalProperties": false,
+  "$defs": {}
+}

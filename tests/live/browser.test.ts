@@ -387,7 +387,7 @@ test("without a declaration, with an empty target list, a missing site, a motion
   const unlaunchable = { CHROME_PATH: "/nonexistent/chrome" };
   const site = await browserSite({ "dist/index.html": CLEAN_LINK, "unbuilt/site.css": "" });
   const cases = [
-    [undefined, "browser: checks.config.ts sets no browser key, and a product opts in to the browser checks by declaring its pages there"],
+    [undefined, "browser: no browser plan; declare the pages to check in checks.browser.config.ts"],
     [declaration({ targets: [], checks: ["layout"] }), "browser: checks.config.ts key browser does not decode"],
     [declaration({ site: "build", checks: ["layout"] }), "browser: the declared site build is not a directory, so build the site before the browser checks run"],
     [declaration({ checks: ["motion"] }), "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce"],
@@ -414,7 +414,7 @@ test("without a declaration, with an empty target list, a missing site, a motion
   await site.write({ "checks.config.ts": declaration({ checks: ["layout"] }), "browser-checks.json": "{}" });
   const moved = await site.run(unlaunchable);
   expect({ text: moved.text, exitCode: moved.exitCode }).toEqual({
-    text: expect.stringContaining("browser: browser-checks.json is no longer read; move it to the browser key of checks.config.ts"),
+    text: expect.stringContaining("browser: browser-checks.json is no longer read; move it to checks.browser.config.ts"),
     exitCode: 2,
   });
 }, 120_000);

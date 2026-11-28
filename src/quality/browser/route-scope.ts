@@ -1,17 +1,19 @@
 import { Console, Effect, FileSystem, Path } from "effect";
 import { workingTreeFiles } from "../../core/git.ts";
 import { importsOf, TEST_TREE } from "../../core/imports.ts";
-import { BrowserRoutes, decodeSetting, loadSettings, SETTINGS_FILE } from "../../core/settings.ts";
+import { BROWSER_SETTINGS_FILE, type AffectedRoutes } from "../../core/browser-settings.ts";
+import { SETTINGS_FILE } from "../../core/settings.ts";
 import { pullRequestReason, testEnvironmentReason, TEST_FILE } from "../../core/test-impact.ts";
+import { readAffectedRoutes } from "./config-reader.ts";
 import type { Declaration } from "./declaration.ts";
-
-type RouteMap = typeof BrowserRoutes.Type;
 
 type Fallback = { readonly kind: "full"; readonly because: string };
 
+type RouteMap = { readonly value: AffectedRoutes; readonly location: string };
+
 export type RouteScope = Fallback | { readonly kind: "routes"; readonly routes: ReadonlySet<string> };
 
-type RouteImpact = Fallback | { readonly kind: "routes"; readonly byChange: ReadonlyMap<string, readonly string[]> };
+type RouteImpact = Fallback | { readonly kind: "routes"; readonly byChange: ReadonlyMap<string, readonly string[]>; readonly location: string | undefined };
 
 function fullRouteReason(changed: readonly string[]): string | undefined {
   if (changed.length === 0) return "the pull request changes no file";
@@ -60,7 +62,7 @@ function indirectImportReason(path: string, node: string, importer: string): str
 // An unmapped importer that nothing imports renders where no route is known, so it places the path nowhere.
 function unmappedPlacement(test: boolean): Fallback | { readonly kind: "placed"; readonly routes: readonly string[] } {
   if (test) return { kind: "placed", routes: [] };
-  return { kind: "full", because: "browserRoutes is not configured" };
+  return { kind: "full", because: `no affectedRoutes is set in ${BROWSER_SETTINGS_FILE}` };
 }
 
 function placed(path: string, map: RouteMap | undefined, sources: ReadonlyMap<string, string>, importers: ReadonlyMap<string, readonly string[]>): Fallback | { readonly kind: "placed"; readonly routes: readonly string[] } {
@@ -73,19 +75,19 @@ function placed(path: string, map: RouteMap | undefined, sources: ReadonlyMap<st
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (seen.has(node)) continue;
     seen.add(node);
-    if (Object.hasOwn(map, node)) {
+    if (Object.hasOwn(map.value, node)) {
       mapped = true;
-      routes.push(...(map[node] ?? []));
+      routes.push(...(map.value[node] ?? []));
       continue;
     }
     const next = importers.get(node) ?? [];
     const stray = strayNamer(node, sources, next);
     if (stray !== undefined) return { kind: "full", because: indirectImportReason(path, node, stray) };
-    if (next.length === 0 && node !== path) return { kind: "full", because: `${path} reaches ${node}, which has no browserRoutes mapping` };
+    if (next.length === 0 && node !== path) return { kind: "full", because: `${path} reaches ${node}, which has no mapping in ${map.location}` };
     pending.push(...next);
   }
   if (mapped || test) return { kind: "placed", routes };
-  return { kind: "full", because: `${path} has no browserRoutes mapping and no mapped file imports it` };
+  return { kind: "full", because: `${path} has no mapping in ${map.location} and no mapped file imports it` };
 }
 
 function routeImpact(changed: readonly string[], map: RouteMap | undefined, sources: ReadonlyMap<string, string>): RouteImpact {
@@ -96,7 +98,7 @@ function routeImpact(changed: readonly string[], map: RouteMap | undefined, sour
     if (placement.kind === "full") return placement;
     byChange.set(path, [...new Set(placement.routes)]);
   }
-  return { kind: "routes", byChange };
+  return { kind: "routes", byChange, location: map?.location };
 }
 
 function scoped(impact: RouteImpact, declaration: { readonly routes: Declaration["routes"] }): RouteScope {
@@ -104,7 +106,7 @@ function scoped(impact: RouteImpact, declaration: { readonly routes: Declaration
   const routes = new Set([...impact.byChange.values()].flat());
   const declared = new Set(declaration.routes.map(({ path }) => path));
   const unknown = [...routes].find((path) => !declared.has(path));
-  if (unknown !== undefined) return { kind: "full", because: `browserRoutes names undeclared route ${unknown}` };
+  if (unknown !== undefined) return { kind: "full", because: `${impact.location ?? BROWSER_SETTINGS_FILE} names undeclared route ${unknown}` };
   return { kind: "routes", routes };
 }
 
@@ -115,7 +117,7 @@ export function scopeRoutes(changed: readonly string[], map: RouteMap, sources: 
 const readSources = Effect.fn("readSources")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const files = (yield* workingTreeFiles(root)).filter((file) => SOURCE_FILE.test(file) && file !== SETTINGS_FILE && !file.startsWith(TEST_TREE));
+  const files = (yield* workingTreeFiles(root)).filter((file) => SOURCE_FILE.test(file) && file !== SETTINGS_FILE && file !== BROWSER_SETTINGS_FILE && !file.startsWith(TEST_TREE));
   return new Map(yield* Effect.forEach(files, (file) =>
     fs.readFileString(path.join(root, file)).pipe(Effect.map((text) => [file, text] as const)), { concurrency: 16 }));
 });
@@ -123,9 +125,8 @@ const readSources = Effect.fn("readSources")(function* (root: string) {
 export const readRouteImpact = Effect.fn("readRouteImpact")(function* (root: string, changed: readonly string[]) {
   const because = fullRouteReason(changed);
   if (because !== undefined) return { kind: "full", because } satisfies Fallback;
-  const raw = (yield* loadSettings(root)).values["browserRoutes"];
-  const map = raw === undefined ? undefined : yield* decodeSetting("browserRoutes", BrowserRoutes, raw);
-  const sources = map === undefined || changed.every((path) => Object.hasOwn(map, path)) ? new Map<string, string>() : yield* readSources(root);
+  const map = yield* readAffectedRoutes(root);
+  const sources = map === undefined || changed.every((path) => Object.hasOwn(map.value, path)) ? new Map<string, string>() : yield* readSources(root);
   return routeImpact(changed, map, sources);
 });
 

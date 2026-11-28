@@ -4,7 +4,8 @@ audience: consumers
 ---
 # Native settings
 
-A consuming repository puts each setting in the file its tool reads, and checks.config.ts gathers the settings no tool file owns.
+Put each setting in the file its tool reads.
+Put the browser plan in `checks.browser.config.ts` and shared kit settings in `checks.config.ts`.
 
 ## Settings by file
 
@@ -22,6 +23,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key except the six scoped keys it removes from the top-level `diagnosticSeverity` | TypeScript and Effect language service |
 | `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-workflows`, `checks-setup`, `checks-release-tag`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-lint-coverage`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
+| `checks.browser.config.ts` | The browser plan, affected routes, build command, and timings | `checks-browser` and `checks-ci changes` |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery, quarantine exclusion and the preload that guards agent runs | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -96,8 +98,10 @@ A repository creates `checks.config.ts` only when it declares a setting, and a m
 Publishing, repository visibility, runner labels, and CI jobs belong under `workflows`.
 Local test selection, affected tests, agent policy, timeouts, timings, and exclusions belong under `test`.
 Tracker prefixes belong under `commentGate`, and nested oxlint allowances belong under `lintCoverage`.
-`copy`, `frontendSyntax`, and the browser settings stay at the root.
-Its default export is the result of `defineConfig` from `@avi2dg/checks/config`, and every key is optional:
+`copy` and `frontendSyntax` stay at the root.
+Browser settings belong in [`checks.browser.config.ts`](../gates/checks-browser.md#what-it-reads).
+Export the result of `defineConfig` from `@avi2dg/checks/config` as the default export of `checks.config.ts`.
+Every section is optional.
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
@@ -131,15 +135,12 @@ export default defineConfig({
 | `frontendSyntax` | None | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
 | `commentGate.trackerKeyPrefixes` | `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
 | `lintCoverage.allowedNestedOxlintRules` | `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
-| `browser` | None | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserRoutes` | None | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserBuild` | None | None | The command that builds the site for the browser test-only proof. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserTimings` | None | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
 
 <!-- end generated settings-keys -->
 
 The TypeScript config type and the generated [JSON Schema](../../dist/checks.schema.json) both come from the grouped settings.
-The type and the schema accept only the grouped keys, while the loader also reads the flat keys in the table and prints deprecation notes on standard error.
+The type and the schema accept only the grouped keys.
+The loader also reads deprecated flat keys in `checks.config.ts`, including browser keys, and prints deprecation notes on standard error.
 Each flat setting produces at most one note per process for its current config file.
 `checks-test --pr`, `checks-test --changed`, and the CI `changes` job load the merge-base copy of `checks.config.ts` to compare affected-test maps.
 That copy produces no deprecation notes.
@@ -147,7 +148,7 @@ Two definitions of one setting fail, even when their values match.
 The kit loads a TypeScript file, not a JSON config.
 
 A key the kit does not know fails the reading gate.
-A setting left outside `checks.config.ts` fails its gate with exit 2 and a message naming the key it moves to.
+When a gate finds a setting in an unsupported file, it exits with code 2 and names where the setting belongs.
 A `checks` object in `package.json` that sets `smoke`, `reach`, `mutationRunner` or `selfHostedRunners` fails the gate that reads that key with exit 2.
 A root `browser-checks.json`, `copy.json` or `frontend-syntax.json` fails the gate that reads that key with exit 2.
 `advisory-acks.json` stays a file of its own, since [checks-advisories](../gates/checks-advisories.md) reads it at a commit rather than from the working tree.
