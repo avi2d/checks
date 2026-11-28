@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { FlakeCron } from "../core/cron-fields.ts";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
-import { decodeMutationShardCount, decodeSetting, ExtraTestJobs, FlakeCron, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, TestTierShards, SETTINGS_FILE, settingLocation, type SettingLocations, type ExtraTestJob } from "../core/settings.ts";
+import { decodeMutationShardCount, decodeSetting, ExtraTestJobs, loadSettings, PlatformPackages, ReleaseAssets, RepositoryVisibility, SetupNix, TestTierShards, SETTINGS_FILE, settingLocation, type SettingLocations, type ExtraTestJob } from "../core/settings.ts";
 import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, extraTestJobFault, testTierOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
@@ -155,11 +156,11 @@ function testTierShardsFault(ci: CiJobs, testTierShards: TestTierShards | undefi
   return tier === undefined ? undefined : `${SETTINGS_FILE} sets ${settingLocation(locations, "testTierShards")}.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key`;
 }
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards, extraTestJobs?: readonly ExtraTestJob[], flakeCron?: string, mutationShardCount?: number, locations: SettingLocations = {}) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards, extraTestJobs?: readonly ExtraTestJob[], flakeCron?: string, mutationShardCount?: number, { setupNix = false, settingLocations: locations = {} }: Partial<Pick<CallerInputs, "setupNix" | "settingLocations">> = {}) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs, attachAssets, platformPackages, flakeCron);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs, attachAssets, platformPackages, flakeCron, setupNix);
   const [extra] = uncarriedInputs(workflows);
   if (extra !== undefined) {
     return yield* new CallerSetFault({
@@ -232,7 +233,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[]; readonly flakeCron: string | undefined; readonly mutationShardCount: number | undefined; readonly settingLocations?: SettingLocations };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean; readonly platformPackages: PlatformPackages | undefined; readonly testTierShards?: TestTierShards; readonly extraTestJobs?: readonly ExtraTestJob[]; readonly flakeCron: string | undefined; readonly mutationShardCount: number | undefined; readonly setupNix: boolean; readonly settingLocations?: SettingLocations };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
@@ -266,8 +267,9 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   const mutationShardCount = yield* decodeMutationShardCount(settings["mutationShardCount"], settingLocation(locations, "mutationShardCount"));
   const configuredExtra = settings["extraTestJobs"];
   const extraTestJobs = configuredExtra === undefined ? undefined : yield* decodeSetting("extraTestJobs", ExtraTestJobs, configuredExtra, settingLocation(locations, "extraTestJobs"));
+  const setupNix = (yield* decodeSetting("setupNix", Schema.UndefinedOr(SetupNix), settings["setupNix"])) ?? false;
   const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
-  return { settingLocations: locations, publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, flakeCron, mutationShardCount, ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined ? {} : { extraTestJobs }) } satisfies CallerInputs;
+  return { setupNix, settingLocations: locations, publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets, platformPackages, flakeCron, mutationShardCount, ...(testTierShards === undefined ? {} : { testTierShards }), ...(extraTestJobs === undefined ? {} : { extraTestJobs }) } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

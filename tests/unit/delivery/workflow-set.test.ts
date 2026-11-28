@@ -21,21 +21,16 @@ const EVERY_OPTION: CallerSet = {
   kind: "code",
   ci: { tests: DEFAULT_CI_JOBS.code.tests.map((job) => ({ ...job, runsOn: "ubuntu-latest" })) },
   options: {
+    ...NO_CALLER_OPTIONS,
     advisoriesCron: "21 5 * * 1",
     flake: { nodeVersionFile: ".node-version" },
     flakeCron: "23 5 * * 1",
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
-    docsBuild: false,
     secretsPack: true,
     fullTest: true,
-    claudeVersion: undefined,
-    publishWorkspaces: false,
-    checkRelease: false,
     publishes: true,
     publicRepository: true,
-    releaseVersionInput: false,
     releaseAssets: true,
-    platformPackages: undefined,
   },
 };
 
@@ -197,9 +192,11 @@ test("an absent optional file is no difference, but a modified mutation workflow
 });
 
 test("a written file that calls another repository's workflow, or an action at a tag instead of a full commit SHA, fails here", () => {
-  const held = everyFile().map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
+  const nix = { ...CHECKED, options: { ...CHECKED.options, setupNix: true } };
+  const files = [...everyFile(), ...written(nix)];
+  const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
   expect(remoteCallsOf(held)).toEqual([]);
-  const uses = everyFile().flatMap(({ text }) => Object.values(jobsOf(parsedRecord(text))).flatMap((job) => [job["uses"], ...stepsOf(job).map((step) => step["uses"])]));
+  const uses = files.flatMap(({ text }) => Object.values(jobsOf(parsedRecord(text))).flatMap((job) => [job["uses"], ...stepsOf(job).map((step) => step["uses"])]));
   const named = uses.filter((use): use is string => typeof use === "string");
   expect(named.length).toBeGreaterThan(0);
   expect(named.filter((use) => !use.startsWith("./") && !/@[0-9a-f]{40}$/.test(use))).toEqual([]);

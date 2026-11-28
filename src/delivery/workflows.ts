@@ -73,7 +73,7 @@ const reportedSet = (present: readonly HeldFile[], flags: SiteNameFlags, inputs:
     inputs.extraTestJobs,
     inputs.flakeCron,
     inputs.mutationShardCount,
-    inputs.settingLocations,
+    inputs,
   );
 
 const checkSet = Effect.fn("checkSet")(function* (root: string, set: CallerSet, present: readonly HeldFile[], kit: boolean) {

@@ -165,6 +165,7 @@ It reads these keys from `checks.config.ts`:
 | `workflows.platformPackages` | The platform binary jobs and steps in the generated workflow set the gate compares with the held files. |
 | `workflows.testShards` | The test tier matrix jobs in the generated workflow set the gate compares with the held files. |
 | `workflows.extraTestJobs` | The extra test jobs in the generated workflow set the gate compares with the held files. |
+| `workflows.setupNix` | The Nix steps in the generated test and release suite jobs. |
 | `workflows.flakeCron` | The flake schedule in the generated workflow set and the scheduled flake workflow the gate accepts. |
 
 The runner policy reads repository visibility from the GitHub event, not `workflows.repositoryVisibility`.

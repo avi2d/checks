@@ -4,7 +4,7 @@ import { browserConfigRows, browserStarterLines, migrationBrowserRows } from "./
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { flatSettingPath, GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
+import { flatSettingPath, GROUPED_KEYS, GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
@@ -225,6 +225,7 @@ const SETTING_READERS = {
   mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
   mutationShardCount: "[checks-mutation](../gates/checks-mutation.md#running-it-in-ci)",
   selfHostedRunners: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  setupNix: "[checks-workflows](../gates/checks-workflows.md#set-up-nix)",
   copy: "[checks-copy](../gates/checks-copy.md)",
   frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
   nestedOxlintConfigs: "[checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs)",
@@ -258,13 +259,13 @@ const SETTINGS: Block = {
     Effect.map(
       Effect.all(Object.entries(Settings.fields).flatMap(([section, schema]) => {
         if (!isSettingSection(section)) return isSettingKey(section) ? [settingRow(section, section, schema)] : [];
-        const keys: Readonly<Record<string, SettingKey>> = TRANSITION_KEYS[section];
+        const keys: Readonly<Record<string, SettingKey>> = GROUPED_KEYS[section];
         const fields: Readonly<Record<string, Schema.Top>> = GroupedSettings[section].fields;
         return Object.entries(fields).map(([key, field]) => {
-          const legacyKey = keys[key];
-          return legacyKey === undefined || !isSettingKey(legacyKey)
-            ? Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no transition for ${section}.${key}` }))
-            : settingRow(`${section}.${key}`, legacyKey, field);
+          const settingKey = keys[key];
+          return settingKey === undefined || !isSettingKey(settingKey)
+            ? Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no reader for ${section}.${key}` }))
+            : settingRow(`${section}.${key}`, settingKey, field);
         });
       })),
       (rows) => ["| Key | Default | What it holds | Reader |", "| --- | --- | --- | --- |", ...rows] as const,

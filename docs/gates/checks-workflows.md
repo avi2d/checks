@@ -126,6 +126,17 @@ It also fails when a test job of `ci.yml` holds an input that does not parse, or
 The message names the flags that fix it.
 Each difference names the file, and each changed line names what the file holds and what `checks-workflows` writes.
 
+### Set up Nix
+
+Set `workflows.setupNix: true` in `checks.config.ts` if your tests need Nix.
+Run `bunx checks-workflows --write` to update `ci.yml` and `main.yml`.
+The setting adds two steps before the tests in the `unit` and `e2e` jobs of `ci.yml` and the `suite` job of `main.yml`.
+The first step uses a pinned `cachix/install-nix-action` on GitHub-hosted runners.
+The second step runs `nix --version` on every runner.
+On a self-hosted runner, make `nix` available on `PATH` before the job starts.
+The setting changes no runner and adds no job.
+The default is `false`, which adds neither step.
+
 ### Flake schedule
 
 Set `workflows.flakeCron` in `checks.config.ts` to schedule the flake workflow in a code repository:
@@ -406,7 +417,7 @@ It names the fix.
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | `workflows.flakeCron` is set in a site, `workflows.extraTestJobs` takes a reserved job name or holds a setup or test command that is not plain, a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `workflows.releaseAssets` or `workflows.platformPackages` in a site or a private repository, or `workflows.platformPackages` with a private `package.json` and no public workspace |
-| 2 | `workflows.mutationShardCount` is not an integer from 1 to 256, `workflows.flakeCron` does not decode, `--write` meets `workflows.flakeCron` in a site, `workflows.extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `workflows.releaseAssets` or `workflows.platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `workflows.platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `workflows.releaseAssets` or `workflows.platformPackages` in a site or a private repository, or `workflows.platformPackages` with a private `package.json` and no public workspace |
+| 2 | `workflows.mutationShardCount` is not an integer from 1 to 256, `workflows.flakeCron` or `workflows.setupNix` does not decode, `--write` meets `workflows.flakeCron` in a site, `workflows.extraTestJobs` does not decode, including a job name listed twice, `--write` meets a reserved extra job name or a setup or test command that is not plain, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `workflows.releaseAssets` or `workflows.platformPackages` and `package.json` defines no `release:assets` script, `checks.config.ts` sets `workflows.platformPackages` in the kit or with a private `package.json` and more than one public workspace, or `--write` meets `workflows.releaseAssets` or `workflows.platformPackages` in a site or a private repository, or `workflows.platformPackages` with a private `package.json` and no public workspace |
 
 ## Sample output
 
