@@ -16,9 +16,9 @@ test.each([
   ["tests/e2e/home.test.ts", true],
   ["tests/unit/helper.ts", true],
   ["tests/e2e/helper.tsx", true],
-] as const)("%s with browserRoutes=%s does not request a site build or browser walk", async (file, mapped) => {
+] as const)("%s with affectedRoutes=%s does not request a site build or browser walk", async (file, mapped) => {
   const repo = await open({
-    "checks.config.ts": mapped ? `export default { browserRoutes: { "${file}": ["/"] } };\n` : "export default {};\n",
+    ...(mapped ? { "checks.browser.config.ts": `export default ${JSON.stringify({ ...browserPlan, affectedRoutes: { [file]: ["/"] } })};\n` } : {}),
     [file]: "export {};\n",
   });
   const base = await repo.commit("test: base");

@@ -19,7 +19,7 @@ test("axe reports both unnamed buttons per visit without loading a second copy o
     const pages = { "one.html": html, "two.html": html, "three.html": html, "four.html": html };
     const site = await browserSite({
       ...sitePages(pages),
-      "checks.config.ts": declaration({
+      "checks.browser.config.ts": declaration({
         checks: ["axe", "nesting"], routes: routesOf(pages),
         viewports: [{ name: "phone", width: 375, height: 667 }, { name: "desktop", width: 1440, height: 900 }],
       }),

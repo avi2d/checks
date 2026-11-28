@@ -20,7 +20,7 @@ const HELPER = "tests/e2e/lib/site.ts";
 test("type-only and Vite asset imports do not make a map entry, new helper and new test run unrelated tests or build the site", async () => {
   const repo = await open({
     ".gitignore": "node_modules/\n",
-    "checks.config.ts": `export default { reach: { "src/components/Hero.astro": ["${A}"] } };`,
+    "checks.config.ts": `export default { test: { affected: { "src/components/Hero.astro": ["${A}"] } } };`,
     "src/content.config.ts": 'import { defineCollection } from "astro:content";',
     "src/lib/articles.ts": 'import { getCollection } from "astro:content"; import type { Element } from "hast"; export type { Element } from "hast";',
     "node_modules/@types/hast/package.json": '{"name":"@types/hast","types":"index.d.ts"}',
@@ -36,7 +36,7 @@ test("type-only and Vite asset imports do not make a map entry, new helper and n
   });
   const base = await repo.commit("test: base");
   await repo.write({
-    "checks.config.ts": `export default { reach: { "src/components/Hero.astro": ["${A}", "${B}"] } };`,
+    "checks.config.ts": `export default { test: { affected: { "src/components/Hero.astro": ["${A}", "${B}"] } } };`,
     [HELPER]: "export const site = 1;",
     [B]: 'import { site } from "./lib/site.ts";',
   });
@@ -101,7 +101,7 @@ test("a helper read by path through another helper does not omit the transitive 
 
 test("a module helper does not lose its explicit reach-map tests", async () => {
   const repo = await open({
-    "checks.config.ts": `export default { reach: { "${HELPER}": ["${A}"] } };`,
+    "checks.config.ts": `export default { test: { affected: { "${HELPER}": ["${A}"] } } };`,
     [HELPER]: "export const site = 1;",
     [A]: "export {};",
     [B]: "export {};",
@@ -142,7 +142,7 @@ test("fixture data still selects its path reader rather than the whole tier", as
 test("an unloadable base config cannot narrow a valid head config", async () => {
   const repo = await open({ "checks.config.ts": 'throw new Error("broken base");', [A]: "export {};", [C]: "export {};" });
   const base = await repo.commit("test: base with unloadable config");
-  await repo.write({ "checks.config.ts": `export default { reach: { "src/page.astro": ["${A}"] } };` });
+  await repo.write({ "checks.config.ts": `export default { test: { affected: { "src/page.astro": ["${A}"] } } };` });
   await repo.commit("test: valid head config");
   const result = await Effect.runPromise(readChangedNarrowing(repo.dir, ["checks.config.ts"], [A, C], "e2e", base).pipe(Effect.provide(platform)));
   expect(result.kind).toBe("full");

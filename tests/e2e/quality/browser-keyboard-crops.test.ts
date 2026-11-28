@@ -10,7 +10,7 @@ test("keyboard keeps visible focus and rejects missing focus without decoding im
           window.createImageBitmap = () => { throw new Error("keyboard images must stay outside the page"); };
         </script>` },
     ),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       targets: [
         { name: "visible", selector: "#visible", focusable: true },
         { name: "missing", selector: "#missing", focusable: true },

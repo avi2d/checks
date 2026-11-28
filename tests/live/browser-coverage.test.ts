@@ -11,7 +11,7 @@ test("every-page visits each built page the declaration never names, and an axe-
     "dist/index.html": CLEAN_LINK,
     "dist/about/index.html": FAINT_WHEN_MOVING,
     "dist/notes.html": CLEAN_LINK,
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       routes: [{ preset: "every-page", locale: "en" }],
       states: [{ name: "reduced motion", reducedMotion: "reduce" }, { name: "default motion", checks: ["axe"] }],
       checks: ["layout", "axe"],
@@ -36,7 +36,7 @@ test("every-page visits each built page the declaration never names, and an axe-
 test("html runs in the first state that runs it, rather than in none when the first state names its checks without html", async () => {
   const site = await browserSite({
     "dist/index.html": page(`<p><a href="/">Write to me</a></p><form><input type="text" name="name"><button type="submit">Send</button></form>`),
-    "checks.config.ts": declaration({ states: [{ name: "default", checks: ["axe"] }, { name: "alt" }], checks: ["axe", "html"] }),
+    "checks.browser.config.ts": declaration({ states: [{ name: "default", checks: ["axe"] }, { name: "alt" }], checks: ["axe", "html"] }),
   });
   const failed = await site.run();
   const html = failuresOf(failed.text).filter((line) => line.startsWith("html at"));

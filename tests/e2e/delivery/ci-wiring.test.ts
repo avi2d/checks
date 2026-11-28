@@ -149,7 +149,7 @@ test("a private repository names the mutation runner fault on a hand-written fil
   const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","gpu"]') }}`;
   const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    timeout-minutes: 10\n    steps:\n      - run: bun run mutate\n`;
   const consumer = { name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" } };
-  const runners = settingsFile({ mutationRunner: ["self-hosted", "gpu", "x64"] });
+  const runners = settingsFile({ workflows: { mutationRunsOn: ["self-hosted", "gpu", "x64"] } });
   const repo = await open({
     "package.json": JSON.stringify(consumer),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
@@ -233,7 +233,7 @@ test("a private repository's shell-traced mutation jobs are refused outside the 
   const repo = await open({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", "mutate:incremental": "scripts/mutate.sh --incremental" } }),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
-    "checks.config.ts": settingsFile({ mutationRunner: ["self-hosted", "gpu", "x64"] }),
+    "checks.config.ts": settingsFile({ workflows: { mutationRunsOn: ["self-hosted", "gpu", "x64"] } }),
     "scripts/mutate.sh": '#!/usr/bin/env bash\nset -euo pipefail\nexec ./node_modules/.bin/stryker run "$@"\n',
     "mutate.sh": "#!/bin/sh\nscripts/mutate.sh\n",
     "tools/sweep.sh": "#!/bin/sh\ncd .. && ./mutate.sh\n",

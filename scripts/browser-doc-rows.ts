@@ -1,5 +1,5 @@
 import { Effect, Schema, SchemaAST } from "effect";
-import { BrowserSettings } from "../src/core/browser-settings.ts";
+import { BROWSER_SETTINGS_FILE, BrowserSettings, LEGACY_BROWSER_OPTIONS } from "../src/core/browser-settings.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
 
 export const browserConfigRows = Effect.forEach(Object.entries(BrowserSettings.fields), ([key, schema]) => {
@@ -26,3 +26,8 @@ function compactJson(value: Readonly<Record<string, unknown>>): readonly string[
 }
 
 export const browserStarterLines = ["```json", ...compactJson(starter), "```"];
+
+export const migrationBrowserRows = [
+  `| \`browser\` | The default export of \`${BROWSER_SETTINGS_FILE}\` |`,
+  ...Object.entries(LEGACY_BROWSER_OPTIONS).map(([key, old]) => `| \`${old}\` | \`${key}\` in \`${BROWSER_SETTINGS_FILE}\` |`),
+];

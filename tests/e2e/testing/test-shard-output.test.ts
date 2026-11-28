@@ -13,7 +13,7 @@ const PASSING = 'import { test } from "bun:test"; test("passes", () => {});\n';
 test("shards report all excluded files instead of claiming the shard alone is empty", async () => {
   const repo = await open({
     "package.json": JSON.stringify({ name: "acme" }),
-    "checks.config.ts": 'export default { testFileSkips: ["tests/unit/one.test.ts"] };\n',
+    "checks.config.ts": 'export default { test: { excludeFiles: ["tests/unit/one.test.ts"] } };\n',
     "tests/unit/one.test.ts": 'throw new Error("excluded file ran");\n',
   });
   await repo.commit("test: exclude the selected tier");
@@ -54,7 +54,7 @@ for (const ci of [false, true]) {
     test(`a ${ci ? "CI" : "local"} ${fails ? "failed" : "passing"} run emits reusable file timings without zero values`, async () => {
       const repo = await open({
         "package.json": JSON.stringify({ name: "acme" }),
-        "checks.config.ts": "export default { agentTests: { allowLocal: true } };\n",
+        "checks.config.ts": "export default { test: { allowAgentRunsOutsideCI: true } };\n",
         "tests/unit/one.test.ts": PASSING,
         "tests/unit/two.test.ts": fails
           ? 'import { test } from "bun:test"; test("fails", () => { throw new Error("expected failure"); });\n'

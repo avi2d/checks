@@ -15,7 +15,7 @@ const Pixels = Schema.Int.check(Schema.isGreaterThan(0));
 const Bytes = Schema.Int.check(Schema.isGreaterThan(0));
 
 const Route = Schema.Struct({
-  path: Schema.String.check(Schema.isPattern(/^\//, { message: "is not a path from the site root, such as /ru/" })),
+  path: Schema.String.check(Schema.isPattern(/^\//u, { message: "is not a path from the site root, such as /ru/" })),
   locale: Name,
 });
 

@@ -16,7 +16,7 @@ const SANDBOX = {
   run: "bunx checks-test --tier=live",
 };
 
-const configWith = (jobs: readonly unknown[]): string => `export default { extraTestJobs: ${JSON.stringify(jobs)} };\n`;
+const configWith = (jobs: readonly unknown[]): string => `export default { workflows: { extraTestJobs: ${JSON.stringify(jobs)} } };\n`;
 
 const repoWith = async (config: string | undefined) => {
   const repo = await open({

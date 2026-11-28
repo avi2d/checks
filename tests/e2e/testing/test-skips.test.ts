@@ -311,7 +311,7 @@ test("CI rejects slow file setup even when every test passes, but a local run do
   await consumer(
     'import { describe, test } from "bun:test";\nawait Bun.sleep(250);\ndescribe("nested", () => { test("passes", () => {}); });\n',
   );
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileMaxSeconds: 0.1 }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { fileTimeoutSeconds: 0.1 } }));
   const args = ["--tier=unit", "--parallel=2"];
 
   const ci = await checksTest(true, args);
@@ -326,11 +326,11 @@ test("CI rejects slow file setup even when every test passes, but a local run do
 
 test("CI refuses a zero file limit instead of treating it as disabled", async () => {
   await consumer('import { test } from "bun:test";\ntest("does not start", () => {});\n');
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileMaxSeconds: 0 }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { fileTimeoutSeconds: 0 } }));
 
   const ci = await checksTest(true);
   expect(ci.exitCode).toBe(2);
-  expect(ci.text).toContain("checks.config.ts key testFileMaxSeconds does not decode");
+  expect(ci.text).toContain("checks.config.ts key test.fileTimeoutSeconds does not decode");
   expect(ci.text).not.toContain("1 pass");
 });
 
@@ -343,12 +343,12 @@ test("a listed file does not run or leave stale skips, and a similarly named fil
   ].join("\n");
   const neighbor = 'import { test } from "bun:test"; test("neighbor ran", () => {});';
   await consumer(skipped, { "tests/unit/suite.test.tsx": neighbor });
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [SUITE] }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { excludeFiles: [SUITE] } }));
 
   const ci = await checksTest(true, ["--full"]);
 
   expect(ci.exitCode).toBe(0);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${SUITE}`);
   expect(ci.text).toContain("neighbor ran");
   expect(ci.text).not.toContain("excluded test ran");
   expect(ci.text).not.toContain("no test skipped with this declaration");
@@ -358,13 +358,13 @@ test("excluding every file in a tier does not fall back to an unfiltered run", a
   const failing = 'import { test } from "bun:test"; test("unexpected run", () => { throw new Error("must not run"); });';
   const live = "tests/live/machine.test.ts";
   await consumer(failing, { [live]: failing });
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [SUITE, live] }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { excludeFiles: [SUITE, live] } }));
 
   const ci = await checksTest(true, ["--tier=live"]);
 
   expect(ci.exitCode).toBe(0);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${live}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${SUITE}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${live}`);
   expect(ci.text).toContain("all selected test files are excluded, so no test ran");
   expect(ci.text).not.toContain("unexpected run");
 });
@@ -372,17 +372,17 @@ test("excluding every file in a tier does not fall back to an unfiltered run", a
 test("a missing file in the skip list is not silently accepted", async () => {
   await consumer('import { test } from "bun:test"; test("does not start", () => {});');
   const missing = "tests/unit/missing.test.ts";
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [missing] }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { excludeFiles: [missing] } }));
 
   const ci = await checksTest(true);
 
   expect(ci.exitCode).toBe(2);
-  expect(ci.text).toContain(`testFileSkips names no test file at ${missing}`);
+  expect(ci.text).toContain(`checks.config.ts test.excludeFiles names no test file at ${missing}`);
   expect(ci.text).not.toContain("1 pass");
 });
 
 async function declareSmoke(smoke: readonly string[]): Promise<void> {
-  await writeFile(join(dir, "checks.config.ts"), settingsFile({ smoke }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ test: { extraLocalFiles: smoke } }));
 }
 
 async function smokeConsumer(): Promise<void> {
@@ -457,7 +457,7 @@ test("a smoke entry Bun's ignored paths would drop is refused before the suite r
 
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(2);
-  expect(refused.text).toContain("checks.config.ts smoke cannot name a quarantined, live or pixel test at tests/live/machine.test.ts");
+  expect(refused.text).toContain("checks.config.ts test.extraLocalFiles cannot name a quarantined, live or pixel test at tests/live/machine.test.ts");
 });
 
 test("a smoke list left under package.json checks.smoke is refused naming the checks.config.ts key, instead of running without it", async () => {

@@ -44,6 +44,7 @@ If it does not, the commands run from source.
 | --- | --- |
 | write every file the gates ask for | [Set up a repository](docs/how-to/set-up-a-repository.md) |
 | move to a newer release | [Upgrade the kit](docs/how-to/upgrade-the-kit.md) |
+| move flat settings into sections and a browser config file | [Migrate checks configuration](docs/how-to/migrate-checks-configuration.md) |
 | turn on the CSS checks | [Turn on the CSS families](docs/how-to/turn-on-the-css-families.md) |
 | picture one block at each screen size and approve its pictures | [Test the screens of one block](docs/how-to/test-a-blocks-screens.md) |
 | serve a built site and test its pages in a browser | [Test a built site in a browser](docs/how-to/test-a-built-site.md) |

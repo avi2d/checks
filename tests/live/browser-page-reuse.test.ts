@@ -24,7 +24,7 @@ async function observeLoads(config: Declared) {
     const site = await browserSite({
       "dist/index.html": html,
       "dist/other.html": html,
-      "checks.config.ts": declaration(config),
+      "checks.browser.config.ts": declaration(config),
     });
     const result = await site.run();
     return { ...result, loads: loads.toSorted(), probeUrl };
