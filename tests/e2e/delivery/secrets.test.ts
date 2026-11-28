@@ -198,7 +198,6 @@ async function started(): Promise<{ readonly repo: FixtureRepo; readonly base: s
   return { repo, base: await repo.commit("chore: start") };
 }
 
-// Each side writes its own files, and the merge stops before its commit so the test writes the resolution.
 async function diverged(files: {
   readonly topic: Readonly<Record<string, string>>;
   readonly main: Readonly<Record<string, string>>;
