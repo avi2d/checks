@@ -4,7 +4,7 @@ import { browserConfigRows, browserStarterLines, migrationBrowserRows } from "./
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
+import { flatSettingPath, GroupedSettings, Settings, TRANSITION_KEYS, SETTINGS_FILE, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
@@ -278,7 +278,7 @@ const CONFIG_MIGRATION: Block = {
     "| Flat key in `checks.config.ts` | Where it goes |",
     "| --- | --- |",
     ...Object.entries(TRANSITION_KEYS).flatMap(([section, keys]) =>
-      Object.entries(keys).map(([key, old]) => `| ${code(old === "agentTests" ? "agentTests.allowLocal" : old)} | ${code(`${section}.${key}`)} |`),
+      Object.entries(keys).map(([key, old]) => `| ${code(flatSettingPath(old))} | ${code(`${section}.${key}`)} |`),
     ),
     ...migrationBrowserRows,
   ]),

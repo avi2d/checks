@@ -348,7 +348,7 @@ test("a listed file does not run or leave stale skips, and a similarly named fil
   const ci = await checksTest(true, ["--full"]);
 
   expect(ci.exitCode).toBe(0);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${SUITE}`);
   expect(ci.text).toContain("neighbor ran");
   expect(ci.text).not.toContain("excluded test ran");
   expect(ci.text).not.toContain("no test skipped with this declaration");
@@ -363,8 +363,8 @@ test("excluding every file in a tier does not fall back to an unfiltered run", a
   const ci = await checksTest(true, ["--tier=live"]);
 
   expect(ci.exitCode).toBe(0);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
-  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${live}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${SUITE}`);
+  expect(ci.text).toContain(`checks-test: test.excludeFiles excludes ${live}`);
   expect(ci.text).toContain("all selected test files are excluded, so no test ran");
   expect(ci.text).not.toContain("unexpected run");
 });
@@ -377,7 +377,7 @@ test("a missing file in the skip list is not silently accepted", async () => {
   const ci = await checksTest(true);
 
   expect(ci.exitCode).toBe(2);
-  expect(ci.text).toContain(`testFileSkips names no test file at ${missing}`);
+  expect(ci.text).toContain(`checks.config.ts test.excludeFiles names no test file at ${missing}`);
   expect(ci.text).not.toContain("1 pass");
 });
 
