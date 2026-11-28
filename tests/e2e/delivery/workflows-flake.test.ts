@@ -62,6 +62,31 @@ test.each(["23 5 * * *", "23 5 * * 1"])("daily limit does not block writing and 
   expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
+test.each([
+  ["23 5 0 * *", "day-of-month"],
+  ["23 5 32 * *", "day-of-month"],
+  ["23 5 8-2 * *", "day-of-month"],
+  ["23 5 */0 * *", "day-of-month"],
+  ["23 5 * 0 *", "month"],
+  ["23 5 * 13 *", "month"],
+  ["23 5 * JAN-XYZ *", "month"],
+  ["23 5 * * 7", "weekday"],
+  ["23 5 * * MON,,FRI", "weekday"],
+  ["23 5 * * FUNDAY", "weekday"],
+])("rejects invalid cron %s in the %s field", async (cron, field) => {
+  const repo = await consumer({ "checks.config.ts": `export default { workflows: { flakeCron: "${cron}" } };\n` });
+  const result = await write(repo);
+  expect(result.exitCode).toBe(2);
+  expect(result.text).toContain("checks.config.ts key workflows.flakeCron does not decode");
+  expect(result.text).toContain(`invalid ${field} field`);
+}, 30_000);
+
+test.each(["23 5 1,15 1-12/2 0-6/2", "23 5 */2 JAN,MAR-DEC MON-FRI", "23 5 31 DEC SAT"])("writes valid cron %s", async (cron) => {
+  const repo = await consumer({ "checks.config.ts": `export default { workflows: { flakeCron: "${cron}" } };\n` });
+  expect((await write(repo)).exitCode).toBe(0);
+  expect(await events(repo)).toEqual({ workflow_dispatch: null, schedule: [{ cron }] });
+}, 30_000);
+
 test("without flakeCron ci-wiring rejects a hand-added flake schedule and --write restores dispatch-only", async () => {
   const repo = await consumer({ [FLAKE]: `name: flake\non:\n  workflow_dispatch:\n  schedule:\n    - cron: "${CRON}"\n` });
 
