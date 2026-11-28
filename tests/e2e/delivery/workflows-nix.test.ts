@@ -7,7 +7,7 @@ const open = fixtureRepos("checks-workflows-nix-");
 const WORKFLOWS = "delivery/workflows.ts";
 
 const decodeJobs = Schema.decodeUnknownSync(Schema.Struct({
-  jobs: Schema.Record(Schema.String, Schema.Struct({ steps: Schema.Array(Schema.Unknown) })),
+  jobs: Schema.Record(Schema.String, Schema.Struct({ steps: Schema.optionalKey(Schema.Array(Schema.Unknown)) })),
 }));
 
 const stepsOf = async (repo: FixtureRepo, name: string, job: string) =>
