@@ -1,5 +1,5 @@
 import { Console, Effect, FileSystem, Path, Schema, Struct } from "effect";
-import { Listed } from "./browser-settings.ts";
+import { browserSettingDestination, LegacyBrowserFields } from "./browser-settings.ts";
 import { cronFields, validCronField } from "./cron-fields.ts";
 import { Usage } from "./main.ts";
 
@@ -39,14 +39,6 @@ export const TrackerKeyPrefixes = Schema.Array(Schema.String.check(Schema.isPatt
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
 export const Reach = Schema.Record(Schema.String, Schema.Array(Schema.String));
-
-export const BrowserRoutes = Schema.Record(Schema.NonEmptyString, Schema.Array(Schema.NonEmptyString));
-
-export const BrowserBuild = Schema.NonEmptyArray(Schema.NonEmptyString);
-
-export const BrowserTimings = Schema.Record(Schema.NonEmptyString, Schema.Record(Schema.NonEmptyString, Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))));
-
-export type BrowserTimings = typeof BrowserTimings.Type;
 
 export const MutationRunner = Schema.NonEmptyArray(Schema.NonEmptyString);
 
@@ -144,10 +136,7 @@ const LegacySettings = Schema.Struct({
   mutationRunner: Schema.optionalKey(MutationRunner.annotate({ description: "The runner labels for mutation jobs in a private repository." })),
   mutationShardCount: Schema.optionalKey(MutationShardCount),
   selfHostedRunners: Schema.optionalKey(SelfHostedRunners.annotate({ description: "The other sets of self-hosted runner labels that jobs in a private repository may use." })),
-  browser: Schema.optionalKey(Listed.annotate({ description: "The site, routes, and checks for browser tests." })),
-  browserRoutes: Schema.optionalKey(BrowserRoutes.annotate({ description: "The repository paths that can affect each browser route." })),
-  browserBuild: Schema.optionalKey(BrowserBuild.annotate({ description: "The command that builds the site for the browser test-only proof." })),
-  browserTimings: Schema.optionalKey(BrowserTimings.annotate({ description: "The measured milliseconds of each browser check at each route, which browser shards balance on." })),
+  ...LegacyBrowserFields,
   copy: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the copy gate." })),
   frontendSyntax: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the frontend syntax gate." })),
   nestedOxlintConfigs: Schema.optionalKey(NestedOxlintConfigs.annotate({
@@ -232,10 +221,6 @@ export const Settings = Schema.Struct({
   frontendSyntax: legacy.frontendSyntax,
   commentGate: Schema.optionalKey(GroupedSettings.commentGate),
   lintCoverage: Schema.optionalKey(GroupedSettings.lintCoverage),
-  browser: legacy.browser,
-  browserRoutes: legacy.browserRoutes,
-  browserBuild: legacy.browserBuild,
-  browserTimings: legacy.browserTimings,
 });
 
 const SETTING_KEYS = [...Object.keys(Settings.fields), ...Object.keys(legacy).filter((key) => !Object.hasOwn(Settings.fields, key))];
@@ -273,7 +258,7 @@ const OldManifest = Schema.fromJsonString(Schema.Struct({ checks: Schema.optiona
 
 const decodeOldManifest = Schema.decodeUnknownEffect(OldManifest);
 
-const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
+export const refuseUnknownSettings = Effect.fn("refuseUnknownSettings")(function* (
   location: string, raw: Readonly<Record<string, unknown>>, known: readonly string[], recommended: readonly string[] = known,
 ) {
   const unknown = Object.keys(raw).filter((key) => !known.includes(key));
@@ -309,28 +294,47 @@ const normalizeSection = Effect.fn("normalizeSection")(function* (
   }
 });
 
+const DEPRECATED_KEYS = [
+  ...Object.values(TRANSITION_KEYS).flatMap((keys) => Object.values(keys)),
+  ...Object.keys(LegacyBrowserFields).filter(isOldBrowserKey),
+];
+
 function flatKeysPresent(settings: Readonly<Record<string, unknown>>): SettingKey[] {
-  return Object.values(TRANSITION_KEYS).flatMap((keys) => Object.values(keys)).filter((key) => Object.hasOwn(settings, key));
+  return DEPRECATED_KEYS.filter((key) => Object.hasOwn(settings, key));
+}
+
+function isOldBrowserKey(key: string): key is keyof typeof LegacyBrowserFields {
+  return Object.hasOwn(LegacyBrowserFields, key);
+}
+
+function migrationDestination(key: SettingKey): string {
+  return isOldBrowserKey(key) ? browserSettingDestination(key) : settingPath(key);
 }
 
 const reportDeprecation = Effect.fn("reportDeprecation")(function* (file: string, key: SettingKey) {
   const deprecationId = `${file}\0${key}`;
   if (reportedDeprecations.has(deprecationId)) return;
   reportedDeprecations.add(deprecationId);
-  yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${settingPath(key)}`);
+  yield* Console.error(`${SETTINGS_FILE} key ${key === "agentTests" ? "agentTests.allowLocal" : key} is deprecated; move it to ${migrationDestination(key)}`);
+});
+
+export const readSettingsModule = Effect.fn("readSettingsModule")(function* (file: string, filename: string, example: string) {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(file))) return undefined;
+  const loaded: unknown = yield* Effect.tryPromise({
+    try: () => import(file),
+    catch: (cause) => new Usage({ message: `${filename} does not load: ${String(cause)}` }),
+  });
+  const { default: settings } = yield* decodeSettingsModule(loaded).pipe(
+    Effect.mapError(() => new Usage({ message: `${filename} has no default export of a settings object; export ${example}` })),
+  );
+  return settings;
 });
 
 export const loadSettings = Effect.fn("loadSettings")(function* (root: string, source: "current" | "historical" = "current") {
-  const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).resolve(root, SETTINGS_FILE);
-  if (!(yield* fs.exists(file))) return { values: {}, locations: {} } satisfies LoadedSettings;
-  const loaded: unknown = yield* Effect.tryPromise({
-    try: () => import(file),
-    catch: (cause) => new Usage({ message: `${SETTINGS_FILE} does not load: ${String(cause)}` }),
-  });
-  const { default: settings } = yield* decodeSettingsModule(loaded).pipe(
-    Effect.mapError(() => new Usage({ message: `${SETTINGS_FILE} has no default export of a settings object; export defineConfig({ ... }) from @avi2dg/checks/config` })),
-  );
+  const settings = yield* readSettingsModule(file, SETTINGS_FILE, "defineConfig({ ... }) from @avi2dg/checks/config");
+  if (settings === undefined) return { values: {}, locations: {} } satisfies LoadedSettings;
   if (Object.hasOwn(settings, "localTests")) {
     return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use test.allowAgentRunsOutsideCI instead` });
   }
@@ -364,13 +368,18 @@ const holdsOldPlace = Effect.fn("holdsOldPlace")(function* (root: string, old: O
 
 export const refuseOldPlace = Effect.fn("refuseOldPlace")(function* (root: string, key: SettingKey, old: OldPlace) {
   if (!(yield* holdsOldPlace(root, old))) return;
-  return yield* new Usage({ message: `${oldPlaceName(old)} is no longer read; move it to the ${settingPath(key)} key of ${SETTINGS_FILE}` });
+  const destination = isOldBrowserKey(key) ? browserSettingDestination(key) : `the ${settingPath(key)} key of ${SETTINGS_FILE}`;
+  return yield* new Usage({ message: `${oldPlaceName(old)} is no longer read; move it to ${destination}` });
+});
+
+export const decodeSettingAt = Effect.fn("decodeSettingAt")(function* <A>(location: string, schema: Schema.Decoder<A>, value: unknown) {
+  return yield* Schema.decodeUnknownEffect(schema)(value, { onExcessProperty: "error" }).pipe(
+    Effect.mapError(({ message }) => new Usage({ message: `${location} does not decode: ${message}` })),
+  );
 });
 
 export const decodeSetting = Effect.fn("decodeSetting")(function* <A>(key: SettingKey, schema: Schema.Decoder<A>, value: unknown, location = settingPath(key)) {
-  return yield* Schema.decodeUnknownEffect(schema)(value, { onExcessProperty: "error" }).pipe(
-    Effect.mapError(({ message }) => new Usage({ message: `${SETTINGS_FILE} key ${location} does not decode: ${message}` })),
-  );
+  return yield* decodeSettingAt(`${SETTINGS_FILE} key ${location}`, schema, value);
 });
 
 export const decodeMutationShardCount = (value: unknown, location?: string): Effect.Effect<number | undefined, Usage> => decodeSetting("mutationShardCount", Schema.UndefinedOr(MutationShardCount), value, location);

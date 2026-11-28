@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import browserPlan from "../../../../src/quality/browser/browser-checks.json" with { type: "json" };
 import { runCi } from "../../lib/ci-command.ts";
 import { fixtureRepos } from "../../lib/fixture-repo.ts";
 
@@ -36,6 +37,23 @@ test.each([
     "tests-only": "true",
     browser: "false",
   });
+});
+
+test("editing only the browser config does not narrow to the routes in its own map", async () => {
+  const file = "checks.browser.config.ts";
+  const repo = await open({ [file]: `export default ${JSON.stringify({ ...browserPlan, affectedRoutes: {} })};\n` });
+  const base = await repo.commit("test: record the browser config");
+  await repo.write({ [file]: `export default ${JSON.stringify({ ...browserPlan, affectedRoutes: { [file]: [] } })};\n` });
+  await repo.commit("test: change the browser config only");
+  const output = join(repo.dir, "output");
+  const result = await runCi("changes", [], {
+    PATH: process.env["PATH"] ?? "",
+    BASE_SHA: base,
+    PLAN_BROWSER: "true",
+    GITHUB_OUTPUT: output,
+  }, repo.dir);
+  expect(result.exitCode).toBe(0);
+  expect((await readFile(output, "utf8")).trim().split("\n")).toEqual(["docs-only=false", "tests-only=false", "browser=true"]);
 });
 
 test.each([

@@ -88,10 +88,10 @@ Nothing would then say which gate a helper serves.
 A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
 The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
 
-Twenty-three `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+These `exports` keys give consumers import paths that differ from the file paths.
 `@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
 `@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
-`@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter a product copies under the `browser` key of `checks.config.ts`.
+`@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter plan for `defineBrowserConfig` in `checks.browser.config.ts`.
 `@avi2dg/checks/screen-sizes.ts` points at `src/quality/browser/screen-sizes.ts`, whose sizes a product imports.
 `@avi2dg/checks/block-screens.ts` points at `src/testing/block-screens.ts`, whose screenshot suite a product's pixel tests call.
 `@avi2dg/checks/site-test.ts` points at `src/testing/site-test.ts`, which serves a product's built site to its browser tests.
@@ -101,6 +101,7 @@ Twenty-three `exports` keys name a path the file does not sit at, because consum
 `@avi2dg/checks/local-tests` points at `src/core/agent-marker.ts`, whose `AGENT_MARKER` names `CHECKS_AGENT`, whose `AI_AGENT_MARKER` names `AI_AGENT`, and whose `isAgent` marks an agent run.
 `@avi2dg/checks/local-test-preload` points at `src/testing/local-test-preload.ts`, the preload the shipped `bunfig.toml` names.
 `@avi2dg/checks/config` points at `src/quality/config.ts`, whose `defineConfig` a repository's `checks.config.ts` imports.
+`@avi2dg/checks/browser-config` points at `src/quality/browser-config.ts`, whose `defineBrowserConfig` a repository's `checks.browser.config.ts` imports.
 `@avi2dg/checks/templates/*` points at `dist/templates/`.
 A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
 
@@ -356,7 +357,9 @@ A pull request's title, body and comments reach the forge without a commit, so [
 ## The frontend checks are opt-in
 
 A browser check needs a built site and a browser, and a backend repository has neither.
-So a product opts in by setting the `browser` key of `checks.config.ts`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
+A product opts in by exporting its plan from `checks.browser.config.ts`.
+`checks-lint` never starts a browser.
+The browser libraries are optional peers.
 `checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where the `frontendSyntax` key of `checks.config.ts` declares its inputs.
 A repository with no interface has no CSS to hold to it.
 

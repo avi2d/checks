@@ -1,4 +1,4 @@
-import type { BrowserTimings } from "../../core/settings.ts";
+import type { BrowserTimings } from "../../core/browser-settings.ts";
 import type { Shard } from "../../core/shard.ts";
 
 const LOOK = "look";
