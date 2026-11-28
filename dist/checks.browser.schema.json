@@ -16,7 +16,8 @@
               "type": "object",
               "properties": {
                 "path": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^\\/"
                 },
                 "locale": {
                   "type": "string",
@@ -63,7 +64,8 @@
             "type": "object",
             "properties": {
               "path": {
-                "type": "string"
+                "type": "string",
+                "pattern": "^\\/"
               },
               "locale": {
                 "type": "string",
