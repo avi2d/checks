@@ -183,7 +183,7 @@ expect(keptGate.runs).toContain("bunx checks-ci require-success");
 test(
 "a private run marks the manifest private and names the variable when the repository is private",
 async () => {
-const repo = await open({ "checks.config.ts": 'export default { repositoryVisibility: "private" };\n' });
+const repo = await open({ "checks.config.ts": 'export default { workflows: { repositoryVisibility: "private" } };\n' });
 const run = await setup(repo, "--private");
 expect(run.exitCode).toBe(0);
 const { uses, runs } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
@@ -491,7 +491,7 @@ const docs = await pub.script("docs/docs.ts", "HEAD~1", "HEAD");
 expect(docs.exitCode).toBe(0);
 const pubWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(pub.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(pub, false) }));
 expect(pubWiring.exitCode).toBe(0);
-const priv = await open({ "checks.config.ts": 'export default { repositoryVisibility: "private" };\n' });
+const priv = await open({ "checks.config.ts": 'export default { workflows: { repositoryVisibility: "private" } };\n' });
 expect((await setup(priv, "--private")).exitCode).toBe(0);
 await priv.commit("ci: set up private repository");
 const privWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(priv.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(priv, true) }));

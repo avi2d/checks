@@ -25,7 +25,7 @@ test("keyboard reads a distinct path for each of two Tab stops, including one in
 test("keyboard scans every one of two Tab stops on a target", async () => {
   const site = await browserSite({
     "dist/index.html": page(`<a href="/">Services</a><a href="/">Contacts</a>`, { head: `<style>a:focus { outline: 3px solid #000; }</style>` }),
-    "checks.config.ts": declaration({ checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -38,7 +38,7 @@ test("keyboard judges a menu on the items visible before the first Tab press, no
     "dist/index.html": page(
       `<nav class="bar" hidden style="position: fixed; top: 0"><a href="/">Call</a></nav><nav><a href="/">Services</a></nav><div style="height: 3000px"></div><p><a href="/">Write to me</a></p>${COMPACT_BAR}`,
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -57,7 +57,7 @@ test("keyboard counts a focus ring drawn on the row far outside the link as visi
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "checks.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/lit-row.html", "default", "phone 320x640 touch")} link shows no visible focus when Tab reaches it`]);
@@ -77,7 +77,7 @@ test("keyboard counts a row ring at any nesting depth, and still fails a distant
   const pages = { "nested-ring.html": nestedRing, "tall-form.html": tallForm };
   const site = await browserSite({
     ...sitePages(pages),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       routes: routesOf(pages),
       viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
       targets: [
@@ -104,7 +104,7 @@ test("keyboard counts a row ring drawn by a pseudo-element or a large outline of
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "checks.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -125,7 +125,7 @@ test("keyboard counts a ring the link draws with its own focus-visible pseudo-el
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "checks.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/no-ring.html", "default", "phone 320x640 touch")} link shows no visible focus when Tab reaches it`]);
@@ -140,7 +140,7 @@ test("keyboard does not count paint added by the field's blur handler as focus",
       `<input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.classList.add("touched"));</script>`,
       { head: `<style>input:focus { outline: none; } input.touched { background: red; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
@@ -153,7 +153,7 @@ test("keyboard does not count paint a previous field adds on blur to the next fi
       `<input id="first"><input id="next"><script>document.querySelector("#first").addEventListener("blur", () => document.querySelector("#next").classList.add("touched"));</script>`,
       { head: `<style>input:focus { outline: none; } #next.touched { background: red; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "next field", selector: "#next", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "next field", selector: "#next", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} next field shows no visible focus when Tab reaches it`]);
@@ -166,7 +166,7 @@ test("keyboard does not count horizontal container scrolling as visible focus", 
       `<nav><a href="/" style="background: blue">First</a><a id="offscreen" href="/" style="background: red">Next</a></nav>`,
       { head: `<style>nav { width: 240px; overflow-x: auto; white-space: nowrap; } a { display: inline-block; width: 240px; height: 40px; } a:focus { outline: none; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "offscreen link", selector: "#offscreen", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "offscreen link", selector: "#offscreen", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} offscreen link shows no visible focus when Tab reaches it`]);
@@ -179,7 +179,7 @@ test("keyboard fails a scrolled sticky stop with no focus indication and still c
       `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav><a id="later" href="/">Later</a>`,
       { head: `<style>#sticky:focus { outline: none; } #later:focus { outline: 3px solid black; }</style>` },
     ),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       targets: [
         { name: "sticky link", selector: "#sticky", focusable: true },
         { name: "later link", selector: "#later", focusable: true },
@@ -200,7 +200,7 @@ test("keyboard reports a scrolled sticky ring as not measured rather than credit
       `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav>`,
       { head: `<style>#sticky:focus { outline: 3px solid black; }</style>` },
     ),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       targets: [{ name: "sticky link", selector: "#sticky", focusable: true }],
       viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
       checks: ["keyboard"],
@@ -229,7 +229,7 @@ test("keyboard reports changed and shortened Tab orders as unmeasured, not unrea
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       routes: routesOf(pages),
       targets: [
         { name: "first", selector: "#first", focusable: true },
@@ -254,7 +254,7 @@ test("keyboard still fails a ring that appears only after blur", async () => {
       `<form><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.classList.add("touched"));</script></form>`,
       { head: `<style>input:focus { outline: none; } input.touched:focus { outline: 3px solid #000; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
@@ -266,7 +266,7 @@ test("keyboard does not credit a cloned control for the original it copied", asy
     "dist/index.html": page(
       `<nav inert><a href="/">Services</a></nav><div style="height: 3000px"></div><p><button type="button">Write to me</button></p><script>document.querySelector("button").addEventListener("focus", () => { if (document.querySelector(".clone")) return; const bar = document.createElement("nav"); bar.className = "clone"; bar.append(document.querySelector("nav a").cloneNode(true)); document.body.append(bar); });</script>`,
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([
@@ -282,7 +282,7 @@ test("keyboard still fails a touched row whose ring needs refocus to appear", as
       `<ul style="list-style: none; padding: 0"><li class="row" style="padding: 40px"><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.closest(".row").classList.add("touched"));</script></li></ul>`,
       { head: `<style>input:focus { outline: none; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
@@ -295,7 +295,7 @@ test("keyboard still fails a distant message in a shadowed card with a transpare
       `<div class="card" style="box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); padding: 24px"><form><input name="name"><div style="height: 200px"></div><p class="msg">Complete every field</p></form></div>`,
       { head: `<style>input:focus { outline: 3px solid transparent; } form:focus-within .msg { display: none; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
@@ -305,7 +305,7 @@ test("keyboard still fails a distant message in a shadowed card with a transpare
 test("keyboard counts an underline drawn inside the link as visible focus", async () => {
   const site = await browserSite({
     "dist/index.html": page(`<p><a href="/">Family law</a></p>`, { head: `<style>a { text-decoration: none; outline-offset: 0; } a:focus { outline: none; outline-offset: 0; text-decoration: underline; }</style>` }),
-    "checks.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -318,7 +318,7 @@ test("keyboard walks past a shadow-root search into the declared menu", async ()
     "dist/index.html": page(
       `<search-box></search-box><nav><a href="/">Services</a></nav><script>class SearchBox extends HTMLElement { constructor() { super(); const root = this.attachShadow({ mode: "open", delegatesFocus: true }); root.innerHTML = "<input type=search aria-label=Search>"; } } customElements.define("search-box", SearchBox);</script>`,
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -329,7 +329,7 @@ test("keyboard walks past a shadow-root search into the declared menu", async ()
 test("keyboard counts a bolder label with no outline as visible focus", async () => {
   const site = await browserSite({
     "dist/index.html": page(`<p><a href="/">Family law</a></p>`, { head: `<style>a { font-weight: 400; } a:focus { outline: none; font-weight: 700; }</style>` }),
-    "checks.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -343,7 +343,7 @@ test("keyboard counts a shadow drawn left of the row as visible focus", async ()
       `<ul style="list-style: none; padding: 0"><li class="row" style="margin-left: 40px; padding: 20px"><a href="/">Family law</a></li></ul>`,
       { head: `<style>a:focus { outline: none; } .row:focus-within { box-shadow: -12px 0 0 #000; }</style>` },
     ),
-    "checks.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+    "checks.browser.config.ts": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
   });
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
@@ -355,7 +355,7 @@ const checkFixture = async (file: string, labels: readonly string[], withoutFocu
   const html = await Bun.file(new URL("../fixtures/keyboard/" + file, import.meta.url)).text();
   const site = await browserSite({
     "dist/index.html": html,
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       targets: labels.map((name) => ({ name, selector: "#" + name, focusable: true })),
       checks: ["keyboard"],
     }),

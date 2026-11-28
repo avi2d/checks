@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { identicalTestBuild } from "../../../src/quality/browser/build-proof.ts";
+import { declaration } from "../lib/browser-site.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo } from "../lib/fixture-repo.ts";
 import type { RunScope } from "../../../src/core/pull-request-scope.ts";
 
@@ -17,7 +18,7 @@ const script = "import { mkdir } from \"node:fs/promises\";\nawait mkdir(\"dist/
 async function setup(files: Record<string, string>): Promise<FixtureRepo> {
   const repo = await open({
     ".gitignore": "dist/\n",
-    "checks.config.ts": "export default { browserBuild: [\"bun\", \"build-site.ts\"] };\n",
+    "checks.browser.config.ts": declaration({ checks: ["html"], buildCommand: ["bun", "build-site.ts"] }),
     "build-site.ts": script,
     ...files,
   });
@@ -47,7 +48,6 @@ test("a test-only change with matching builds skips instead of running the brows
 test("a helper-only pull request does not bypass the buildCommand skip", async () => {
   const repo = await setup({
     "tests/unit/helper.ts": "export {};\n",
-    "checks.config.ts": "export default {};\n",
     "checks.browser.config.ts": `export default {
       buildCommand: ["bun", "build-site.ts"],
       site: "dist",

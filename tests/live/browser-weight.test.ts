@@ -37,7 +37,7 @@ test("weight is red on a page over its image, script and non-image budgets, and 
     "dist/big.svg": paddedSvgOfSizeBytes(600_000),
     "dist/heavy.js": randomJsOfSizeBytes(700_000),
     "dist/repetitive.js": paddedJsOfSizeBytes(1_000_000),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       routes: [{ path: "/eager.html", locale: "en" }, { path: "/lazy.html", locale: "en" }, { path: "/scripts.html", locale: "en" }, { path: "/repetitive.html", locale: "en" }],
       checks: ["weight"],
       weight: BUDGETS,

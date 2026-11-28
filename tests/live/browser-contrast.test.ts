@@ -23,7 +23,7 @@ test("contrast is red on grey body text and on white headlines over a light phot
   const site = await browserSite({
     ...sitePages(red),
     "dist/photo.svg": stripes("#fff", "#ddd"),
-    "checks.config.ts": declaration({ routes: routesOf(red), targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ routes: routesOf(red), targets: [HEADLINE], checks: ["contrast"] }),
   });
   const failed = await site.run();
   const found = failuresOf(failed.text);
@@ -53,7 +53,7 @@ test("contrast fails a declared target the page does not show or draws faded out
     "dist/index.html": page(
       `<h1>Contracts</h1><p class="note" style="display:none">Five years of practice</p><p class="faded" style="opacity:0">Deals closed</p>`,
     ),
-    "checks.config.ts": declaration({
+    "checks.browser.config.ts": declaration({
       targets: [HEADLINE, { name: "note", selector: ".note", contrast: true }, { name: "faded", selector: ".faded", contrast: true }],
       checks: ["contrast"],
     }),
@@ -73,7 +73,7 @@ test("contrast reads a headline after its entrance plays out, not at the transpa
       `<h1 style="color:#000;animation:enter 1.5s ease-out 0.3s both">Contracts</h1>`,
       { head: "<style>@keyframes enter { from { opacity: 0 } to { opacity: 1 } }</style>" },
     ),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -84,7 +84,7 @@ test("contrast reads a headline after its entrance plays out, not at the transpa
 test("contrast measures a narrow run inside a passing heading, rather than skipping it", async () => {
   const site = await browserSite({
     "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000">Contracts <span style="color:#fff">I</span></h1>'),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([
@@ -96,7 +96,7 @@ test("contrast measures a narrow run inside a passing heading, rather than skipp
 test("contrast ignores a text run placed wholly beyond the viewport, rather than failing it as drawing no glyph", async () => {
   const site = await browserSite({
     "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000">Contracts <span style="position:absolute;left:-9999px">Elsewhere</span></h1>'),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -106,7 +106,7 @@ test("contrast ignores a text run placed wholly beyond the viewport, rather than
 test("contrast keeps a currentColor backdrop behind the letters when the text is repainted", async () => {
   const site = await browserSite({
     "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;background:linear-gradient(currentColor,currentColor)"><span style="color:#fff">Contracts</span></h1>'),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -117,7 +117,7 @@ test("contrast keeps a currentColor backdrop behind the letters when the text is
 test("contrast skips the empty line of preserved multiline text at a fractional offset, rather than failing it", async () => {
   const site = await browserSite({
     "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;margin-left:20.5px;white-space:pre-line">I\n\nI</h1>'),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -127,7 +127,7 @@ test("contrast skips the empty line of preserved multiline text at a fractional 
 test("contrast keeps an inset currentColor shadow behind the letters when the text is repainted", async () => {
   const site = await browserSite({
     "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;background:linear-gradient(white,white);box-shadow:inset 0 0 0 1000px currentColor"><span style="color:#fff">Contracts</span></h1>'),
-    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+    "checks.browser.config.ts": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);

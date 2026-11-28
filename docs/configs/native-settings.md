@@ -114,33 +114,34 @@ export default defineConfig({
 
 <!-- generated settings-keys: bun run build writes it from src/core/settings.ts and scripts/doc-blocks.ts -->
 
-| Key | Flat key still read | Default | What it holds | Reader |
-| --- | --- | --- | --- | --- |
-| `workflows.repositoryVisibility` | `repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
-| `workflows.releaseAssets` | `releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
-| `workflows.platformPackages` | `platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
-| `workflows.extraTestJobs` | `extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
-| `workflows.mutationRunsOn` | `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `workflows.mutationShardCount` | `mutationShardCount` | `12` | The maximum number of shards in the generated mutation refresh, as an integer from 1 to 256. | [checks-mutation](../gates/checks-mutation.md#running-it-in-ci) |
-| `workflows.selfHostedRunsOn` | `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `workflows.testShards` | `testTierShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
-| `workflows.flakeCron` | `flakeCron` | None | The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
-| `test.extraLocalFiles` | `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
-| `test.affected` | `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
-| `test.allowAgentRunsOutsideCI` | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
-| `test.fileTimeoutSeconds` | `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
-| `test.fileTimingsSeconds` | `testFileTimings` | None | The recorded seconds per test file, which balance the shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
-| `test.excludeFiles` | `testFileSkips` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
-| `copy` | None | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
-| `frontendSyntax` | None | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
-| `commentGate.trackerKeyPrefixes` | `trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
-| `lintCoverage.allowedNestedOxlintRules` | `nestedOxlintConfigs` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
+| Key | Default | What it holds | Reader |
+| --- | --- | --- | --- |
+| `workflows.repositoryVisibility` | `"public"` | The GitHub repository visibility that selects generated workflow runners. | [checks-workflows](../gates/checks-workflows.md) |
+| `workflows.releaseAssets` | `false` | Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release. | [checks-workflows](../gates/checks-workflows.md#attach-release-assets) |
+| `workflows.platformPackages` | None | The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies. | [checks-workflows](../gates/checks-workflows.md#publish-platform-packages) |
+| `workflows.extraTestJobs` | `[]` | The test jobs the generated ci.yml runs beside its default ones, each with its own environment, setup commands and test command. | [checks-workflows](../gates/checks-workflows.md#add-a-test-job-with-its-own-setup) |
+| `workflows.mutationRunsOn` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `workflows.mutationShardCount` | `12` | The maximum number of shards in the generated mutation refresh, as an integer from 1 to 256. | [checks-mutation](../gates/checks-mutation.md#running-it-in-ci) |
+| `workflows.selfHostedRunsOn` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `workflows.testShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
+| `workflows.flakeCron` | None | The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
+| `test.extraLocalFiles` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
+| `test.affected` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
+| `test.allowAgentRunsOutsideCI` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
+| `test.fileTimeoutSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
+| `test.fileTimingsSeconds` | None | The recorded seconds per test file, which balance the shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
+| `test.excludeFiles` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
+| `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
+| `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `commentGate.trackerKeyPrefixes` | `[]` | The uppercase tracker prefixes whose numbered keys the comment gate refuses. | [checks-comment-gate](../gates/checks-comment-gate.md#tracker-keys) |
+| `lintCoverage.allowedNestedOxlintRules` | None | The rules each nested oxlint config, named by its repository-relative path, may turn off, down to a lower severity, or to other options than the root oxlint config sets. | [checks-lint-coverage](../gates/checks-lint-coverage.md#nested-oxlint-configs) |
 
 <!-- end generated settings-keys -->
 
 The TypeScript config type and the generated [JSON Schema](../../dist/checks.schema.json) both come from the grouped settings.
 The type and the schema accept only the grouped keys.
 The loader also reads deprecated flat keys in `checks.config.ts`, including browser keys, and prints deprecation notes on standard error.
+Use the [configuration migration guide](../how-to/migrate-checks-configuration.md) to find the current key for each flat setting.
 Each flat setting produces at most one note per process for its current config file.
 `checks-test --pr`, `checks-test --changed`, and the CI `changes` job load the merge-base copy of `checks.config.ts` to compare affected-test maps.
 That copy produces no deprecation notes.
