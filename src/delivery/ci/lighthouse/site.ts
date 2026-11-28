@@ -36,7 +36,7 @@ export function choosePages(found: readonly string[], named: string): Effect.Eff
 export function auditOrigin(named: string): Effect.Effect<Option.Option<string>, SiteError> {
   if (named === "") return Effect.succeedNone;
   if (!URL.canParse(named) || new URL(named).protocol !== "https:") {
-    return Effect.fail(new SiteError({ message: `origin must be an https address such as https://azalialaw.com, not '${named}'` }));
+    return Effect.fail(new SiteError({ message: `origin must be an https address such as https://example.com, not '${named}'` }));
   }
   return Effect.succeedSome(`${new URL(named).origin}/`);
 }
