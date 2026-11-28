@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
@@ -12,8 +12,8 @@ const GATE = "delivery/secrets.ts";
 const SCAN_MS = 120_000;
 
 // Each secret is assembled at run time, so the kit's own scan finds none in this file.
-const base64Key = () => randomBytes(32).toString("base64");
-const hex = (bytes: number) => randomBytes(bytes).toString("hex");
+const base64Key = () => Buffer.from(Array.from({ length: 32 }, (_, index) => 255 - index)).toString("base64");
+const hex = (bytes: 12 | 16) => "93e70c5ab184f26d".repeat(2).slice(0, bytes * 2);
 const alphanumeric = (length: number) => randomBytes(length * 2).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, length);
 const link = (scheme: string, rest: string) => `${scheme}://${rest}`;
 const withPadding = (text: string) => Buffer.from(text + " ".repeat((4 - (text.length % 3)) % 3)).toString("base64");
@@ -42,10 +42,11 @@ const PLACEHOLDERS: Readonly<Record<string, string>> = {
 type Case = { readonly file: string; readonly line: string; readonly rules: readonly string[] };
 
 function cases(): readonly Case[] {
-  const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
+  const uuid = "93e70c5a-b184-426d-8f19-56b8a37de024";
+  const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: uuid, net: "ws" })).toString("base64");
   const shadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}`).toString("base64");
   const legacyShadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`).toString("base64");
-  const paddedVmess = withPadding(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" }));
+  const paddedVmess = withPadding(JSON.stringify({ v: "2", add: HOST, port: "443", id: uuid, net: "ws" }));
   const paddedShadowsocks = withPadding(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`);
   const userinfo = ["proxy-userinfo-link"];
   const base64 = ["proxy-base64-link"];
@@ -62,12 +63,12 @@ function cases(): readonly Case[] {
       const token = ["claude-login-token"];
       return [row("aB3-_".repeat(18), token), row("aB3-_".repeat(16), token), row(`${"aB3-_".repeat(15)}aB3-`, passes), ...["", "xxxx", "REDACTED", "YOUR_TOKEN"].map((body) => row(body, passes))];
     }),
-    { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
+    { line: link("vless", `${uuid}@${HOST}:443?security=reality#home`), rules: userinfo },
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
     { line: link("socks5", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
     { line: link("socks5h", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
-    { line: link("vmess", `${randomUUID()}@${HOST}:443?type=ws#home`), rules: userinfo },
+    { line: link("vmess", `${uuid}@${HOST}:443?type=ws#home`), rules: userinfo },
     { line: link("wireguard", `${encodeURIComponent(base64Key())}@${HOST}:51820?address=192.0.2.2/32&mtu=1280#home`), rules: userinfo },
     { line: link("wg", `${HOST}:51820?pk=${base64Key()}&local_address=192.0.2.2/32&peer_pk=${base64Key()}#home`), rules: query },
     { line: link("wg", `${HOST}:51820?pk=${encodeURIComponent(base64Key())}&peer_pk=${encodeURIComponent(base64Key())}#home`), rules: query },
@@ -99,6 +100,7 @@ function cases(): readonly Case[] {
     { line: JSON.stringify([link("hysteria", "vpn.example.com:443?auth=x"), link("wg", `${HOST}:51820?pk=${base64Key()}`)]), rules: query },
     { line: link("https", `panel.home-fixture.net/sub/${hex(16)}`), rules: ["proxy-subscription-url"] },
     { line: link("https", `panel.home-fixture.net/sub?token=${hex(16)}&key=${"a".repeat(20)}`), rules: ["proxy-subscription-url"] },
+    { line: link("https", `panel.home-fixture.net/sub?token=${"13579bdf".repeat(4)}&key=${"a".repeat(20)}`), rules: passes },
     { line: `client_psk: ${base64Key()}`, rules: key },
     { line: `wireguard_psk: ${base64Key()}`, rules: key },
     { line: `wg_private_key: ${base64Key()}`, rules: key },
@@ -109,7 +111,7 @@ function cases(): readonly Case[] {
     { line: link("vmess", `${HOST}:443`), rules: passes },
     { line: link("vmess", "<base64-config>"), rules: passes },
     { line: link("vless", "<uuid>@vpn.example.com:443?security=reality#home"), rules: passes },
-    { line: link("vmess", `${randomUUID()}@vpn.example.com:443?type=ws#home`), rules: passes },
+    { line: link("vmess", `${uuid}@vpn.example.com:443?type=ws#home`), rules: passes },
     { line: link("wireguard", "<private-key>@vpn.example.com:51820"), rules: passes },
     { line: link("trojan", `pw@${HOST}:443#home`), rules: passes },
     { line: link("socks5", `user@${HOST}:1080`), rules: passes },
