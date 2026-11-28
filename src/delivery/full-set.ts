@@ -5,7 +5,7 @@ import { HOSTED_PLATFORMS, PLATFORM_BINARIES_ENV } from "./platform-packages.ts"
 import { type CallerSet } from "./site-names.ts";
 import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall, nixSetup } from "./full-set/steps.ts";
+import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall, nixVersionCheck } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow, gitleaksCache } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 import { PR_TEXT } from "./full-set/pr-text.ts";
@@ -144,7 +144,7 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, pl
                 SETUP,
                 gitleaksCache(false),
                 { run: "bunx checks-ci gitleaks" },
-                ...nixSetup(setupNix),
+                ...nixVersionCheck(setupNix),
                 { name: "run the full test suite on the release commit", run: "bun run test --full" },
               ],
             },
@@ -257,7 +257,7 @@ export const fullFlake = ({ flake: { nodeVersionFile }, claudeVersion, flakeCron
           SETUP,
           ...(nodeVersionFile === undefined ? [] : [{ uses: SETUP_NODE, with: [["node-version-file", nodeVersionFile]] } satisfies Step]),
           ...claudeInstall(claudeVersion),
-          ...nixSetup(setupNix),
+          ...nixVersionCheck(setupNix),
           { run: "bunx checks-flake --runs 10 --report flake-report.json" },
           { ...keepArtifacts("flake-report", "flake-report.json"), with: [["name", "flake-report"], ["path", "flake-report.json"], ["retention-days", "7"], ["if-no-files-found", "ignore"]] },
         ],

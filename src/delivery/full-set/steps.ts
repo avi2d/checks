@@ -4,7 +4,6 @@ export const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90
 export const SETUP_BUN = "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0";
 export const CACHE = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0";
 export const SETUP_NODE = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0";
-const INSTALL_NIX = "cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0";
 export const UPLOAD = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2";
 export const DOWNLOAD = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2";
 export const CONFIGURE_PAGES = "actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0";
@@ -24,8 +23,7 @@ export type StepHead = {
 
 export type Step = StepHead & ({ readonly uses: string; readonly with?: readonly Pair[] } | { readonly run: string; readonly env?: readonly Pair[]; readonly shell?: "bash" });
 
-export const nixSetup = (enabled: boolean): readonly Step[] =>
-  enabled ? [{ if: "runner.environment == 'github-hosted'", uses: INSTALL_NIX }, { run: "nix --version" }] : [];
+export const nixVersionCheck = (enabled: boolean): readonly Step[] => enabled ? [{ run: "nix --version" }] : [];
 
 export type Job = {
   readonly id: string;

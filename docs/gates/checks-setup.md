@@ -64,7 +64,7 @@ It reads a `package.json` it finds for the fields and scripts it keeps, replaces
 It reads `checks.config.ts` for the repository visibility, which selects the workflow runners and whether the set takes `pr-text.yml`, and for `workflows.releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
 It also reads `workflows.platformPackages`, which adds the `binaries` job to `main.yml`.
 It reads `workflows.mutationShardCount` for the number of shards the mutation refresh can create.
-It reads `workflows.flakeCron` for the flake schedule and `workflows.setupNix` for the Nix steps in code repositories.
+It reads `workflows.flakeCron` for the flake schedule and `workflows.setupNix` for the Nix version check in code repositories.
 It reads `workflows.extraTestJobs` for the extra test jobs, their environment variables, setup commands, and test commands in `ci.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins, its `typescript` pin, its `@types/bun` version, and each template.

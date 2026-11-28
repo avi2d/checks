@@ -145,7 +145,7 @@ const LegacySettings = Schema.Struct({
 const legacy = LegacySettings.fields;
 
 export const SetupNix = Schema.Boolean.annotate({
-  description: "Whether unit, e2e, release suite, flake, and whole-tree test jobs in code repositories install Nix on GitHub-hosted runners and check its version on every runner.",
+  description: "Whether unit, e2e, release suite, flake, and whole-tree test jobs in code repositories run nix --version before tests. The jobs do not install Nix.",
   default: false,
 });
 

@@ -130,20 +130,19 @@ Each difference names the file, and each changed line names what the file holds 
 
 Set `workflows.setupNix: true` in `checks.config.ts` if your code repository's tests need Nix.
 A site cannot enable this setting.
-Run `bunx checks-workflows --write` to update `ci.yml`, `main.yml`, and any present or scheduled `flake.yml`.
-The setting adds two steps before the tests in these jobs:
+Run `bunx checks-workflows --write` to update the workflow files.
+The setting adds a `nix --version` step before tests in these jobs:
 
 - The `unit` and `e2e` jobs of `ci.yml`.
 - The `suite` job of `main.yml`.
 - The `flake` job of `flake.yml`, whether it starts by hand or on a schedule.
 - The `tests` job of `whole-tree-run.yml`, in a repository that is not the kit.
 
-The first step uses a pinned `cachix/install-nix-action` on GitHub-hosted runners.
-The second step runs `nix --version` on every runner.
-On a self-hosted runner, make `nix` available on `PATH` before the job starts.
-The setting changes no runner and adds no job.
-`mutation.yml` gets neither step, so a test that needs Nix fails in the mutation run.
-The default is `false`, which adds neither step.
+The step fails the job if `nix` is not on `PATH`.
+Use your own runners with Nix already installed.
+The setting does not install Nix, change runners, or add jobs.
+`mutation.yml` still runs on GitHub-hosted runners without Nix, so tests that need Nix fail there.
+The default is `false`, which adds no step.
 
 ### Flake schedule
 

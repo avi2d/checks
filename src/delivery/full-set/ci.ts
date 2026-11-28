@@ -1,7 +1,7 @@
 import { type ExtraTestJob } from "../../core/settings.ts";
 import { type CallerSet } from "../site-names.ts";
 import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, RELEASE_TEST_RUN, isBrowserWalk, runnerOf, testTierOf } from "../ci-jobs.ts";
-import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, nixSetup, node26, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, nixVersionCheck, node26, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const CHECKED_RELEASE = "needs.changes.outputs.check-release == 'true'";
@@ -185,7 +185,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
           ]
         : []),
       ...(test.browsers === "" ? [] : [{ uses: PLAYWRIGHT_USES, with: [["browsers", scalar(test.browsers)]] } satisfies Step]),
-      ...nixSetup(set.options.setupNix && (test.name === "unit" || test.name === "e2e")),
+      ...nixVersionCheck(set.options.setupNix && (test.name === "unit" || test.name === "e2e")),
       testStep(set, test),
       keepArtifacts("artifacts-" + expression("job.check_run_id"), "artifacts/"),
     ],

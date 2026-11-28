@@ -10,17 +10,24 @@ const decodeJobs = Schema.decodeUnknownSync(Schema.Struct({
   jobs: Schema.Record(Schema.String, Schema.Struct({ steps: Schema.optionalKey(Schema.Array(Schema.Unknown)) })),
 }));
 
-const stepsOf = async (repo: FixtureRepo, name: string, job: string) =>
-  decodeJobs(Bun.YAML.parse(await Bun.file(join(repo.dir, ".github", "workflows", name)).text())).jobs[job]?.steps;
+const jobsOf = async (path: string) => decodeJobs(Bun.YAML.parse(await Bun.file(path).text())).jobs;
 
-const install = { if: "runner.environment == 'github-hosted'", uses: "cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877" };
+const stepsOf = async (repo: FixtureRepo, name: string, job: string) =>
+  (await jobsOf(join(repo.dir, ".github", "workflows", name)))[job]?.steps;
+
 const verify = { run: "nix --version" };
+
+function expectVerificationBefore(steps: readonly unknown[] | undefined, testStep: unknown) {
+  expect(steps?.filter((step) => Bun.deepEquals(step, verify))).toEqual([verify]);
+  const verifyIndex = steps?.findIndex((step) => Bun.deepEquals(step, verify)) ?? -1;
+  expect(steps?.slice(verifyIndex, verifyIndex + 2)).toEqual([verify, testStep]);
+}
 
 test.each([
   { name: "ci.yml", job: "unit", test: expect.objectContaining({ id: "test" }) },
   { name: "ci.yml", job: "e2e", test: expect.objectContaining({ id: "test" }) },
   { name: "main.yml", job: "suite", test: expect.objectContaining({ run: "bun run test --full" }) },
-])("$job sets up Nix only on opt-in instead of installing Nix on a self-hosted runner or running tests before verification", async ({ name, job, test: testStep }) => {
+])("$job checks for Nix only on opt-in and does not start tests before the check", async ({ name, job, test: testStep }) => {
   const repo = await open({
     "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
     "tests/e2e/one.test.ts": "export {};\n",
@@ -31,17 +38,13 @@ test.each([
   const baseline = await stepsOf(repo, name, job);
   expect(baseline).toContainEqual(testStep);
   expect(baseline).not.toContainEqual(verify);
-  expect(baseline).not.toContainEqual(expect.objectContaining({ uses: expect.stringContaining("cachix/install-nix-action") }));
 
   await repo.write({ "checks.config.ts": 'export default { workflows: { repositoryVisibility: "private", setupNix: true } };\n' });
   const stale = await repo.script(WORKFLOWS);
   expect(stale.exitCode, stale.text).toBe(1);
   const rewritten = await repo.script(WORKFLOWS, "--write");
   expect(rewritten.exitCode, rewritten.text).toBe(0);
-  const steps = await stepsOf(repo, name, job);
-  const installIndex = steps?.findIndex((step) => Bun.deepEquals(step, install)) ?? -1;
-  expect(installIndex).toBeGreaterThanOrEqual(0);
-  expect(steps?.slice(installIndex, installIndex + 3)).toEqual([install, verify, testStep]);
+  expectVerificationBefore(await stepsOf(repo, name, job), testStep);
   const accepted = await repo.script(WORKFLOWS);
   expect(accepted.exitCode, accepted.text).toBe(0);
 });
@@ -67,10 +70,7 @@ test.each([undefined, "23 5 * * 1"])("flake job verifies Nix before running the 
   expect(stale.exitCode, stale.text).toBe(1);
   const rewritten = await repo.script(WORKFLOWS, "--write");
   expect(rewritten.exitCode, rewritten.text).toBe(0);
-  const steps = await stepsOf(repo, "flake.yml", "flake");
-  const installIndex = steps?.findIndex((step) => Bun.deepEquals(step, install)) ?? -1;
-  expect(installIndex).toBeGreaterThanOrEqual(0);
-  expect(steps?.slice(installIndex, installIndex + 3)).toEqual([install, verify, { run: "bunx checks-flake --runs 10 --report flake-report.json" }]);
+  expectVerificationBefore(await stepsOf(repo, "flake.yml", "flake"), { run: "bunx checks-flake --runs 10 --report flake-report.json" });
   const accepted = await repo.script(WORKFLOWS);
   expect(accepted.exitCode, accepted.text).toBe(0);
 
@@ -80,10 +80,11 @@ test.each([undefined, "23 5 * * 1"])("flake job verifies Nix before running the 
   expect(await file.text()).toBe(baseline);
 });
 
-test("whole-tree test job sets up Nix on opt-in, mutation.yml gets none, and opt-out bytes stay unchanged", async () => {
-  const config = (setupNix?: boolean) => "export default " + JSON.stringify({ workflows: { repositoryVisibility: "private", setupNix } }) + ";\n";
+test("Nix opt-in never adds an installer, leaves mutation unchanged, and checks Nix before whole-tree tests", async () => {
+  const config = (setupNix?: boolean) => "export default " + JSON.stringify({ workflows: { repositoryVisibility: "private", flakeCron: "23 5 * * 1", setupNix } }) + ";\n";
   const repo = await open({
     "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
+    "tests/e2e/one.test.ts": "export {};\n",
     "checks.config.ts": config(),
   });
   const written = await repo.script(WORKFLOWS, "--write");
@@ -94,17 +95,19 @@ test("whole-tree test job sets up Nix on opt-in, mutation.yml gets none, and opt
   const mutationBaseline = await mutation.text();
   const run = { run: "bunx checks-ci whole-tree tests" };
   expect(await stepsOf(repo, "whole-tree-run.yml", "tests")).toContainEqual(run);
-  expect(baseline).not.toContain("install-nix-action");
 
   await repo.write({ "checks.config.ts": config(true) });
   const stale = await repo.script(WORKFLOWS);
   expect(stale.exitCode, stale.text).toBe(1);
   const rewritten = await repo.script(WORKFLOWS, "--write");
   expect(rewritten.exitCode, rewritten.text).toBe(0);
-  const steps = await stepsOf(repo, "whole-tree-run.yml", "tests");
-  const installIndex = steps?.findIndex((step) => Bun.deepEquals(step, install)) ?? -1;
-  expect(installIndex).toBeGreaterThanOrEqual(0);
-  expect(steps?.slice(installIndex, installIndex + 3)).toEqual([install, verify, run]);
+  expectVerificationBefore(await stepsOf(repo, "whole-tree-run.yml", "tests"), run);
+  for await (const path of new Bun.Glob("*.{yml,yaml}").scan({ cwd: join(repo.dir, ".github", "workflows"), absolute: true })) {
+    const jobs = await jobsOf(path);
+    for (const { steps = [] } of Object.values(jobs)) {
+      expect(steps, path).not.toContainEqual(expect.objectContaining({ uses: expect.stringContaining("install-nix-action") }));
+    }
+  }
   expect(await mutation.text()).toBe(mutationBaseline);
   const accepted = await repo.script(WORKFLOWS);
   expect(accepted.exitCode, accepted.text).toBe(0);
