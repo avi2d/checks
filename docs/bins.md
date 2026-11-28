@@ -72,7 +72,7 @@ These bins run on their own:
 - [`checks-release-tag`](gates/checks-release-tag.md) releases a landed release commit: it tags it, and then releases and publishes it or dispatches the release workflow on the tag.
 - [`checks-production-gate`](gates/checks-production-gate.md) refuses to publish a commit to production unless it is a published release.
 - [`checks-vendor`](gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
-- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks the `browser` key of its `checks.config.ts` declares.
+- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks in its `checks.browser.config.ts` plan.
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.

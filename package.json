@@ -50,6 +50,7 @@
     "./browser-hooks.ts": "./src/quality/browser/hooks.ts",
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
     "./config": "./src/quality/config.ts",
+    "./browser-config": "./src/quality/browser-config.ts",
     "./local-tests": "./src/core/agent-marker.ts",
     "./local-test-preload": "./src/testing/local-test-preload.ts",
     "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",

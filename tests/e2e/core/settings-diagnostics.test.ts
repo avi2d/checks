@@ -49,5 +49,5 @@ test("unknown root key advice does not recommend deprecated flat keys", async ()
   const repo = await open({ [CONFIG]: "export default { typo: true };\n" });
   const result = await repo.script("testing/local-tests-command.ts");
   expect(result.exitCode).toBe(2);
-  expect(result.text).toBe("checks-local-tests: checks.config.ts sets typo, which no command reads; its keys are workflows, test, copy, frontendSyntax, commentGate, lintCoverage, browser, browserRoutes, browserBuild, browserTimings\n");
+  expect(result.text).toBe("checks-local-tests: checks.config.ts sets typo, which no command reads; its keys are workflows, test, copy, frontendSyntax, commentGate, lintCoverage\n");
 });
