@@ -2,6 +2,25 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.122.0
+
+Released 2026-11-28.
+
+### Breaking changes
+
+- **config:** separate the browser plan from shared settings [#295](https://github.com/avi2d/checks/pull/295)
+- **config:** group shared checks settings [#277](https://github.com/avi2d/checks/pull/277)
+
+### Features
+
+- **delivery:** generate Nix setup steps in checks-workflows [#303](https://github.com/avi2d/checks/pull/303)
+
+### Fixes
+
+- **core:** keep JSON schema pattern for every regex setting [#301](https://github.com/avi2d/checks/pull/301)
+- **core:** validate flakeCron day-of-month, month and weekday fields [#297](https://github.com/avi2d/checks/pull/297)
+- **core:** carry platformPackages description and binary pattern into the schema [#292](https://github.com/avi2d/checks/pull/292)
+
 ## 0.121.1
 
 Released 2026-11-27.
