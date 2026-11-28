@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
-import { incrementalCandidates, newerThan, newestFirst, superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
+import { superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
+import { incrementalCandidates, newerThan, newestFirst } from "../../../src/testing/mutation-baseline-runs.ts";
 import { pruneReport, pruned } from "../../../src/testing/mutation-baseline-report.ts";
 import { inRefreshWindow } from "../../../src/testing/mutation-baseline-full.ts";
 import { outlived, withoutReasons, withoutStale } from "../../../src/testing/mutation-baseline-saved.ts";

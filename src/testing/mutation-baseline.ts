@@ -1,82 +1,24 @@
 #!/usr/bin/env bun
-import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Config, Console, Effect, FileSystem, Option, Path } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { BaselineFailure, gh, pruneFullState } from "./mutation-baseline-full.ts";
 import { type Kept, type Missed, pruneReport, pruned } from "./mutation-baseline-report.ts";
+import { type Artifact, artifactOf, everyArtifact, fullCandidates, latestCandidates, latestRuns, MAIN_BRANCH, newerThan, type Run, viewedRun } from "./mutation-baseline-runs.ts";
 import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
 
 const NAME = "checks-mutation-baseline";
 const USAGE =
   "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> [incremental-dest] | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
-const WORKFLOW = "mutation.yml";
-const BRANCH = "main";
 const REPORT_ALONE = "mutation.json";
 const KEPT_PER_ARTIFACT = 2;
 const FULL_ARTIFACT = "mutation-baseline-full";
 const REFRESH_ARTIFACT = "mutation-refresh-state";
-const LATEST_LIMIT = 20;
-const FULL_LIMIT = 50;
-const PAGE_SIZE = 100;
-const FULL_EVENTS = ["schedule", "workflow_dispatch"];
 
 // The first of `from` the artifact holds is copied to `to`.
 type Copy = { readonly from: readonly string[]; readonly to: string };
 
-const Run = Schema.Struct({ databaseId: Schema.Int, event: Schema.String, createdAt: Schema.String });
-type Run = typeof Run.Type;
-
-const Artifact = Schema.Struct({
-  id: Schema.Int,
-  name: Schema.String,
-  expired: Schema.Boolean,
-  workflow_run: Schema.Struct({ id: Schema.Int, repository_id: Schema.Int }),
-});
-type Artifact = typeof Artifact.Type;
-
-const decodeRuns = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Run)));
-const decodeArtifacts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ artifacts: Schema.Array(Artifact) })));
-
 const warned = <A>(fallback: A) => (failure: BaselineFailure) => Console.error(`mutation-baseline: ${failure.message}`).pipe(Effect.as(fallback));
-
-const listed = Effect.fn("listed")(function* (event: string | undefined, limit: number) {
-  const filter = event === undefined ? [] : ["--event", event];
-  const args = ["run", "list", "--workflow", WORKFLOW, "--branch", BRANCH, "--status", "success", ...filter, "--limit", String(limit), "--json", "databaseId,event,createdAt"];
-  return yield* gh(args).pipe(
-    Effect.flatMap(decodeRuns),
-    Effect.mapError((cause) => new BaselineFailure({ message: cause.message })),
-  );
-});
-
-const byNewest = (runs: readonly Run[]): readonly Run[] => [...runs].sort((one, other) => other.createdAt.localeCompare(one.createdAt));
-
-export function newestFirst(runs: readonly Run[]): readonly number[] {
-  return byNewest(runs).map((run) => run.databaseId);
-}
-
-// Runs newer than the newest push hold no baseline, and a newer push without one supersedes every older baseline.
-export function incrementalCandidates(runs: readonly Run[]): readonly Run[] {
-  const ordered = byNewest(runs.filter((run) => run.event !== "pull_request"));
-  const newestPush = ordered.findIndex((run) => run.event === "push");
-  return newestPush === -1 ? ordered : ordered.slice(0, newestPush + 1);
-}
-
-const latestCandidates = listed(undefined, LATEST_LIMIT).pipe(Effect.map(incrementalCandidates));
-
-const latestRuns = latestCandidates.pipe(Effect.map((runs) => runs.map((run) => run.databaseId)));
-
-// Each full event is listed on its own, because one shared window lets push runs crowd out every full run.
-const fullCandidates = Effect.gen(function* () {
-  const perEvent = yield* Effect.forEach(FULL_EVENTS, (event) => listed(event, FULL_LIMIT));
-  return byNewest(perEvent.flat());
-});
-
-// A full baseline supersedes every resume state before it, so only the runs newer than the run holding it can hold the state to resume from.
-export function newerThan(runs: readonly number[], full: Option.Option<number>): readonly number[] {
-  if (Option.isNone(full)) return runs;
-  const at = runs.indexOf(full.value);
-  return at === -1 ? runs : runs.slice(0, at);
-}
 
 // A successful run uploaded the files, so the newest unexpired artifact is the one the restore takes.
 // A failed lookup aborts rather than counting as absent, since that would delete the artifact the restore takes.
@@ -86,20 +28,6 @@ const keptArtifact = Effect.fn("keptArtifact")(function* (runs: readonly number[
     if (Option.isSome(artifact)) return Option.some<Kept>({ run, id: artifact.value.id, name });
   }
   return Option.none<Kept>();
-});
-
-const everyArtifact = Effect.fn("everyArtifact")(function* () {
-  const artifacts: Artifact[] = [];
-  let page = 1;
-  while (true) {
-    const batch = yield* gh(["api", `repos/{owner}/{repo}/actions/artifacts?per_page=${PAGE_SIZE}&page=${page}`]).pipe(
-      Effect.flatMap(decodeArtifacts),
-      Effect.mapError((cause) => new BaselineFailure({ message: cause.message })),
-    );
-    artifacts.push(...batch.artifacts);
-    if (batch.artifacts.length < PAGE_SIZE) return artifacts;
-    page += 1;
-  }
 });
 
 const missedDeletion = Effect.fn("missedDeletion")(function* (artifact: Artifact) {
@@ -122,7 +50,7 @@ const keptLatest = Effect.fn("keptLatest")(function* (runs: readonly number[], s
 const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
   const running = yield* Config.Int("GITHUB_RUN_ID").pipe(Config.option);
   const latest = yield* keptLatest(yield* latestRuns, yield* savedShelf(yield* runnerCache));
-  const fullRuns = (yield* fullCandidates).map((run) => run.databaseId);
+  const fullRuns = (yield* fullCandidates(MAIN_BRANCH)).map((run) => run.databaseId);
   const full = yield* keptArtifact(fullRuns, FULL_ARTIFACT);
   const resume = yield* keptArtifact(newerThan(fullRuns, Option.map(full, (kept) => kept.run)), REFRESH_ARTIFACT);
   const artifacts = yield* everyArtifact();
@@ -139,14 +67,6 @@ const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
   }
   yield* Console.log(pruneReport(dryRun, dryRun ? victims.map((victim) => victim.id) : removed, missed, keeping, latest.saved));
   return true;
-});
-
-const artifactOf = Effect.fn("artifactOf")(function* (run: number, name: string) {
-  const found = yield* gh(["api", `repos/{owner}/{repo}/actions/runs/${run}/artifacts?name=${name}`]).pipe(
-    Effect.flatMap(decodeArtifacts),
-    Effect.mapError((cause) => new BaselineFailure({ message: cause.message })),
-  );
-  return Option.fromNullishOr(found.artifacts.find((artifact) => artifact.name === name && !artifact.expired));
 });
 
 const held = Effect.fn("held")(function* (dir: string, names: readonly string[]) {
@@ -179,8 +99,10 @@ export function uploadedBy(artifacts: readonly Artifact[], running: Option.Optio
     .map((artifact) => ({ run: running.value, id: artifact.id, name: artifact.name }));
 }
 
+const prunable = (artifact: Artifact): boolean => isBaseline(artifact) && (artifact.name === LATEST_ARTIFACT || artifact.workflow_run.head_branch === MAIN_BRANCH);
+
 export function superseded(artifacts: readonly Artifact[], kept: ReadonlySet<number>): readonly Artifact[] {
-  return artifacts.filter((artifact) => isBaseline(artifact) && !kept.has(artifact.id)).sort((one, other) => one.id - other.id);
+  return artifacts.filter((artifact) => prunable(artifact) && !kept.has(artifact.id)).sort((one, other) => one.id - other.id);
 }
 
 const prune = Effect.fn("prune")(function* (shelf: string, restoring: string) {
@@ -343,30 +265,64 @@ const restoredRun = Effect.fn("restoredRun")(function* (run: Run, name: string, 
   return true;
 });
 
-const resumedState = Effect.fn("resumedState")(function* (runs: readonly Run[], ids: readonly number[], state: string, root: Option.Option<string>) {
-  const request: Request = { kind: "restore", full: false, needed: { from: [INCREMENTAL], to: state }, optional: [] };
-  for (const run of runs.filter((candidate) => ids.includes(candidate.databaseId))) {
-    const artifact = yield* artifactOf(run.databaseId, REFRESH_ARTIFACT).pipe(Effect.catch(warned(Option.none<Artifact>())));
-    if (Option.isSome(artifact) && (yield* restoredFrom(run.databaseId, artifact.value, root, request))) {
-      yield* pruneFullState(run, state);
-      return;
-    }
+const stateRequest = (to: string, optional: readonly Copy[] = []): Request =>
+  ({ kind: "restore", full: false, needed: { from: [INCREMENTAL], to }, optional });
+
+const restoredFullRun = Effect.fn("restoredFullRun")(function* (runs: readonly Run[], request: Request, root: Option.Option<string>) {
+  for (const run of runs) {
+    if (yield* restoredRun(run, FULL_ARTIFACT, root, Option.none<string>(), request)) return Option.some(run.databaseId);
   }
+  return Option.none<number>();
+});
+
+const resumedState = Effect.fn("resumedState")(function* (runs: readonly Run[], full: Option.Option<number>, state: string, root: Option.Option<string>) {
+  const eligible = newerThan(runs.map((run) => run.databaseId), full);
+  for (const run of runs.slice(0, eligible.length)) {
+    if (yield* restoredRun(run, REFRESH_ARTIFACT, root, Option.none<string>(), stateRequest(state))) return true;
+  }
+  return false;
+});
+
+const searchFull = Effect.fn("searchFull")(function* (branch: string, request: Request, root: Option.Option<string>) {
+  const runs = yield* fullCandidates(branch);
+  return { runs, full: yield* restoredFullRun(runs, request, root) };
+});
+
+const absentReport = Console.log(`mutation-baseline: no successful ${MAIN_BRANCH} run holds a ${FULL_ARTIFACT} artifact, so no report was restored`);
+
+const preferredReport = Effect.fn("preferredReport")(function* (branch: string, request: Request, root: Option.Option<string>) {
+  const selected = yield* searchFull(branch, request, root);
+  if (Option.isSome(selected.full)) return { selected };
+  const fallback = branch === MAIN_BRANCH ? undefined : yield* searchFull(MAIN_BRANCH, request, root);
+  if (fallback === undefined || Option.isNone(fallback.full)) yield* absentReport;
+  return { selected, fallback };
+});
+
+const restoreNamed = Effect.fn("restoreNamed")(function* (id: string, branch: string, request: Request, root: Option.Option<string>) {
+  const state = request.optional[0]?.to;
+  if (state === undefined) return yield* new BaselineFailure({ message: "CHECKS_MUTATION_RESUME_RUN_ID needs an incremental destination" });
+  if (!/^[1-9][0-9]*$/.test(id) || !Number.isSafeInteger(Number(id))) {
+    return yield* new BaselineFailure({ message: "CHECKS_MUTATION_RESUME_RUN_ID must be a positive run ID" });
+  }
+  const run = yield* viewedRun(id);
+  if (yield* restoredRun(run, FULL_ARTIFACT, root, Option.none<string>(), stateRequest(state, [request.needed]))) return true;
+  if (!(yield* restoredRun(run, REFRESH_ARTIFACT, root, Option.none<string>(), stateRequest(state)))) {
+    return yield* new BaselineFailure({ message: `run ${id} holds no full or stopped mutation state` });
+  }
+  yield* preferredReport(branch, { ...request, optional: [] }, root);
+  return true;
 });
 
 const restoreFull = Effect.fn("restoreFull")(function* (request: Request) {
   const root = yield* runnerCache;
-  const runs = yield* fullCandidates;
-  let restored = Option.none<number>();
-  for (const run of runs) {
-    if (yield* restoredRun(run, FULL_ARTIFACT, root, Option.none<string>(), request)) {
-      restored = Option.some(run.databaseId);
-      break;
-    }
-  }
-  if (Option.isNone(restored)) yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${FULL_ARTIFACT} artifact, so no report was restored`);
+  const branch = yield* Config.String("CHECKS_MUTATION_BRANCH").pipe(Config.withDefault(MAIN_BRANCH));
+  const named = yield* Config.String("CHECKS_MUTATION_RESUME_RUN_ID").pipe(Config.withDefault(""));
+  if (named !== "") return yield* restoreNamed(named, branch, request, root);
+  const { selected, fallback } = yield* preferredReport(branch, request, root);
   const state = request.optional[0]?.to;
-  if (state !== undefined) yield* resumedState(runs, newerThan(runs.map((run) => run.databaseId), restored), state, root);
+  if (state !== undefined && !(yield* resumedState(selected.runs, selected.full, state, root)) && fallback !== undefined) {
+    yield* resumedState(fallback.runs, fallback.full, state, root);
+  }
   return true;
 });
 
@@ -377,7 +333,7 @@ const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request
   for (const run of yield* latestCandidates) {
     if (yield* restoredRun(run, LATEST_ARTIFACT, root, shelf, request)) return true;
   }
-  yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${LATEST_ARTIFACT} artifact, so nothing was restored`);
+  yield* Console.log(`mutation-baseline: no successful ${MAIN_BRANCH} run holds a ${LATEST_ARTIFACT} artifact, so nothing was restored`);
   return true;
 });
 

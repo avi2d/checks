@@ -35,9 +35,23 @@ const exitedWhenDone = (handle: ChildProcessSpawner.ChildProcessHandle) =>
 
 const passedWhenDone = (handle: ChildProcessSpawner.ChildProcessHandle) => exitedWhenDone(handle).pipe(Effect.map((exitCode) => exitCode === 0));
 
-export const commandExit = Effect.fn("commandExit")(
-  function* (program: string, args: readonly string[], env: Readonly<Record<string, string>> = {}) {
-    return yield* exitedWhenDone(yield* spawnForwarded(program, args, env));
+const forwardedMatch = (stream: Stream.Stream<Uint8Array, PlatformError>, writer: NodeJS.WritableStream, matches: (line: string) => boolean) =>
+  stream.pipe(
+    Stream.tap((chunk) => writeChunk(writer, chunk)),
+    Stream.decodeText(),
+    Stream.splitLines,
+    Stream.runFold(() => false, (found, line) => found || matches(line)),
+  );
+
+export const commandExitWatching = Effect.fn("commandExitWatching")(
+  function* (program: string, args: readonly string[], matches: (line: string) => boolean) {
+    const handle = yield* spawnForwarded(program, args, {});
+    const [exitCode, stdoutMatch, stderrMatch] = yield* Effect.all([
+      handle.exitCode,
+      forwardedMatch(handle.stdout, process.stdout, matches),
+      forwardedMatch(handle.stderr, process.stderr, matches),
+    ], { concurrency: "unbounded" });
+    return { exitCode: Number(exitCode), matched: stdoutMatch || stderrMatch };
   },
   Effect.scoped,
 );

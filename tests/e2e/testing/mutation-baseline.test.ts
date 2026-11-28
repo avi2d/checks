@@ -8,6 +8,42 @@ const NOW_MS = Number(process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] ?? Date.now
 process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] = String(NOW_MS);
 const started = (): string => new Date(NOW_MS).toISOString();
 
+const DISPATCH = "workflow_dispatch";
+const FULL_RESTORE = ["--full", "full/mutation.json", "full/stryker-incremental.json"];
+const branchRuns = () => [
+  { ...run(40, DISPATCH, started(), [refreshState(400, "other branch")]), headBranch: "other" },
+  { ...run(30, DISPATCH, started(), [refreshState(300, "branch stopped")]), headBranch: "topic/work" },
+  run(20, DISPATCH, started(), [refreshState(200, "main stopped")]),
+  run(10, DISPATCH, started(), [fullBaseline(100, "main full")]),
+];
+
+test("--full resumes its own branch's stopped shards instead of another branch's state", async () => {
+  const runner = await selfHosted(branchRuns());
+  const restored = await runner.run(FULL_RESTORE, { CHECKS_MUTATION_BRANCH: "topic/work" });
+  expect(restored.exitCode).toBe(0);
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"main full"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"branch stopped"}');
+}, 30_000);
+
+test("--full on main still resumes main's stopped shards instead of a branch's state", async () => {
+  const runner = await selfHosted(branchRuns());
+  const restored = await runner.run(FULL_RESTORE, { CHECKS_MUTATION_BRANCH: "main" });
+  expect(restored.exitCode).toBe(0);
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"main full"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"main stopped"}');
+}, 30_000);
+
+test("--full uses the named run instead of the current branch's stopped state", async () => {
+  const runner = await selfHosted(branchRuns());
+  const restored = await runner.run(FULL_RESTORE, {
+    CHECKS_MUTATION_BRANCH: "topic/work",
+    CHECKS_MUTATION_RESUME_RUN_ID: "40",
+  });
+  expect(restored.exitCode).toBe(0);
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"main full"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"other branch"}');
+}, 30_000);
+
 test("a cache miss downloads the newest main run's baseline that is not a pull request's, restores both files and keeps the artifact in the cache", async () => {
   const runner = await selfHosted(MAIN_RUNS);
 

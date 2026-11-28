@@ -15,6 +15,7 @@ const Run = Schema.Struct({
   event: Schema.String,
   createdAt: Schema.String,
   headSha: Schema.optionalKey(Schema.String),
+  headBranch: Schema.optionalKey(Schema.String),
   artifacts: Schema.Array(Artifact),
 });
 
@@ -66,7 +67,6 @@ export type FakeOptions = {
   readonly issues?: readonly FakeIssue[];
 };
 
-// Puts a `gh` on PATH that answers the run list, artifact and download calls from successful runs of a workflow on main, mutation.yml unless named, and the issue and label calls.
 export async function fakeActions(home: string, repositoryId: number, runs: readonly FakeRun[], options: FakeOptions = {}): Promise<FakeActions> {
   const bin = join(home, "bin");
   await mkdir(bin, { recursive: true });
@@ -101,11 +101,12 @@ function flag(args: readonly string[], name: string): string | undefined {
 }
 
 function listRuns(state: FakeState, args: readonly string[]): string | undefined {
-  if (flag(args, "--workflow") !== state.workflow || flag(args, "--branch") !== "main" || flag(args, "--status") !== "success") return undefined;
+  if (flag(args, "--workflow") !== state.workflow || flag(args, "--status") !== "success") return undefined;
+  const branch = flag(args, "--branch");
   if (flag(args, "--json") !== "databaseId,event,createdAt") return undefined;
   const event = flag(args, "--event");
   const listed = [...state.runs]
-    .filter((run) => !state.inProgress.includes(run.databaseId) && (event === undefined || run.event === event))
+    .filter((run) => (run.headBranch ?? "main") === branch && !state.inProgress.includes(run.databaseId) && (event === undefined || run.event === event))
     .sort((one, other) => other.createdAt.localeCompare(one.createdAt))
     .slice(0, Number(flag(args, "--limit") ?? "20"))
     .map(({ databaseId, event: runEvent, createdAt }) => ({ databaseId, event: runEvent, createdAt }));
@@ -131,7 +132,11 @@ async function meet(state: FakeState, statePath: string): Promise<void> {
 
 async function viewRun(state: FakeState, args: readonly string[]): Promise<string | undefined> {
   const run = state.runs.find((one) => String(one.databaseId) === args[0]);
-  return run === undefined ? undefined : JSON.stringify({ headSha: run.headSha ?? "" });
+  if (run === undefined) return undefined;
+  if (flag(args, "--json") === "databaseId,event,createdAt") {
+    return JSON.stringify({ databaseId: run.databaseId, event: run.event, createdAt: run.createdAt });
+  }
+  return JSON.stringify({ headSha: run.headSha ?? "" });
 }
 
 async function download(state: FakeState, args: readonly string[]): Promise<boolean> {
@@ -154,7 +159,9 @@ function listRepoArtifacts(state: FakeState, endpoint: string): string | undefin
   const perPage = Number(params.get("per_page") ?? "30");
   const page = Number(params.get("page") ?? "1");
   const all = state.runs.flatMap((run) =>
-    run.artifacts.map(({ id, name, expired }) => ({ id, name, expired, workflow_run: { id: run.databaseId, repository_id: state.repositoryId } })),
+    run.artifacts.map(({ id, name, expired }) => ({
+      id, name, expired, workflow_run: { id: run.databaseId, repository_id: state.repositoryId, head_branch: run.headBranch ?? "main" },
+    })),
   );
   return JSON.stringify({ total_count: all.length, artifacts: all.slice((page - 1) * perPage, page * perPage) });
 }
