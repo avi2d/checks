@@ -3,7 +3,7 @@ import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import type { PlatformPackages } from "../core/settings.ts";
 import { HOSTED_PLATFORMS, PLATFORM_BINARIES_ENV } from "./platform-packages.ts";
 import { type CallerSet } from "./site-names.ts";
-import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
+import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
 import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall, nixSetup } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow, gitleaksCache } from "./full-set/ci.ts";
@@ -242,10 +242,10 @@ export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
     ],
   });
 
-export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined, cron?: string): FullWorkflow =>
+export const fullFlake = ({ flake: { nodeVersionFile }, claudeVersion, flakeCron, setupNix }: Pick<CallerOptions, "flake" | "claudeVersion" | "flakeCron" | "setupNix">): FullWorkflow =>
   fileOf({
     name: "flake",
-    on: dispatchAndSchedule(cron),
+    on: dispatchAndSchedule(flakeCron),
     jobs: [
       {
         id: "flake",
@@ -257,6 +257,7 @@ export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | un
           SETUP,
           ...(nodeVersionFile === undefined ? [] : [{ uses: SETUP_NODE, with: [["node-version-file", nodeVersionFile]] } satisfies Step]),
           ...claudeInstall(claudeVersion),
+          ...nixSetup(setupNix),
           { run: "bunx checks-flake --runs 10 --report flake-report.json" },
           { ...keepArtifacts("flake-report", "flake-report.json"), with: [["name", "flake-report"], ["path", "flake-report.json"], ["retention-days", "7"], ["if-no-files-found", "ignore"]] },
         ],

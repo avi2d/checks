@@ -145,8 +145,9 @@ function platformPackagesFault(site: boolean, publicRepository: boolean, publish
   return undefined;
 }
 
-function workflowOptionFault(site: boolean, options: Pick<CallerOptions, "flakeCron" | "releaseAssets" | "platformPackages" | "publicRepository" | "publishes" | "publishWorkspaces">, locations: SettingLocations): string | undefined {
+function workflowOptionFault(site: boolean, options: Pick<CallerOptions, "setupNix" | "flakeCron" | "releaseAssets" | "platformPackages" | "publicRepository" | "publishes" | "publishWorkspaces">, locations: SettingLocations): string | undefined {
   if (site && options.flakeCron !== undefined) return `${SETTINGS_FILE} sets ${settingLocation(locations, "flakeCron")}, but a site does not have a flake.yml, so remove it`;
+  if (site && options.setupNix) return `${SETTINGS_FILE} sets ${settingLocation(locations, "setupNix")}, but a site does not support Nix setup, so remove it`;
   const assetsFault = options.releaseAssets ? releaseAssetsFault(site, options.publicRepository, locations) : undefined;
   return assetsFault ?? (options.platformPackages === undefined ? undefined : platformPackagesFault(site, options.publicRepository, options.publishes, options.publishWorkspaces, locations));
 }

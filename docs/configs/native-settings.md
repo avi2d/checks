@@ -125,7 +125,7 @@ export default defineConfig({
 | `workflows.selfHostedRunsOn` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
 | `workflows.testShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
 | `workflows.flakeCron` | None | The UTC cron expression for the generated flake workflow, limited to at most once a day with one minute and one hour. | [checks-workflows](../gates/checks-workflows.md#flake-schedule) |
-| `workflows.setupNix` | `false` | Whether unit, e2e, and release suite jobs install Nix on GitHub-hosted runners and check its version on every runner. | [checks-workflows](../gates/checks-workflows.md#set-up-nix) |
+| `workflows.setupNix` | `false` | Whether unit, e2e, release suite, and flake jobs in code repositories install Nix on GitHub-hosted runners and check its version on every runner. | [checks-workflows](../gates/checks-workflows.md#set-up-nix) |
 | `test.extraLocalFiles` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
 | `test.affected` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
 | `test.allowAgentRunsOutsideCI` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |

@@ -45,3 +45,67 @@ test.each([
   const accepted = await repo.script(WORKFLOWS);
   expect(accepted.exitCode, accepted.text).toBe(0);
 });
+
+test.each([undefined, "23 5 * * 1"])("flake job verifies Nix before running the suite for cron %j and keeps opt-out bytes unchanged", async (flakeCron) => {
+  const workflows = { repositoryVisibility: "private", flakeCron };
+  const config = (setupNix?: boolean) => "export default " + JSON.stringify({ workflows: { ...workflows, setupNix } }) + ";\n";
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
+    ".github/workflows/flake.yml": "name: flake\non:\n  workflow_dispatch:\n",
+    "checks.config.ts": config(),
+  });
+  const written = await repo.script(WORKFLOWS, "--write");
+  expect(written.exitCode, written.text).toBe(0);
+  const file = Bun.file(join(repo.dir, ".github", "workflows", "flake.yml"));
+  const baseline = await file.text();
+  const baselineSteps = await stepsOf(repo, "flake.yml", "flake");
+  expect(baselineSteps).toContainEqual({ run: "bunx checks-flake --runs 10 --report flake-report.json" });
+  expect(baselineSteps).not.toContainEqual(verify);
+
+  await repo.write({ "checks.config.ts": config(true) });
+  const stale = await repo.script(WORKFLOWS);
+  expect(stale.exitCode, stale.text).toBe(1);
+  const rewritten = await repo.script(WORKFLOWS, "--write");
+  expect(rewritten.exitCode, rewritten.text).toBe(0);
+  const steps = await stepsOf(repo, "flake.yml", "flake");
+  const installIndex = steps?.findIndex((step) => Bun.deepEquals(step, install)) ?? -1;
+  expect(installIndex).toBeGreaterThanOrEqual(0);
+  expect(steps?.slice(installIndex, installIndex + 3)).toEqual([install, verify, { run: "bunx checks-flake --runs 10 --report flake-report.json" }]);
+  const accepted = await repo.script(WORKFLOWS);
+  expect(accepted.exitCode, accepted.text).toBe(0);
+
+  await repo.write({ "checks.config.ts": config(false) });
+  const disabled = await repo.script(WORKFLOWS, "--write");
+  expect(disabled.exitCode, disabled.text).toBe(0);
+  expect(await file.text()).toBe(baseline);
+});
+
+test.each([false, true])("site Nix opt-in is refused before writes when site names are held: %j", async (held) => {
+  const flags = ["--pages", "acme", "--domain", "acme.example", "--production", "acme/acme.example"];
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "checks-test" } }),
+    "checks.config.ts": 'export default { workflows: { setupNix: false } };\n',
+  });
+  if (held) {
+    const written = await repo.script(WORKFLOWS, "--write", ...flags);
+    expect(written.exitCode, written.text).toBe(0);
+  }
+  const ci = Bun.file(join(repo.dir, ".github", "workflows", "ci.yml"));
+  const baseline = await ci.exists() ? await ci.text() : undefined;
+  await repo.write({ "checks.config.ts": 'export default { workflows: { setupNix: true } };\n' });
+  const names = held ? [] : flags;
+  for (const command of [WORKFLOWS, "delivery/setup.ts"]) {
+    const result = await repo.script(command, ...(command === WORKFLOWS ? ["--write"] : []), ...names);
+    expect(result.exitCode, result.text).toBe(2);
+    expect(result.text).toContain("workflows.setupNix");
+    expect(result.text).toContain("a site does not support Nix setup");
+  }
+  if (held) {
+    const result = await repo.script(WORKFLOWS);
+    expect(result.exitCode, result.text).toBe(1);
+    expect(result.text).toContain("a site does not support Nix setup");
+    expect(await ci.text()).toBe(baseline);
+  } else {
+    expect(await ci.exists()).toBe(false);
+  }
+});

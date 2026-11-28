@@ -27,8 +27,8 @@ type DifferentLine = { readonly line: number; readonly holds: string | undefined
 
 const mutationFile = (set: Pick<CallerSet, "mutationShardCount">): WorkflowFile => ({ name: "mutation.yml", text: mutationWorkflow(set.mutationShardCount) });
 
-export function scheduledFlakeOf({ kind, options: { flake, claudeVersion, flakeCron } }: CallerSet): WorkflowFile | undefined {
-  return kind === "code" && flakeCron !== undefined ? fullFlake(flake, claudeVersion, flakeCron) : undefined;
+export function scheduledFlakeOf({ kind, options }: CallerSet): WorkflowFile | undefined {
+  return kind === "code" && options.flakeCron !== undefined ? fullFlake(options) : undefined;
 }
 
 export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
@@ -48,10 +48,10 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
 
 // An optional file may be absent, but a present one holds exactly this text.
 export function byHandSet(set: CallerSet, kit: boolean): readonly WorkflowFile[] {
-  const { advisoriesCron, flake, flakeCron, pages } = set.options;
+  const { advisoriesCron, flakeCron, pages } = set.options;
   const docs = pages === undefined ? [] : [fullDocs(pages)];
   const advisories = fullAdvisories(advisoriesCron);
-  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [mutationFile(set)] : []), ...(flakeCron === undefined ? [fullFlake(flake, set.options.claudeVersion)] : []), ...docs];
+  return set.kind === "site" ? [advisories, ...docs] : [advisories, ...(kit ? [mutationFile(set)] : []), ...(flakeCron === undefined ? [fullFlake(set.options)] : []), ...docs];
 }
 
 export function differentLines(holds: string, writes: string): readonly DifferentLine[] {
