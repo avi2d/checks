@@ -24,7 +24,7 @@ export function addressOf(file: string): string {
 
 export function originOf(named: string): Effect.Effect<string, NotServed> {
   if (!URL.canParse(named) || new URL(named).protocol !== "https:") {
-    return Effect.fail(new NotServed({ message: `origin must be an https address such as https://azalialaw.pages.dev, not '${named}'` }));
+    return Effect.fail(new NotServed({ message: `origin must be an https address such as https://example.com, not '${named}'` }));
   }
   return Effect.succeed(new URL(named).origin);
 }
