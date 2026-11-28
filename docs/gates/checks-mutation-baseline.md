@@ -30,18 +30,18 @@ With an incremental destination it also copies `stryker-incremental.json` when t
 The refresh in the `mutation.yml` [checks-setup](checks-setup.md) writes passes one, and tests the mutants its state holds no result for, except static ones.
 With an incremental destination, `--full` also looks at the successful runs newer than the one whose full artifact it restored, newest first.
 It takes the first `mutation-refresh-state` artifact among them that downloads and holds `stryker-incremental.json`, and that state replaces the full artifact's, since the full artifact's state is older.
-A run older than the restored full run never supplies one, because that full run superseded it.
+A run on the same branch older than the restored full run never supplies one, because that full run superseded it.
+A stopped state the restore drops as stale replaces nothing, so the state restored before it stays.
 With no full artifact at all, it still restores such a state and no report.
 
 If `CHECKS_MUTATION_BRANCH` names a branch other than `main`, `--full` looks on that branch first.
 If that branch has no full report, it looks for a report on `main`.
 State from the named branch takes priority over state from `main`, even when the report came from `main`.
-If the named branch has neither a full report nor a stopped state, the restore uses the same state it would use on `main`.
+If the named branch has neither a full report nor a stopped state it keeps, the restore uses the same state it would use on `main`.
 
-If `CHECKS_MUTATION_RESUME_RUN_ID` names a run, `--full` takes incremental state from that run alone.
-It takes the report from that run's full artifact when it holds the state.
-If the run holds stopped state instead, the restore looks for the report on the selected branch, then on `main`.
-It fails when the named run holds neither kind of state.
+If `CHECKS_MUTATION_RESUME_RUN_ID` names a run, `--full` takes incremental state from that run's `mutation-refresh-state` artifact alone.
+It looks for the report on the selected branch, then on `main`.
+It fails when the named run holds no such state.
 The same rules for dropping stale state apply to a named run.
 
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.

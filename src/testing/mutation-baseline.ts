@@ -265,8 +265,7 @@ const restoredRun = Effect.fn("restoredRun")(function* (run: Run, name: string, 
   return true;
 });
 
-const stateRequest = (to: string, optional: readonly Copy[] = []): Request =>
-  ({ kind: "restore", full: false, needed: { from: [INCREMENTAL], to }, optional });
+const stateRequest = (to: string): Request => ({ kind: "restore", full: false, needed: { from: [INCREMENTAL], to }, optional: [] });
 
 const restoredFullRun = Effect.fn("restoredFullRun")(function* (runs: readonly Run[], request: Request, root: Option.Option<string>) {
   for (const run of runs) {
@@ -275,13 +274,24 @@ const restoredFullRun = Effect.fn("restoredFullRun")(function* (runs: readonly R
   return Option.none<number>();
 });
 
-const resumedState = Effect.fn("resumedState")(function* (runs: readonly Run[], full: Option.Option<number>, state: string, root: Option.Option<string>) {
-  const eligible = newerThan(runs.map((run) => run.databaseId), full);
-  for (const run of runs.slice(0, eligible.length)) {
-    if (yield* restoredRun(run, REFRESH_ARTIFACT, root, Option.none<string>(), stateRequest(state))) return true;
-  }
-  return false;
-});
+// Restoring straight into the destination would let a state the prune drops delete the state restored before it.
+const resumedState = Effect.fn("resumedState")(
+  function* (runs: readonly Run[], full: Option.Option<number>, state: string, root: Option.Option<string>) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const staged = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "mutation-state-" }), INCREMENTAL);
+    const eligible = newerThan(runs.map((run) => run.databaseId), full);
+    for (const run of runs.slice(0, eligible.length)) {
+      if (!(yield* restoredRun(run, REFRESH_ARTIFACT, root, Option.none<string>(), stateRequest(staged)))) continue;
+      if (!(yield* fs.exists(staged))) return false;
+      yield* fs.makeDirectory(path.dirname(state), { recursive: true });
+      yield* fs.copyFile(staged, state);
+      return true;
+    }
+    return false;
+  },
+  Effect.scoped,
+);
 
 const searchFull = Effect.fn("searchFull")(function* (branch: string, request: Request, root: Option.Option<string>) {
   const runs = yield* fullCandidates(branch);
@@ -305,9 +315,8 @@ const restoreNamed = Effect.fn("restoreNamed")(function* (id: string, branch: st
     return yield* new BaselineFailure({ message: "CHECKS_MUTATION_RESUME_RUN_ID must be a positive run ID" });
   }
   const run = yield* viewedRun(id);
-  if (yield* restoredRun(run, FULL_ARTIFACT, root, Option.none<string>(), stateRequest(state, [request.needed]))) return true;
   if (!(yield* restoredRun(run, REFRESH_ARTIFACT, root, Option.none<string>(), stateRequest(state)))) {
-    return yield* new BaselineFailure({ message: `run ${id} holds no full or stopped mutation state` });
+    return yield* new BaselineFailure({ message: `run ${id} holds no stopped mutation state` });
   }
   yield* preferredReport(branch, { ...request, optional: [] }, root);
   return true;

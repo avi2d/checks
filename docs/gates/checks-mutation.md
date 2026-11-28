@@ -106,8 +106,9 @@ A refresh restores the previous full report and its incremental state with `--fu
 To change that limit, set `workflows.mutationShardCount` in `checks.config.ts` to an integer from 1 to 256, such as `workflows: { mutationShardCount: 4 }`.
 Run `checks-workflows --write` to apply the setting to `mutation.yml`.
 It runs each shard with static mutants ignored, at most 4 shards at a time.
-If Bun's summary counts one extra pass, the inspector lost exactly one end event, and the inspector WebSocket closed with code 1006, the shard retries once within the same timeout.
-The retry must pass Stryker's checks for complete test results and coverage.
+A shard retries once within the same timeout when the inspector lost exactly one end event and Bun's summary counts one extra pass.
+The inspector WebSocket must also have closed with code 1006.
+The retry must pass the dry-run data-completeness check of `@hughescr/stryker-bun-runner`, which covers test results and coverage.
 The first attempt's incomplete results are never scored.
 Other mismatches still fail the shard.
 A failing shard does not cancel the other shards, but the merge job does not run.

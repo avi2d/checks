@@ -8,11 +8,6 @@ on:
         type: string
         required: false
   workflow_call:
-    inputs:
-      resume-run-id:
-        description: Run ID to restore mutation state from
-        type: string
-        required: false
 
 concurrency:
   group: mutation-refresh

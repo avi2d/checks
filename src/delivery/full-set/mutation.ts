@@ -129,7 +129,7 @@ const REFRESH_JOBS: readonly Job[] = [
 // A whole-tree run calls the refresh as a local reusable workflow, since a job of its own that runs mutation is refused.
 export const mutationWorkflow = (shardCount = DEFAULT_MUTATION_SHARD_COUNT): string => workflowText({
   name: "mutation",
-  on: ["workflow_dispatch:", ...restoreInputs, "workflow_call:", ...restoreInputs],
+  on: ["workflow_dispatch:", ...restoreInputs, "workflow_call:"],
   concurrency: "mutation-refresh",
   cancelInProgress: false,
   env: [
