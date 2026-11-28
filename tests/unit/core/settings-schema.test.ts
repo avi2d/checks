@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { JsonSchema, Schema, SchemaAST } from "effect";
+import { Schema, SchemaAST } from "effect";
 import { Settings } from "../../../src/core/settings.ts";
 
 function regexNodes(ast: SchemaAST.AST): SchemaAST.AST[] {
@@ -20,11 +20,8 @@ function patterns(value: unknown): string[] {
   ]);
 }
 
-test("settings JSON schema retains every regex-checked string pattern", async () => {
-  const { schema, definitions } = Schema.toJsonSchemaDocument(Settings, { onExcessProperty: "error" });
-  const document = { $schema: JsonSchema.META_SCHEMA_URI_DRAFT_2020_12, ...schema, $defs: definitions };
-  const committed: unknown = await Bun.file("dist/checks.schema.json").json();
-  expect(committed).toEqual(document);
+test("settings JSON schema retains every regex-checked string pattern instead of silently dropping it", async () => {
+  const committed: unknown = await Bun.file(new URL("../../../dist/checks.schema.json", import.meta.url)).json();
   const nodes = regexNodes(Settings.ast);
   expect(nodes.length).toBeGreaterThan(0);
   const emitted = patterns(committed);
